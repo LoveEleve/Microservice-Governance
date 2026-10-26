@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: microsphere-spring-cloud-lab
+  cloud:
+    openfeign:
+      client:
+        config:
+          demo-service:
+            connectTimeout: 1000
+            readTimeout: 2000
+            loggerLevel: basic
+
+server:
+  port: 8080
+
+microsphere:
+  spring:
+    cloud:
+      # 开启 MultipleServiceRegistry / MultipleRegistration / MultipleAutoServiceRegistration
+      multiple-registration:
+        enabled: true
+      # 开启 UnionDiscoveryClient：聚合所有 DiscoveryClient
+      client:
+        discovery:
+          mode: union
+
+demo:
+  service:
+    url: http://127.0.0.1:8081

@@ -5,6 +5,12 @@ Microsphere + Poly 服务治理源码学习快照（2026-10-26）。
 > 来源：https://github.com/microsphere-projects ；Poly 来自 /data/workspace/source-code/poly。
 > 本仓库为工作树快照，不含各子项目的 `.git` 历史、`target/`、`build/` 等构建产物；原始仓库请以 GitHub 为准。
 
+## Labs
+
+用法展示工程在 [`labs/`](labs/README.md)：
+
+- [`microsphere-spring-cloud-lab`](labs/microsphere-spring-cloud-lab/README.md)：多注册中心、Union Discovery、注册事件、OpenFeign 动态刷新。
+
 ## 文档
 
 文档总入口：[`docs/README.md`](docs/README.md)。Microsphere 主线在 [`docs/microsphere/`](docs/microsphere/README.md)，Poly 对照在 [`docs/poly/`](docs/poly/README.md)。
