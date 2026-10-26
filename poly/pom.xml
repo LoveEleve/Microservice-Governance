@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.github.loveeleve</groupId>
+    <artifactId>poly</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Poly</name>
+    <description>The Poly series: multi-zone routing, unified configuration, dynamic datasources, Redis multi-datacenter replication and endpoint-level gateway routing</description>
+    <url>https://github.com/LoveEleve/poly-project</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>LoveEleve</id>
+            <name>LoveEleve</name>
+            <url>https://github.com/LoveEleve</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <url>https://github.com/LoveEleve/poly-project</url>
+        <connection>scm:git:https://github.com/LoveEleve/poly-project.git</connection>
+        <developerConnection>scm:git:git@github.com:LoveEleve/poly-project.git</developerConnection>
+    </scm>
+
+    <!-- Aggregator only: every project keeps its own parent POM and builds standalone.
+         The order follows the dependency chain (polydata depends on polyzone and polyconfig). -->
+    <modules>
+        <module>polyzone</module>
+        <module>polyconfig</module>
+        <module>polydata</module>
+        <module>polycache</module>
+        <module>polygateway</module>
+    </modules>
+
+</project>

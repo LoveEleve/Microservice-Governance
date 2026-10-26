@@ -1,0 +1,9 @@
+Poly
+Copyright 2026 LoveEleve
+
+This repository aggregates the Poly projects. Each subdirectory is an
+independent project with its own LICENSE and NOTICE file carrying its own
+attributions:
+
+  polyzone/NOTICE    polyconfig/NOTICE    polydata/NOTICE
+  polycache/NOTICE   polygateway/NOTICE
