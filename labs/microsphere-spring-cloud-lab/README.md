@@ -7,7 +7,7 @@
 | 文件 | 展示点 |
 |---|---|
 | `MicrosphereSpringCloudLabApplication` | `@EnableFeignClients` + `@EnableFeignAutoRefresh` |
-| `config/MultipleRegistryConfiguration` | 两个 `SimpleServiceRegistry` + 一个 `Registration`，由 Microsphere 自动装配成 `MultipleServiceRegistry` / `MultipleRegistration` |
+| `config/MultipleRegistryConfiguration` | 两个**不同 Registration 类型**的注册中心 A/B（内部用 `SimpleServiceRegistry` 作内存 delegate），由 Microsphere 自动装配成 `MultipleServiceRegistry` / `MultipleRegistration` |
 | `config/UnionDiscoveryConfiguration` | 两个内存 `DiscoveryClient`，由 `UnionDiscoveryClient` 聚合 |
 | `event/RegistrationEventListener` | 注册/注销生命周期事件 |
 | `client/DemoServiceClient` | OpenFeign 客户端，配置变更可动态刷新 |
@@ -26,6 +26,19 @@ microsphere:
         discovery:
           mode: union
 ```
+
+## 与官方实现对照（评审用）
+
+| 能力 | 官方 Spring Cloud | Microsphere | 本 Lab |
+|---|---|---|---|
+| 一实例多注册 | 默认单个 `ServiceRegistry`，无多注册编排 | `MultipleServiceRegistry` 按 `Registration` 类型委托 | A/B 两个 Registration 子类型 + 两个 registry |
+| 发现聚合 | `CompositeDiscoveryClient` 取**第一个非空** client 结果 | `UnionDiscoveryClient` 对**所有** client 做并集 | `demo-service` 在 A/B 都有实例，能看出两种语义差异 |
+| 实例去重 | Composite 不跨 client 去重 | Union 直接拼接，不保证去重 | 同名实例会重复，这是待评审点 |
+| 失败语义 | 单 registry，边界清楚 | 逐个委托，中途失败可能部分注册 | 不能假设多注册原子；生产要幂等/对账 |
+| 注册事件 | 无细粒度注册生命周期事件 | Pre/Registered/PreDeregistered/Deregistered | 本 Lab 只打日志，验证事件接线 |
+| Feign 刷新 | 配置刷新不重建 Feign 组件 | `@EnableFeignAutoRefresh` 监听变更重建 | 本 Lab 展示注解接线，不验证并发行为 |
+
+> 结论：Microsphere 补的是官方空白，不是“官方正确答案”。使用前必须按 `docs/microsphere/00-overview/技术评审方法.md` 检查语义、失败和边界。
 
 ## 运行边界
 
