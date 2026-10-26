@@ -2,7 +2,15 @@
 
 本仓库文档按“项目 → 系列 → 篇章”组织；源码在仓库根目录，文档在 `docs/`。
 
-## Poly
+## Microsphere（主线）
+
+- [Microsphere 文档总览](microsphere/README.md)
+- [L3 总览终稿](microsphere/00-overview/L3总览终稿.md)
+- [stage-1 服务治理完整梳理](microsphere/00-overview/course/stage-1-服务治理-完整梳理.md)
+- [microsphere-spring-cloud 知识大纲](microsphere/03-source-outline/05-microsphere-spring-cloud-服务治理知识大纲.md)
+- [microsphere-spring-cloud 源码映射](microsphere/02-source-mapping/05-microsphere-spring-cloud.md)
+
+## Poly（对照/重写案例）
 
 - [Poly 文档总览](poly/README.md)
 - [PolyZone：异地多活路由](poly/polyzone/README.md)
@@ -12,4 +20,4 @@
 - [PolyCache：Redis 多机房复制](poly/polycache/README.md)
 - [Poly vs Microsphere 对比](poly/comparison/poly-vs-microsphere.md)
 
-> 当前文档来自 `xhs-demo/docs` 的 Poly 系列（2026-10-26 归档），已按“总览 → 项目 → 篇章”重组。
+> Microsphere 文档来自 `xhs-demo/docs` 的 `xmg-stage` + `microsphere-source`；Poly 文档来自 Poly 系列。两者严格分区，不混放。
