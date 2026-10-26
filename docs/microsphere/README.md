@@ -1,7 +1,7 @@
 # Microsphere 文档总览
 
 > 小马哥 Microsphere 服务治理源码学习资料。
-> 来源：`xhs-demo/docs` 的 `xmg-stage` + `microsphere-source`（2026-10-26 归档并重组）。
+> 来源：历史归档的 `xmg-stage` + `microsphere-source`（2026-10-26 重组）。
 > 原则：**宏观总览、L3 章节、源码映射、源码大纲、方法论、历史进度分层存放，不互相混放。**
 
 ## 目录

@@ -20,4 +20,4 @@
 - [PolyCache：Redis 多机房复制](poly/polycache/README.md)
 - [Poly vs Microsphere 对比](poly/comparison/poly-vs-microsphere.md)
 
-> Microsphere 文档来自 `xhs-demo/docs` 的 `xmg-stage` + `microsphere-source`；Poly 文档来自 Poly 系列。两者严格分区，不混放。
+> Microsphere 文档来自历史归档的 `xmg-stage` + `microsphere-source`；Poly 文档来自 Poly 系列。两者严格分区，不混放。
