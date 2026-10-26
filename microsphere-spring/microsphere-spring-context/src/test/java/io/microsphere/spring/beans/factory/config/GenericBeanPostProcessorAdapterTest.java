@@ -1,0 +1,106 @@
+package io.microsphere.spring.beans.factory.config;
+
+import io.microsphere.spring.beans.test.Bean;
+import io.microsphere.spring.beans.test.TestBean;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.BeansException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+/**
+ * {@link GenericBeanPostProcessorAdapter} Test
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @see GenericBeanPostProcessorAdapter
+ * @since 1.0.0
+ */
+@SuppressWarnings("unchecked")
+class GenericBeanPostProcessorAdapterTest {
+
+    @Test
+    void testPostProcessBeforeInitialization() {
+
+        TestBean testBean = new TestBean();
+
+        GenericBeanPostProcessorAdapter<Bean> beanPostProcessor = new GenericBeanPostProcessorAdapter<Bean>() {
+
+            protected Bean doPostProcessBeforeInitialization(Bean bean, String beanName) throws BeansException {
+                return null;
+            }
+        };
+
+        assertNull(beanPostProcessor.postProcessBeforeInitialization(testBean, "testBean"));
+        assertNull(beanPostProcessor.doPostProcessBeforeInitialization(testBean, "testBean"));
+        beanPostProcessor.processBeforeInitialization(testBean, "testBean");
+
+        beanPostProcessor = new GenericBeanPostProcessorAdapter<Bean>() {
+
+            protected void processBeforeInitialization(Bean bean, String beanName) throws BeansException {
+            }
+        };
+
+        assertEquals(testBean, beanPostProcessor.postProcessBeforeInitialization(testBean, "testBean"));
+        assertEquals(testBean, beanPostProcessor.doPostProcessBeforeInitialization(testBean, "testBean"));
+        beanPostProcessor.processBeforeInitialization(testBean, "testBean");
+
+    }
+
+    @Test
+    void testPostProcessAfterInitialization() {
+
+        TestBean testBean = new TestBean();
+
+        GenericBeanPostProcessorAdapter beanPostProcessor = new GenericBeanPostProcessorAdapter<Bean>() {
+
+            protected Bean doPostProcessAfterInitialization(Bean bean, String beanName) throws BeansException {
+                return null;
+            }
+        };
+
+        assertNull(beanPostProcessor.postProcessAfterInitialization(testBean, "testBean"));
+        assertNull(beanPostProcessor.doPostProcessAfterInitialization(testBean, "testBean"));
+        beanPostProcessor.processAfterInitialization(testBean, "testBean");
+
+        beanPostProcessor = new GenericBeanPostProcessorAdapter<Bean>() {
+
+            protected Bean doPostProcessAfterInitialization(Bean bean, String beanName) throws BeansException {
+                return null;
+            }
+        };
+
+        assertNull(beanPostProcessor.postProcessAfterInitialization(testBean, "testBean"));
+
+        beanPostProcessor = new GenericBeanPostProcessorAdapter<Bean>() {
+
+            protected void processAfterInitialization(Bean bean, String beanName) throws BeansException {
+            }
+        };
+
+        assertEquals(testBean, beanPostProcessor.postProcessAfterInitialization(testBean, "testBean"));
+        assertEquals(testBean, beanPostProcessor.doPostProcessAfterInitialization(testBean, "testBean"));
+        beanPostProcessor.processAfterInitialization(testBean, "testBean");
+
+    }
+
+    @Test
+    void testPostProcess() {
+
+        GenericBeanPostProcessorAdapter<Bean> beanPostProcessor = new GenericBeanPostProcessorAdapter<Bean>() {
+        };
+
+        String bean = "test";
+
+        assertEquals("test", beanPostProcessor.postProcessBeforeInitialization(bean, ""));
+        assertEquals("test", beanPostProcessor.postProcessAfterInitialization(bean, ""));
+    }
+
+    @Test
+    void testGetBeanType() {
+
+        assertEquals(Bean.class, new GenericBeanPostProcessorAdapter<Bean>() {
+        }.getBeanType());
+
+    }
+
+}

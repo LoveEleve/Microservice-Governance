@@ -1,0 +1,212 @@
+# This workflow parses each BOM module's pom.xml and:
+#   1. Publishes a dependency table to the GitHub Actions job summary (all triggers).
+#   2. Writes/updates the BOM-Dependencies wiki page (on release or workflow_dispatch).
+# Excluded modules: microsphere-all-bom, microsphere-bom-example
+
+name: List BOM Dependencies
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [ 'main', 'dev' ]
+  pull_request:
+    branches: [ 'main', 'dev', 'release' ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'Release version to document (e.g. 0.2.4). Leave empty to use version from pom.xml.'
+        required: false
+        default: ''
+
+jobs:
+  list-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v7.0.1
+
+      - name: Detect release version
+        id: version
+        run: |
+          if [ -n "${{ inputs.revision }}" ]; then
+            VERSION="${{ inputs.revision }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION=$(grep -oP '(?<=<revision>)[^<]+' pom.xml | head -1)
+          fi
+          echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate dependency tables
+        env:
+          BOM_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          NS = {'m': 'http://maven.apache.org/POM/4.0.0'}
+
+          # BOM modules to process (microsphere-all-bom and microsphere-bom-example are excluded)
+          BOM_MODULES = [
+              'microsphere-logging-bom',
+              'microsphere-testing-bom',
+              'microsphere-javadb-bom',
+              'microsphere-javaee-bom',
+              'microsphere-tomcat-bom',
+          ]
+
+          def text(el, tag):
+              found = el.find(tag, NS)
+              return found.text.strip() if found is not None and found.text else ''
+
+          def strip_ns(tag):
+              return tag.replace('{http://maven.apache.org/POM/4.0.0}', '')
+
+          def parse_properties(el):
+              props = {}
+              properties_el = el.find('m:properties', NS)
+              if properties_el is not None:
+                  for prop in properties_el:
+                      props[strip_ns(prop.tag)] = (prop.text or '').strip()
+              return props
+
+          def parse_deps(container_el):
+              """Return list of (groupId, artifactId, raw_version) from <dependencyManagement>."""
+              deps = []
+              dm = container_el.find('m:dependencyManagement/m:dependencies', NS)
+              if dm is not None:
+                  for dep in dm.findall('m:dependency', NS):
+                      gid = text(dep, 'm:groupId')
+                      aid = text(dep, 'm:artifactId')
+                      ver = text(dep, 'm:version')
+                      deps.append((gid, aid, ver))
+              return deps
+
+          def resolve(ver_raw, props):
+              """Resolve a version string that may be a ${property} reference."""
+              if ver_raw.startswith('${') and ver_raw.endswith('}'):
+                  prop_name = ver_raw[2:-1]
+                  return props.get(prop_name, ver_raw), prop_name
+              return ver_raw, None
+
+          def parse_pom(pom_path):
+              tree = ET.parse(pom_path)
+              root = tree.getroot()
+
+              default_props = parse_properties(root)
+              main_deps = parse_deps(root)
+
+              # Collect profiles: id -> {props, extra_deps}
+              profiles = {}
+              for profile in root.findall('m:profiles/m:profile', NS):
+                  pid = text(profile, 'm:id')
+                  p_props = parse_properties(profile)
+                  p_deps  = parse_deps(profile)
+                  profiles[pid] = {'props': p_props, 'deps': p_deps}
+
+              return default_props, main_deps, profiles
+
+          def escape(s):
+              return s.replace('|', '\\|')
+
+          def render_tables(out, version):
+              out.write(f'# BOM Dependencies — v{version}\n')
+
+              for module in BOM_MODULES:
+                  pom_path = os.path.join(module, 'pom.xml')
+                  if not os.path.exists(pom_path):
+                      continue
+
+                  try:
+                      default_props, main_deps, profiles = parse_pom(pom_path)
+                  except ET.ParseError as e:
+                      print(f'ERROR: Failed to parse {pom_path}: {e}', file=sys.stderr)
+                      continue
+
+                  # Build a unified dependency list:
+                  # key = (groupId, artifactId) -> (default_version_str, prop_name)
+                  dep_map = {}
+                  for gid, aid, ver_raw in main_deps:
+                      ver, prop_name = resolve(ver_raw, default_props)
+                      dep_map[(gid, aid)] = (ver, prop_name)
+
+                  # Merge profile-only deps (those absent from main dependencyManagement)
+                  for pid, pdata in profiles.items():
+                      for gid, aid, ver_raw in pdata['deps']:
+                          key = (gid, aid)
+                          if key not in dep_map:
+                              # Resolve using profile props first, then default props
+                              merged = {**default_props, **pdata['props']}
+                              ver, prop_name = resolve(ver_raw, merged)
+                              dep_map[key] = (ver, prop_name)
+
+                  # Preserve insertion order (main deps first, then profile-only deps)
+                  ordered_keys = list(dict.fromkeys(
+                      [(g, a) for g, a, _ in main_deps] +
+                      [(g, a) for pid, pd in profiles.items() for g, a, _ in pd['deps']]
+                  ))
+
+                  out.write(f'\n## {module}\n\n')
+                  out.write('| groupId | artifactId | version | version (profile-specified) |\n')
+                  out.write('| --- | --- | --- | --- |\n')
+
+                  for gid, aid in ordered_keys:
+                      default_ver, prop_name = dep_map.get((gid, aid), ('', None))
+
+                      # Collect per-profile version overrides
+                      profile_versions = []
+                      for pid, pdata in profiles.items():
+                          if prop_name and prop_name in pdata['props']:
+                              profile_versions.append(
+                                  f'`{pid}`: {pdata["props"][prop_name]}'
+                              )
+
+                      profile_str = ' / '.join(profile_versions)
+                      out.write(
+                          f'| {escape(gid)} | {escape(aid)} | {escape(default_ver)} '
+                          f'| {escape(profile_str)} |\n'
+                      )
+
+          version = os.environ.get('BOM_VERSION', 'unknown')
+
+          # Write to the GitHub Actions job summary
+          summary_path = os.environ.get('GITHUB_STEP_SUMMARY', 'bom-dependencies-summary.md')
+          with open(summary_path, 'a') as out:
+              render_tables(out, version)
+
+          # Write a standalone wiki page for use in the next step
+          with open('wiki-BOM-Dependencies.md', 'w') as out:
+              render_tables(out, version)
+
+          EOF
+
+      - name: Publish dependency table to wiki
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BOM_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          WIKI_REPO="https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.wiki.git"
+          if ! git clone "${WIKI_REPO}" wiki-repo 2>/dev/null; then
+            echo "::warning::Wiki repository could not be cloned. Ensure the wiki is enabled for this repository. Skipping wiki update."
+            exit 0
+          fi
+
+          cp wiki-BOM-Dependencies.md wiki-repo/BOM-Dependencies.md
+
+          cd wiki-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add BOM-Dependencies.md
+          if git diff --cached --quiet; then
+            echo "No changes to wiki page, skipping commit."
+          else
+            git commit -m "docs: update BOM dependency table for v${BOM_VERSION}"
+            git push
+          fi

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.microsphere-projects</groupId>
+        <artifactId>microsphere-build</artifactId>
+        <version>0.3.17</version>
+    </parent>
+
+    <groupId>io.github.microsphere-projects</groupId>
+    <artifactId>microsphere-java</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+
+    <name>Microsphere :: Java</name>
+    <description>Microsphere Projects for Java</description>
+    <url>https://github.com/microsphere-projects/microsphere-java</url>
+
+    <organization>
+        <name>Microsphere</name>
+        <url>https://github.com/microsphere-projects</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>The Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>mercyblitz</id>
+            <name>Mercy Ma</name>
+            <email>mercyblitz@gmail.com</email>
+            <organization>Microsphere</organization>
+            <roles>
+                <role>lead</role>
+                <role>architect</role>
+                <role>developer</role>
+            </roles>
+        </developer>
+    </developers>
+
+    <scm>
+        <url>git@github.com/microsphere-projects/microsphere-java.git</url>
+        <connection>scm:git:${project.scm.url}</connection>
+        <developerConnection>scm:git:ssh://${project.scm.url}</developerConnection>
+    </scm>
+
+    <properties>
+        <revision>0.3.21-SNAPSHOT</revision>
+    </properties>
+
+    <modules>
+        <module>microsphere-java-parent</module>
+        <module>microsphere-java-dependencies</module>
+        <module>microsphere-java-annotations</module>
+        <module>microsphere-java-core</module>
+        <module>microsphere-jdk-tools</module>
+        <module>microsphere-java-test</module>
+        <module>microsphere-annotation-test</module>
+        <module>microsphere-lang-model</module>
+        <module>microsphere-annotation-processor</module>
+    </modules>
+
+</project>

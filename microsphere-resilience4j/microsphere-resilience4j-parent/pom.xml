@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>io.github.microsphere-projects</groupId>
+        <artifactId>microsphere-resilience4j</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.github.microsphere-projects</groupId>
+    <artifactId>microsphere-resilience4j-parent</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+
+    <name>Microsphere :: Resilience4j :: Parent</name>
+    <description>Microsphere Resilience4j Parent</description>
+
+    <properties>
+        <microsphere-spring-cloud.version>0.2.26</microsphere-spring-cloud.version>
+        <microsphere-alibaba-druid.version>0.2.20</microsphere-alibaba-druid.version>
+        <microsphere-mybatis.version>0.2.16</microsphere-mybatis.version>
+        <microsphere-hibernate.version>0.2.10</microsphere-hibernate.version>
+        <microsphere-redis.version>0.2.14</microsphere-redis.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+
+            <!-- Resilience4j Dependencies -->
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-framework-common</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-bom</artifactId>
+                <version>${resilience4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Microsphere Spring Cloud Dependencies -->
+            <dependency>
+                <groupId>io.github.microsphere-projects</groupId>
+                <artifactId>microsphere-spring-cloud-dependencies</artifactId>
+                <version>${microsphere-spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Microsphere Alibaba Druid -->
+            <dependency>
+                <groupId>io.github.microsphere-projects</groupId>
+                <artifactId>microsphere-alibaba-druid-dependencies</artifactId>
+                <version>${microsphere-alibaba-druid.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Microsphere MyBatis -->
+            <dependency>
+                <groupId>io.github.microsphere-projects</groupId>
+                <artifactId>microsphere-mybatis-dependencies</artifactId>
+                <version>${microsphere-mybatis.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Microsphere Hibernate -->
+            <dependency>
+                <groupId>io.github.microsphere-projects</groupId>
+                <artifactId>microsphere-hibernate-dependencies</artifactId>
+                <version>${microsphere-hibernate.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Microsphere Redis -->
+            <dependency>
+                <groupId>io.github.microsphere-projects</groupId>
+                <artifactId>microsphere-redis-dependencies</artifactId>
+                <version>${microsphere-redis.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+        </dependencies>
+    </dependencyManagement>
+
+    <profiles>
+
+        <profile>
+            <id>resilience4j-2.0</id>
+            <properties>
+                <resilience4j.version>2.0.0</resilience4j.version>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>resilience4j-2.1</id>
+            <properties>
+                <resilience4j.version>2.1.0</resilience4j.version>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>resilience4j-2.2</id>
+            <properties>
+                <resilience4j.version>2.2.0</resilience4j.version>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>resilience4j-2.3</id>
+            <properties>
+                <resilience4j.version>2.3.0</resilience4j.version>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>resilience4j-2.4</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <resilience4j.version>2.4.0</resilience4j.version>
+            </properties>
+        </profile>
+
+    </profiles>
+
+</project>

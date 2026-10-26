@@ -1,0 +1,2 @@
+io.microsphere.multiple.active.zone.spring.ZoneLocator=\
+io.microsphere.multiple.active.zone.spring.DefaultZoneLocator

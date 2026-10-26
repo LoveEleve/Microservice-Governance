@@ -1,0 +1,79 @@
+package io.microsphere.spring.web.event;
+
+import io.microsphere.annotation.Nonnull;
+import io.microsphere.annotation.Nullable;
+import org.springframework.context.ApplicationEvent;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.HandlerMethod;
+
+import java.lang.reflect.Method;
+
+import static io.microsphere.util.ArrayUtils.arrayToString;
+import static io.microsphere.util.Assert.assertNotNull;
+
+/**
+ * {@link HandlerMethod} Arguments Resolved Event
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy<a/>
+ * @since 1.0.0
+ */
+public class HandlerMethodArgumentsResolvedEvent extends ApplicationEvent {
+
+    private transient final HandlerMethod handlerMethod;
+
+    private transient final Object[] arguments;
+
+    /**
+     * @param webRequest    {@link WebRequest}
+     * @param handlerMethod {@link HandlerMethod}
+     * @param arguments     {@link Object the argument object that was resolved}
+     */
+    public HandlerMethodArgumentsResolvedEvent(WebRequest webRequest, @Nonnull HandlerMethod handlerMethod, @Nonnull Object... arguments) {
+        super(webRequest);
+        assertNotNull(handlerMethod, () -> "The 'handlerMethod' argument must not be null");
+        assertNotNull(arguments, () -> "The 'arguments' argument must not be null");
+        this.handlerMethod = handlerMethod;
+        this.arguments = arguments;
+    }
+
+    /**
+     * @return the {@link HandlerMethod} being invoking
+     */
+    @Nonnull
+    public HandlerMethod getHandlerMethod() {
+        return handlerMethod;
+    }
+
+    /**
+     * @return the {@link Method} of {@link HandlerMethod} being invoking
+     */
+    @Nonnull
+    public Method getMethod() {
+        return handlerMethod.getMethod();
+    }
+
+    /**
+     * @return the resolved arguments of {@link HandlerMethod} being invoking
+     */
+    @Nonnull
+    public Object[] getArguments() {
+        return arguments;
+    }
+
+    /**
+     * @return {@link WebRequest The Web Request for HandlerMethod invocation}
+     */
+    @Nonnull
+    public WebRequest getWebRequest() {
+        return (WebRequest) getSource();
+    }
+
+    @Override
+    public String toString() {
+        return "HandlerMethodArgumentsResolvedEvent{" +
+                "source=" + getSource() +
+                ", handlerMethod=" + handlerMethod +
+                ", arguments=" + arrayToString(arguments) +
+                '}';
+    }
+}

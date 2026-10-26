@@ -1,0 +1,245 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.logging;
+
+import io.microsphere.annotation.Nonnull;
+import io.microsphere.annotation.Nullable;
+
+/**
+ * Logger interface for logging messages with different severity levels.
+ * <p>
+ * The {@code Logger} provides methods to log messages at various levels such as TRACE, DEBUG, INFO, WARN, and ERROR.
+ * Each level has corresponding methods to check if the level is enabled ({@code isXxxEnabled()}) and to log messages
+ * either as simple strings, formatted strings, or with associated exceptions.
+ * </p>
+ *
+ * <h3>Example Usage</h3>
+ *
+ * <h4>Basic Usage</h4>
+ * <pre>{@code
+ * if (logger.isInfoEnabled()) {
+ *     logger.info("Application started successfully.");
+ * }
+ * }</pre>
+ *
+ * <h4>Formatted Logging</h4>
+ * <pre>{@code
+ * String user = "JohnDoe";
+ * int attempts = 3;
+ * logger.warn("User '{}' exceeded maximum login attempts: {}", user, attempts);
+ * }</pre>
+ *
+ * <h4>Logging Exceptions</h4>
+ * <pre>{@code
+ * try {
+ *     // some operation that may fail
+ * } catch (Exception e) {
+ *     logger.error("An error occurred during processing", e);
+ * }
+ * }</pre>
+ *
+ * <h4>Conditional Logging</h4>
+ * <pre>{@code
+ * if (logger.isDebugEnabled()) {
+ *     logger.debug("Detailed debug information: {}", generateDebugData());
+ * }
+ * }</pre>
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy<a/>
+ * @since 1.0.0
+ */
+public interface Logger {
+
+    /**
+     * Return the name of this <code>Logger</code> instance.
+     *
+     * @return name of this logger instance
+     */
+    @Nonnull
+    String getName();
+
+    /**
+     * Is the logger instance enabled for the TRACE level?
+     *
+     * @return True if this Logger is enabled for the TRACE level,
+     * false otherwise.
+     */
+    boolean isTraceEnabled();
+
+    /**
+     * Log a message at the TRACE level.
+     *
+     * @param message the message string to be logged
+     */
+    void trace(@Nullable String message);
+
+    /**
+     * Log a message at the TRACE level according to the specified format
+     * and arguments.
+     * <p/>
+     * <p>This form avoids superfluous string concatenation when the logger
+     * is disabled for the TRACE level. However, this variant incurs the hidden
+     * (and relatively small) cost of creating an <code>Object[]</code> before invoking the method,
+     * even if this logger is disabled for TRACE.
+     *
+     * @param format    the format string
+     * @param arguments the arguments
+     */
+    void trace(@Nullable String format, Object... arguments);
+
+    /**
+     * Log an exception (throwable) at the TRACE level with an
+     * accompanying message.
+     *
+     * @param message the message accompanying the exception
+     * @param t       the exception (throwable) to log
+     */
+    void trace(@Nullable String message, @Nullable Throwable t);
+
+    /**
+     * Is the logger instance enabled for the DEBUG level?
+     *
+     * @return True if this Logger is enabled for the DEBUG level,
+     * false otherwise.
+     */
+    boolean isDebugEnabled();
+
+    /**
+     * Log a message at the DEBUG level.
+     *
+     * @param message the message string to be logged
+     */
+    void debug(@Nullable String message);
+
+    /**
+     * Log a message at the DEBUG level according to the specified format
+     * and arguments.
+     *
+     * @param format    the format string
+     * @param arguments the arguments
+     */
+    void debug(@Nullable String format, Object... arguments);
+
+    /**
+     * Log an exception (throwable) at the DEBUG level with an
+     * accompanying message.
+     *
+     * @param message the message accompanying the exception
+     * @param t       the exception (throwable) to log
+     */
+    void debug(@Nullable String message, @Nullable Throwable t);
+
+    /**
+     * Is the logger instance enabled for the INFO level?
+     *
+     * @return True if this Logger is enabled for the INFO level,
+     * false otherwise.
+     */
+    boolean isInfoEnabled();
+
+    /**
+     * Log a message at the INFO level.
+     *
+     * @param message the message string to be logged
+     */
+    void info(@Nullable String message);
+
+    /**
+     * Log a message at the INFO level according to the specified format
+     * and arguments.
+     *
+     * @param format    the format string
+     * @param arguments the arguments
+     */
+    void info(@Nullable String format, Object... arguments);
+
+    /**
+     * Log an exception (throwable) at the INFO level with an
+     * accompanying message.
+     *
+     * @param message the message accompanying the exception
+     * @param t       the exception (throwable) to log
+     */
+    void info(@Nullable String message, @Nullable Throwable t);
+
+    /**
+     * Is the logger instance enabled for the WARN level?
+     *
+     * @return True if this Logger is enabled for the WARN level,
+     * false otherwise.
+     */
+    boolean isWarnEnabled();
+
+    /**
+     * Log a message at the WARN level.
+     *
+     * @param message the message string to be logged
+     */
+    void warn(@Nullable String message);
+
+    /**
+     * Log a message at the WARN level according to the specified format
+     * and arguments.
+     *
+     * @param format    the format string
+     * @param arguments the arguments
+     */
+    void warn(@Nullable String format, Object... arguments);
+
+    /**
+     * Log an exception (throwable) at the WARN level with an
+     * accompanying message.
+     *
+     * @param message the message accompanying the exception
+     * @param t       the exception (throwable) to log
+     */
+    void warn(@Nullable String message, @Nullable Throwable t);
+
+    /**
+     * Is the logger instance enabled for the ERROR level?
+     *
+     * @return True if this Logger is enabled for the ERROR level,
+     * false otherwise.
+     */
+    boolean isErrorEnabled();
+
+    /**
+     * Log a message at the ERROR level.
+     *
+     * @param message the message string to be logged
+     */
+    void error(@Nullable String message);
+
+    /**
+     * Log a message at the ERROR level according to the specified format
+     * and arguments.
+     *
+     * @param format    the format string
+     * @param arguments the arguments
+     */
+    void error(@Nullable String format, Object... arguments);
+
+    /**
+     * Log an exception (throwable) at the ERROR level with an
+     * accompanying message.
+     *
+     * @param message the message accompanying the exception
+     * @param t       the exception (throwable) to log
+     */
+    void error(@Nullable String message, @Nullable Throwable t);
+
+}

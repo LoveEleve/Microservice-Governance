@@ -1,0 +1,21 @@
+# PropertySourceLoader
+org.springframework.boot.env.PropertySourceLoader=\
+io.microsphere.spring.boot.env.PropertiesEmptyPropertySourceLoader
+
+# BeanListener
+io.microsphere.spring.context.event.BeanListener=\
+io.microsphere.spring.context.event.LoggingBeanListener,\
+io.microsphere.spring.context.event.BeanTimeStatistics
+
+# BeanFactoryListener
+io.microsphere.spring.context.event.BeanFactoryListener=\
+io.microsphere.spring.context.event.LoggingBeanFactoryListener
+
+# ApplicationListener
+org.springframework.context.ApplicationListener=\
+io.microsphere.spring.boot.context.LoggingOnceApplicationPreparedEventListener,\
+io.microsphere.spring.boot.context.LoggingOnceMainApplicationPreparedEventListener
+
+# BindListener
+io.microsphere.spring.boot.context.properties.bind.BindListener=\
+io.microsphere.spring.boot.context.properties.bind.TestBindListener

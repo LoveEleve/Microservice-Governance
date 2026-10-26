@@ -1,0 +1,15 @@
+# Resilience4jEventApplicationEventPublisher
+io.microsphere.resilience4j.spring.common.event.Resilience4jEventApplicationEventPublisher=\
+io.microsphere.resilience4j.spring.bulkhead.event.BulkheadApplicationEventPublisher,\
+io.microsphere.resilience4j.spring.circuitbreaker.event.CircuitBreakerApplicationEventPublisher,\
+io.microsphere.resilience4j.spring.ratelimiter.event.RateLimiterApplicationEventPublisher,\
+io.microsphere.resilience4j.spring.retry.event.RetryApplicationEventPublisher,\
+io.microsphere.resilience4j.spring.timelimiter.event.TimeLimiterApplicationEventPublisher
+
+# Resilience4jEventConsumerBeanRegistrar
+io.microsphere.resilience4j.spring.common.event.Resilience4jEventConsumerBeanRegistrar=\
+io.microsphere.resilience4j.spring.bulkhead.event.BulkheadEventConsumerBeanRegistrar,\
+io.microsphere.resilience4j.spring.circuitbreaker.event.CircuitBreakerEventConsumerBeanRegistrar,\
+io.microsphere.resilience4j.spring.ratelimiter.event.RateLimiterEventConsumerBeanRegistrar,\
+io.microsphere.resilience4j.spring.retry.event.RetryEventConsumerBeanRegistrar,\
+io.microsphere.resilience4j.spring.timelimiter.event.TimeLimiterEventConsumerBeanRegistrar

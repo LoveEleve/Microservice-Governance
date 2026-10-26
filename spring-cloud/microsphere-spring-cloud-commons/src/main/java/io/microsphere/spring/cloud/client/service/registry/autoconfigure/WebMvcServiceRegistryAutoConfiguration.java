@@ -1,0 +1,140 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.spring.cloud.client.service.registry.autoconfigure;
+
+import io.microsphere.spring.boot.webmvc.autoconfigure.condition.ConditionalOnWebMvcAvailable;
+import io.microsphere.spring.cloud.client.service.registry.condition.ConditionalOnAutoServiceRegistrationAvailable;
+import io.microsphere.spring.web.metadata.WebEndpointMapping;
+import io.microsphere.util.ValueHolder;
+import jakarta.servlet.Filter;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.web.servlet.DispatcherServletRegistrationBean;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.cloud.client.serviceregistry.ServiceRegistry;
+
+import java.util.Collection;
+import java.util.Objects;
+
+import static io.microsphere.util.ArrayUtils.EMPTY_STRING_ARRAY;
+import static io.microsphere.util.ArrayUtils.arrayEquals;
+import static java.lang.Boolean.FALSE;
+
+/**
+ * Auto-Configuration class for {@link ServiceRegistry ServiceRegistry} on the Spring WebMVC Application
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @since 1.0.0
+ */
+@ConditionalOnWebMvcAvailable
+@ConditionalOnAutoServiceRegistrationAvailable
+@AutoConfigureAfter(value = {
+        ServiceRegistryAutoConfiguration.class,
+        SimpleAutoServiceRegistrationAutoConfiguration.class
+}, name = {
+        "io.microsphere.spring.boot.webmvc.autoconfigure.WebMvcAutoConfiguration"
+})
+public class WebMvcServiceRegistryAutoConfiguration extends WebServiceRegistryAutoConfiguration {
+
+    private static final String[] DEFAULT_URL_MAPPINGS = {"/*"};
+
+    @Value("${server.servlet.context-path:}")
+    private String contextPath;
+
+    @Autowired
+    private ObjectProvider<FilterRegistrationBean> filterRegistrationBeansProvider;
+
+    @Autowired
+    private ObjectProvider<DispatcherServletRegistrationBean> dispatcherServletRegistrationBeanProvider;
+
+    /**
+     * Returns the servlet context path configured via the {@code server.servlet.context-path}
+     * property for Spring WebMVC applications.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     * // With server.servlet.context-path=/api
+     * String contextPath = config.getContextPath(); // returns "/api"
+     * }</pre>
+     *
+     * @return the servlet context path, or an empty string if not configured
+     */
+    @Override
+    protected String getContextPath() {
+        return this.contextPath;
+    }
+
+    /**
+     * Checks whether the given {@link WebEndpointMapping} should be excluded from
+     * registration metadata. A mapping is excluded if it corresponds to a built-in
+     * Spring {@link Filter} registration or a {@link DispatcherServletRegistrationBean} mapping.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     * boolean excluded = config.isExcludedMapping(mapping, new String[]{"/*"});
+     * // returns true if the mapping matches a built-in filter or DispatcherServlet
+     * }</pre>
+     *
+     * @param mapping  the {@link WebEndpointMapping} to evaluate
+     * @param patterns the URL patterns associated with the mapping
+     * @return {@code true} if the mapping is a built-in filter or DispatcherServlet mapping
+     */
+    @Override
+    protected boolean isExcludedMapping(WebEndpointMapping mapping, String[] patterns) {
+        return isBuiltInFilterMapping(patterns) || isDispatcherServletMapping(mapping, patterns);
+    }
+
+    private boolean isBuiltInFilterMapping(String[] patterns) {
+        boolean found = filterRegistrationBeansProvider.stream()
+                .filter(filterRegistrationBean -> matchFilter(filterRegistrationBean, patterns))
+                .filter(filterRegistrationBean -> {
+                    Filter filter = filterRegistrationBean.getFilter();
+                    Class<? extends Filter> filterClass = filter.getClass();
+                    String filterClassName = filterClass.getName();
+                    return filterClassName.startsWith("org.springframework.");
+                })
+                .findFirst()
+                .isPresent();
+
+        return found;
+    }
+
+    private boolean isDispatcherServletMapping(WebEndpointMapping mapping, String[] patterns) {
+        ValueHolder<Boolean> found = new ValueHolder<>(FALSE);
+        this.dispatcherServletRegistrationBeanProvider.ifAvailable(registrationBean -> {
+            Object source = mapping.getEndpoint();
+            String servletName = registrationBean.getServletName();
+            if (Objects.equals(source, servletName)) {
+                Collection<String> urlMappings = registrationBean.getUrlMappings();
+                found.setValue(matchUrlPatterns(urlMappings, patterns));
+            }
+        });
+        return found.getValue();
+    }
+
+    private boolean matchFilter(FilterRegistrationBean filterRegistrationBean, String[] patterns) {
+        Collection<String> urlPatterns = filterRegistrationBean.getUrlPatterns();
+        return matchUrlPatterns(urlPatterns, patterns);
+    }
+
+    private boolean matchUrlPatterns(Collection<String> urlPatterns, String[] patterns) {
+        String[] urlPatternsArray = urlPatterns.isEmpty() ? DEFAULT_URL_MAPPINGS : urlPatterns.toArray(EMPTY_STRING_ARRAY);
+        return arrayEquals(urlPatternsArray, patterns);
+    }
+}

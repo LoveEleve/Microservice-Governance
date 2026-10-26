@@ -1,0 +1,32 @@
+# ApplicationContextInitializer
+org.springframework.context.ApplicationContextInitializer=\
+io.microsphere.spring.boot.report.ConditionEvaluationReportInitializer,\
+io.microsphere.spring.boot.env.config.OriginTrackedConfigurationPropertyInitializer
+
+# SpringApplicationRunListener
+org.springframework.boot.SpringApplicationRunListener=\
+io.microsphere.spring.boot.classloading.BannedArtifactClassLoadingListener,\
+io.microsphere.spring.boot.listener.FailureReportSpringApplicationRunListener
+
+# Application Listeners
+org.springframework.context.ApplicationListener=\
+io.microsphere.spring.boot.diagnostics.ArtifactsCollisionDiagnosisListener,\
+io.microsphere.spring.boot.report.ConditionEvaluationReportListener,\
+io.microsphere.spring.boot.env.DefaultPropertiesApplicationListener
+
+# SpringBootExceptionReporter
+org.springframework.boot.SpringBootExceptionReporter=\
+io.microsphere.spring.boot.report.ConditionEvaluationSpringBootExceptionReporter
+
+# Failure Analyzers
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+io.microsphere.spring.boot.diagnostics.ArtifactsCollisionFailureAnalyzer
+
+# AutoConfigurationImportFilter
+org.springframework.boot.autoconfigure.AutoConfigurationImportFilter=\
+io.microsphere.spring.boot.autoconfigure.ConfigurableAutoConfigurationImportFilter
+
+# DefaultPropertiesPostProcessor
+io.microsphere.spring.boot.env.DefaultPropertiesPostProcessor=\
+io.microsphere.spring.boot.env.SpringApplicationDefaultPropertiesPostProcessor
+

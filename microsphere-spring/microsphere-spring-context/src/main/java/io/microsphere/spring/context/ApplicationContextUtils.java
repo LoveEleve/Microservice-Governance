@@ -1,0 +1,162 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.spring.context;
+
+import io.microsphere.annotation.Nonnull;
+import io.microsphere.annotation.Nullable;
+import io.microsphere.logging.Logger;
+import io.microsphere.util.Utils;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ConfigurableApplicationContext;
+
+import java.util.List;
+
+import static io.microsphere.logging.LoggerFactory.getLogger;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.getBeanPostProcessors;
+import static io.microsphere.util.ClassLoaderUtils.resolveClass;
+import static io.microsphere.util.ClassUtils.cast;
+import static io.microsphere.util.ClassUtils.getTypeName;
+
+/**
+ * {@link ApplicationContext} Utilities
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @since 1.0.0
+ */
+public abstract class ApplicationContextUtils implements Utils {
+
+    private static final Logger logger = getLogger(ApplicationContextUtils.class);
+
+    /**
+     * The {@link org.springframework.context.support.ApplicationContextAwareProcessor} Class Name (Internal).
+     *
+     * @see org.springframework.context.support.ApplicationContextAwareProcessor
+     */
+    public static final String APPLICATION_CONTEXT_AWARE_PROCESSOR_CLASS_NAME = "org.springframework.context.support.ApplicationContextAwareProcessor";
+
+    /**
+     * The {@link org.springframework.context.support.ApplicationContextAwareProcessor} Class (Internal).
+     *
+     * @see org.springframework.context.support.ApplicationContextAwareProcessor
+     */
+    @Nullable
+    public static final Class<?> APPLICATION_CONTEXT_AWARE_PROCESSOR_CLASS = resolveClass(APPLICATION_CONTEXT_AWARE_PROCESSOR_CLASS_NAME);
+
+    /**
+     * Casts the given {@link ApplicationContext} to a {@link ConfigurableApplicationContext} if possible.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   GenericApplicationContext context = new GenericApplicationContext();
+     *   ConfigurableApplicationContext configurableContext = asConfigurableApplicationContext(context);
+     *   assertSame(context, configurableContext);
+     * }</pre>
+     *
+     * @param context the {@link ApplicationContext} to cast
+     * @return the {@link ConfigurableApplicationContext}, or {@code null} if the cast is not possible
+     */
+    public static ConfigurableApplicationContext asConfigurableApplicationContext(ApplicationContext context) {
+        return asConfigurableApplicationContext((Object) context);
+    }
+
+    /**
+     * Casts the given object to a {@link ConfigurableApplicationContext} if possible.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   ResourceLoader resourceLoader = context; // context is a GenericApplicationContext
+     *   ConfigurableApplicationContext configurableContext =
+     *       asConfigurableApplicationContext(resourceLoader);
+     *   assertSame(context, configurableContext);
+     * }</pre>
+     *
+     * @param object the object to cast
+     * @return the {@link ConfigurableApplicationContext}, or {@code null} if the cast is not possible
+     */
+    public static ConfigurableApplicationContext asConfigurableApplicationContext(Object object) {
+        return cast(object, ConfigurableApplicationContext.class);
+    }
+
+    /**
+     * Casts the given {@link BeanFactory} to an {@link ApplicationContext} if possible.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   GenericApplicationContext context = new GenericApplicationContext();
+     *   ApplicationContext applicationContext = asApplicationContext(context);
+     *   assertSame(context, applicationContext);
+     * }</pre>
+     *
+     * @param beanFactory the {@link BeanFactory} to cast
+     * @return the {@link ApplicationContext}, or {@code null} if the cast is not possible
+     */
+    public static ApplicationContext asApplicationContext(BeanFactory beanFactory) {
+        return cast(beanFactory, ApplicationContext.class);
+    }
+
+    /**
+     * Get the {@link org.springframework.context.support.ApplicationContextAwareProcessor}
+     *
+     * @return the {@link org.springframework.context.support.ApplicationContextAwareProcessor}
+     */
+    @Nonnull
+    public static BeanPostProcessor getApplicationContextAwareProcessor(ConfigurableApplicationContext context) {
+        ConfigurableListableBeanFactory beanFactory = context.getBeanFactory();
+        return getApplicationContextAwareProcessor(beanFactory);
+    }
+
+    /**
+     * Get the {@link org.springframework.context.support.ApplicationContextAwareProcessor}
+     *
+     * @return the {@link org.springframework.context.support.ApplicationContextAwareProcessor}
+     */
+    @Nullable
+    public static BeanPostProcessor getApplicationContextAwareProcessor(BeanFactory beanFactory) {
+        List<BeanPostProcessor> beanPostProcessors = getBeanPostProcessors(beanFactory);
+        BeanPostProcessor applicationContextAwareProcessor = null;
+        for (BeanPostProcessor beanPostProcessor : beanPostProcessors) {
+            if (isApplicationContextAwareProcessor(beanPostProcessor)) {
+                applicationContextAwareProcessor = beanPostProcessor;
+                break;
+            }
+        }
+        if (logger.isTraceEnabled()) {
+            logger.trace("The ApplicationContextAwareProcessor bean : {}", applicationContextAwareProcessor);
+        }
+        return applicationContextAwareProcessor;
+    }
+
+    /**
+     * Is the specified {@link BeanPostProcessor} is
+     * {@link org.springframework.context.support.ApplicationContextAwareProcessor}
+     *
+     * @param instance the specified {@link BeanPostProcessor}
+     * @return if the specified {@link BeanPostProcessor} is
+     * {@link org.springframework.context.support.ApplicationContextAwareProcessor},
+     * return <code>true</code>, or <code>false</code>
+     */
+    public static boolean isApplicationContextAwareProcessor(Object instance) {
+        String beanClassName = getTypeName(instance);
+        return APPLICATION_CONTEXT_AWARE_PROCESSOR_CLASS_NAME.equals(beanClassName);
+    }
+
+    private ApplicationContextUtils() {
+    }
+}

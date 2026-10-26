@@ -1,0 +1,309 @@
+package io.microsphere.metrics.micrometer.instrument.binder.system;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tag;
+import io.microsphere.annotation.Nonnull;
+import io.microsphere.annotation.Nullable;
+import io.microsphere.metrics.micrometer.instrument.binder.AbstractMeterBinder;
+import io.microsphere.metrics.micrometer.util.MicrometerUtils;
+
+import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledExecutorService;
+
+import static io.micrometer.core.instrument.Gauge.builder;
+import static io.micrometer.core.instrument.binder.BaseUnits.BYTES;
+import static io.microsphere.collection.ListUtils.newArrayList;
+import static io.microsphere.collection.MapUtils.newConcurrentHashMap;
+import static io.microsphere.metrics.micrometer.instrument.binder.system.constants.SystemConstants.NETWORK_PREFIX;
+import static io.microsphere.metrics.micrometer.instrument.binder.system.util.SystemUtils.getMetricsCollectionInterval;
+import static io.microsphere.metrics.micrometer.instrument.binder.system.util.SystemUtils.getNetworkStatsFilePath;
+import static io.microsphere.metrics.micrometer.instrument.binder.system.util.SystemUtils.readLines;
+import static io.microsphere.util.ObjectUtils.defaultIfNull;
+import static io.microsphere.util.StringUtils.split;
+import static java.lang.Character.isDigit;
+import static java.lang.Character.isWhitespace;
+import static java.lang.Long.parseLong;
+import static java.nio.file.Files.exists;
+import static java.nio.file.Paths.get;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
+/**
+ * Network Statistics Metrics
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy<a/>
+ */
+public class NetworkStatisticsMetrics extends AbstractMeterBinder {
+
+    public static final String METRIC_PREFIX = NETWORK_PREFIX;
+
+    private final ConcurrentMap<String, Stats> statsMap = newConcurrentHashMap(8);
+
+    @Nonnull
+    private final ScheduledExecutorService scheduledExecutorService;
+
+    /**
+     * The stats file path
+     */
+    @Nonnull
+    private final Path statsFilePath;
+
+    /**
+     * The interval time of metrics collection in milliseconds.
+     */
+    private final long interval;
+
+    private MeterRegistry registry;
+
+    public NetworkStatisticsMetrics() {
+        this(get(getNetworkStatsFilePath()), getMetricsCollectionInterval());
+    }
+
+    public NetworkStatisticsMetrics(Path statsFilePath, long interval) {
+        this(statsFilePath, interval, null);
+    }
+
+    public NetworkStatisticsMetrics(Path statsFilePath, long interval, @Nullable ScheduledExecutorService scheduledExecutorService) {
+        this(statsFilePath, interval, scheduledExecutorService, null);
+    }
+
+    public NetworkStatisticsMetrics(Path statsFilePath, long interval, @Nullable ScheduledExecutorService scheduledExecutorService, @Nullable Iterable<Tag> tags) {
+        super(tags);
+        this.statsFilePath = statsFilePath;
+        this.interval = interval;
+        this.scheduledExecutorService = defaultIfNull(scheduledExecutorService, MicrometerUtils::getScheduledExecutor);
+    }
+
+    private void bindStats() {
+        String[] lines = readLines(this.statsFilePath);
+        for (int i = 2; i < lines.length; i++) {
+            String statsLine = lines[i];
+            Stats stats = parseStats(statsLine);
+            if (stats == null) {
+                logger.warn("The Stats can't be parsed by the line {} : {}", i + 1, statsLine);
+                continue;
+            }
+            Stats boundStats = statsMap.computeIfAbsent(stats.name, name -> {
+                bindStats(stats);
+                return stats;
+            });
+            boundStats.update(stats);
+        }
+    }
+
+    private void bindStats(Stats stats) {
+        Iterable<Tag> newTags = combine("interface", stats.name);
+
+        builder(METRIC_PREFIX + "receive.bytes", stats::getReceiveBytes)
+                .tags(newTags)
+                .description("Number of good received bytes")
+                .baseUnit(BYTES)
+                .register(registry);
+
+        builder(METRIC_PREFIX + "receive.packets", stats::getReceivePackets)
+                .tags(newTags)
+                .description("Number of good packets received by the interface")
+                .strongReference(true)
+                .register(registry);
+
+        builder(METRIC_PREFIX + "receive.errors", stats::getReceiveErrors)
+                .tags(newTags)
+                .description("Total number of bad packets received on this network device")
+                .strongReference(true)
+                .register(registry);
+
+        builder(METRIC_PREFIX + "receive.drop", stats::getReceiveDrop)
+                .tags(newTags)
+                .description("Number of packets received but not processed")
+                .strongReference(true)
+                .register(registry);
+
+        builder(METRIC_PREFIX + "transmit.bytes", stats::getTransmitBytes)
+                .tags(newTags)
+                .description("Number of good transmitted bytes")
+                .baseUnit(BYTES)
+                .register(registry);
+
+        builder(METRIC_PREFIX + "transmit.packets", stats::getTransmitPackets)
+                .tags(newTags)
+                .description("Number of packets successfully transmitted")
+                .strongReference(true)
+                .register(registry);
+
+        builder(METRIC_PREFIX + "transmit.errors", stats::getTransmitErrors)
+                .tags(newTags).description("Total number of transmit problems")
+                .strongReference(true)
+                .register(registry);
+
+        builder(METRIC_PREFIX + "transmit.drop", stats::getTransmitDrop)
+                .tags(newTags).description("Number of packets dropped on their way to transmission")
+                .strongReference(true)
+                .register(registry);
+    }
+
+    @Override
+    protected boolean supports(MeterRegistry registry) {
+        return exists(this.statsFilePath);
+    }
+
+    @Override
+    protected void doBindTo(MeterRegistry registry) {
+        this.registry = registry;
+        bindStats();
+        bindStatsOnSchedule();
+    }
+
+    private void bindStatsOnSchedule() {
+        this.scheduledExecutorService.scheduleAtFixedRate(this::bindStats, 0, this.interval, MILLISECONDS);
+    }
+
+    private Stats parseStats(String statsLine) {
+        String[] nameAndData = split(statsLine, ':');
+        Stats stats = null;
+        if (nameAndData.length == 2) {
+
+            String name = nameAndData[0].trim();
+            String data = nameAndData[1].trim();
+            int startIndex = -1;
+            int endIndex = -1;
+            char[] chars = data.toCharArray();
+            int length = chars.length;
+
+            List<String> values = newArrayList(16);
+
+            for (int i = 0; i < length; i++) {
+                char c = chars[i];
+                boolean isDigit = isDigit(c);
+                if (isDigit && startIndex == -1) {
+                    startIndex = i;
+                }
+                if (isWhitespace(c)) {
+                    endIndex = i;
+                }
+                if (isDigit && i == length - 1) {
+                    endIndex = i + 1;
+                }
+                if (endIndex > startIndex && startIndex > -1) {
+                    String value = new String(chars, startIndex, endIndex - startIndex);
+                    values.add(value);
+                    startIndex = -1;
+                }
+            }
+
+            int index = 0;
+
+            stats = new Stats(name);
+
+            stats.receiveBytes = parseLong(values.get(index++));
+            stats.receivePackets = parseLong(values.get(index++));
+            stats.receiveErrors = parseLong(values.get(index++));
+            stats.receiveDrop = parseLong(values.get(index++));
+            index += 4;
+            stats.transmitBytes = parseLong(values.get(index++));
+            stats.transmitPackets = parseLong(values.get(index++));
+            stats.transmitErrors = parseLong(values.get(index++));
+            stats.transmitDrop = parseLong(values.get(index++));
+        }
+        return stats;
+    }
+
+    /**
+     * Inter-|   Receive                                                |  Transmit
+     * face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+     * lo:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+     * tunl0:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+     * ip6tnl0:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+     * eth0:    1392      16    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+     */
+    private class Stats {
+
+        private final String name;
+
+        private long receiveBytes;
+
+        private long receivePackets;
+
+        private long receiveErrors;
+
+        private long receiveDrop;
+
+        private long transmitBytes;
+
+        private long transmitPackets;
+
+        private long transmitErrors;
+
+        private long transmitDrop;
+
+        private Stats(String name) {
+            this.name = name;
+        }
+
+        public long getReceiveBytes() {
+            return receiveBytes;
+        }
+
+        public long getReceivePackets() {
+            return receivePackets;
+        }
+
+        public long getReceiveErrors() {
+            return receiveErrors;
+        }
+
+        public long getReceiveDrop() {
+            return receiveDrop;
+        }
+
+        public long getTransmitBytes() {
+            return transmitBytes;
+        }
+
+        public long getTransmitPackets() {
+            return transmitPackets;
+        }
+
+        public long getTransmitErrors() {
+            return transmitErrors;
+        }
+
+        public long getTransmitDrop() {
+            return transmitDrop;
+        }
+
+        private void update(Stats stats) {
+            if (this == stats) {
+                return;
+            }
+            synchronized (this) {
+                this.receiveBytes = stats.receiveBytes;
+                this.receivePackets = stats.receivePackets;
+                this.receiveErrors = stats.receiveErrors;
+                this.receiveDrop = stats.receiveDrop;
+
+                this.transmitBytes = stats.transmitBytes;
+                this.transmitPackets = stats.transmitPackets;
+                this.transmitErrors = stats.transmitErrors;
+                this.transmitDrop = stats.transmitDrop;
+            }
+            logger.trace("The Stats has been updated : {}", stats);
+            return;
+        }
+
+        @Override
+        public String toString() {
+            return "Stats{" +
+                    "name='" + name + '\'' +
+                    ", receiveBytes=" + getReceiveBytes() +
+                    ", receivePackets=" + getReceivePackets() +
+                    ", receiveErrors=" + getReceiveErrors() +
+                    ", receiveDrop=" + getReceiveDrop() +
+                    ", transmitBytes=" + getTransmitBytes() +
+                    ", transmitPackets=" + getTransmitPackets() +
+                    ", transmitErrors=" + getTransmitErrors() +
+                    ", transmitDrop=" + getTransmitDrop() +
+                    '}';
+        }
+    }
+}

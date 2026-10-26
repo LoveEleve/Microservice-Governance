@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>io.github.microsphere-projects</groupId>
+        <artifactId>microsphere-java</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.github.microsphere-projects</groupId>
+    <artifactId>microsphere-java-parent</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+
+    <name>Microsphere :: Java :: Parent</name>
+    <description>Microsphere Java Parent</description>
+
+    <properties>
+        <microsphere-bom.version>0.3.16</microsphere-bom.version>
+        <spring-framework.version>7.0.9</spring-framework.version>
+    </properties>
+
+    <dependencyManagement>
+
+        <dependencies>
+
+            <!-- Microsphere BOMs -->
+            <dependency>
+                <groupId>io.github.microsphere-projects</groupId>
+                <artifactId>microsphere-all-bom</artifactId>
+                <version>${microsphere-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Spring Framework BOM -->
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-framework-bom</artifactId>
+                <version>${spring-framework.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+        </dependencies>
+
+    </dependencyManagement>
+
+    <profiles>
+
+        <profile>
+            <id>java8-16</id>
+            <activation>
+                <jdk>[1.8,17)</jdk>
+            </activation>
+            <properties>
+                <spring-framework.version>5.3.39</spring-framework.version>
+            </properties>
+        </profile>
+
+    </profiles>
+</project>

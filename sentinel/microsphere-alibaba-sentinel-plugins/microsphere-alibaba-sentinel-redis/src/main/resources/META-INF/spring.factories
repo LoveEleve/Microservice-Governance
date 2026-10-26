@@ -1,0 +1,2 @@
+io.microsphere.redis.spring.interceptor.RedisConnectionInterceptor=\
+io.microsphere.alibaba.sentinel.redis.spring.SentinelRedisCommandInterceptor

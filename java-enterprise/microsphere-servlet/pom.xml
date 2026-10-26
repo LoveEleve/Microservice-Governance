@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>io.github.microsphere-projects</groupId>
+        <artifactId>microsphere-java-enterprise-parent</artifactId>
+        <version>${revision}</version>
+        <relativePath>../microsphere-java-enterprise-parent/pom.xml</relativePath>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.github.microsphere-projects</groupId>
+    <artifactId>microsphere-servlet</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Microsphere :: Java EE :: Servlet</name>
+    <description>Microsphere Java EE Servlet Project</description>
+
+    <dependencies>
+
+        <!-- Microsphere Core -->
+        <dependency>
+            <groupId>io.github.microsphere-projects</groupId>
+            <artifactId>microsphere-java-core</artifactId>
+        </dependency>
+
+        <!-- Java Common Annotations -->
+        <dependency>
+            <groupId>javax.annotation</groupId>
+            <artifactId>javax.annotation-api</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>javax.servlet-api</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+
+    <profiles>
+        <profile>
+            <id>servlet-2.3</id>
+        </profile>
+
+        <profile>
+            <id>servlet-2.4</id>
+        </profile>
+
+        <profile>
+            <id>servlet-2.5</id>
+        </profile>
+
+        <profile>
+            <id>servlet-3.0</id>
+        </profile>
+
+        <profile>
+            <id>servlet-3.1</id>
+            <properties>
+                <javax.servlet-api.version>3.1.0</javax.servlet-api.version>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>servlet-4.0</id>
+            <properties>
+                <javax.servlet-api.version>4.0.1</javax.servlet-api.version>
+            </properties>
+        </profile>
+
+    </profiles>
+
+</project>

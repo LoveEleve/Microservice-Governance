@@ -1,0 +1,3 @@
+org.springframework.context.ApplicationListener=\
+io.microsphere.observability.logging.log4j2.spring.boot.listener.AddingInMemoryAppenderListener,\
+io.microsphere.observability.logging.log4j2.spring.boot.listener.RemovingInMemoryAppenderListener

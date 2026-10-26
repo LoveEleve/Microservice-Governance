@@ -1,0 +1,10 @@
+io.microsphere.mybatis.test.junit.jupiter.resolver.ConfigurationResolver
+io.microsphere.mybatis.test.junit.jupiter.resolver.ConnectionResolver
+io.microsphere.mybatis.test.junit.jupiter.resolver.DataSourceResolver
+io.microsphere.mybatis.test.junit.jupiter.resolver.EnvironmentResolver
+io.microsphere.mybatis.test.junit.jupiter.resolver.ExecutorResolver
+io.microsphere.mybatis.test.junit.jupiter.resolver.MapperComponentResolver
+io.microsphere.mybatis.test.junit.jupiter.resolver.PropertiesResolver
+io.microsphere.mybatis.test.junit.jupiter.resolver.SqlSessionFactoryResolver
+io.microsphere.mybatis.test.junit.jupiter.resolver.SqlSessionResolver
+io.microsphere.mybatis.test.junit.jupiter.resolver.TransactionResolver

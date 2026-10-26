@@ -1,0 +1,128 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.spring.config.context.annotation;
+
+import io.microsphere.spring.context.annotation.AnnotatedBeanCapableImportSelector;
+import io.microsphere.spring.core.annotation.ResolvablePlaceholderAnnotationAttributes;
+import io.microsphere.spring.core.env.PropertySourcesUtils;
+import org.springframework.core.annotation.AnnotationAttributes;
+import org.springframework.core.env.EnumerablePropertySource;
+import org.springframework.core.env.PropertySource;
+import org.springframework.core.type.AnnotationMetadata;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+
+import static io.microsphere.lang.function.ThrowableAction.execute;
+import static io.microsphere.spring.core.env.PropertySourcesUtils.DEFAULT_PROPERTIES_PROPERTY_SOURCE_NAME;
+import static io.microsphere.spring.core.env.PropertySourcesUtils.getDefaultProperties;
+import static io.microsphere.spring.core.io.support.PropertiesUtils.loadProperties;
+import static io.microsphere.util.ArrayUtils.isEmpty;
+
+/**
+ * The Loader class for {@link DefaultPropertiesPropertySource @DefaultPropertiesPropertySource}
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy<a/>
+ * @see DefaultPropertiesPropertySource
+ * @see ResourcePropertySourceLoader
+ * @since 1.0.0
+ */
+class DefaultPropertiesPropertySourceLoader extends AnnotatedBeanCapableImportSelector<DefaultPropertiesPropertySource> {
+
+    @Override
+    protected void selectImports(AnnotationMetadata metadata,
+                                 ResolvablePlaceholderAnnotationAttributes<DefaultPropertiesPropertySource> annotationAttributes,
+                                 Set<String> imports) {
+        loadPropertySource(annotationAttributes);
+    }
+
+    /**
+     * Load a {@link PropertySource} as a segment of {@link PropertySourcesUtils#DEFAULT_PROPERTIES_PROPERTY_SOURCE_NAME "defaultProperties"}
+     * {@link PropertySource}
+     *
+     * @param attributes {@link AnnotationAttributes}
+     */
+    protected void loadPropertySource(AnnotationAttributes attributes) {
+        Map<String, Object> defaultProperties = getDefaultProperties(this.environment);
+        execute(() -> {
+            loadPropertySourceFromLocations(attributes, defaultProperties);
+            loadPropertySourceFromProperties(attributes, defaultProperties);
+        });
+    }
+
+    void loadPropertySourceFromLocations(AnnotationAttributes attributes, Map<String, Object> defaultProperties) throws Throwable {
+        String[] locations = attributes.getStringArray("locations");
+        if (isEmpty(locations)) {
+            if (logger.isTraceEnabled()) {
+                logger.trace("The 'locations' or 'value' attribute is undefined from : {}", attributes);
+            }
+            return;
+        }
+        // The property source name of current single @DefaultPropertiesPropertySource
+        String propertySourceName = DEFAULT_PROPERTIES_PROPERTY_SOURCE_NAME + "@" + hashCode();
+        // Reuse ResourcePropertySourceLoader
+        ResourcePropertySourceLoader delegate = getDelegate();
+
+        PropertySourceExtensionAttributes<ResourcePropertySource> extensionAttributes = buildExtensionAttributes(attributes);
+        PropertySource<?> propertySource = delegate.loadPropertySource(extensionAttributes, propertySourceName);
+        loadPropertySource(propertySource, defaultProperties);
+    }
+
+    void loadPropertySource(PropertySource<?> propertySource, Map<String, Object> defaultProperties) {
+        if (propertySource instanceof EnumerablePropertySource enumerablePropertySource) {
+            for (String propertyName : enumerablePropertySource.getPropertyNames()) {
+                Object propertyValue = propertySource.getProperty(propertyName);
+                defaultProperties.put(propertyName, propertyValue);
+            }
+        }
+    }
+
+    void loadPropertySourceFromProperties(AnnotationAttributes attributes, Map<String, Object> defaultProperties) throws IOException {
+        String[] propertiesValue = attributes.getStringArray("properties");
+        if (isEmpty(propertiesValue)) {
+            if (logger.isTraceEnabled()) {
+                logger.trace("The 'properties' attribute is undefined from : {}", attributes);
+            }
+            return;
+        }
+        Properties properties = loadProperties(propertiesValue, super.environment);
+        for (String propertyName : properties.stringPropertyNames()) {
+            String propertyValue = properties.getProperty(propertyName);
+            Object oldPropertyValue = defaultProperties.put(propertyName, propertyValue);
+            if (oldPropertyValue != null) {
+                if (logger.isInfoEnabled()) {
+                    logger.info("Overriding property '{}' with value '{}' from '{}'", propertyName, propertyValue, oldPropertyValue);
+                }
+            }
+        }
+    }
+
+    private PropertySourceExtensionAttributes<ResourcePropertySource> buildExtensionAttributes(AnnotationAttributes attributes) {
+        return new PropertySourceExtensionAttributes(attributes, ResourcePropertySource.class, this.getEnvironment());
+    }
+
+    private ResourcePropertySourceLoader getDelegate() {
+        ResourcePropertySourceLoader delegate = new ResourcePropertySourceLoader();
+        delegate.setEnvironment(getEnvironment());
+        delegate.setBeanFactory(getBeanFactory());
+        delegate.setResourceLoader(getResourceLoader());
+        delegate.setBeanClassLoader(getClassLoader());
+        return delegate;
+    }
+}

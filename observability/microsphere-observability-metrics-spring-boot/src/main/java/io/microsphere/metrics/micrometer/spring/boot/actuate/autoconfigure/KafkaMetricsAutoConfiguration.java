@@ -1,0 +1,111 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.microsphere.metrics.micrometer.spring.boot.actuate.autoconfigure;
+
+import io.micrometer.core.instrument.Tag;
+import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics;
+import io.microsphere.annotation.ConfigurationProperty;
+import io.microsphere.metrics.micrometer.spring.boot.actuate.condition.ConditionalOnMicrometerAvailable;
+import io.microsphere.observability.logging.log4j2.spring.boot.Log4j2KafkaAppenderProperties;
+import io.microsphere.observability.logging.log4j2.spring.boot.condition.ConditionalOnLog4j2Available;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.logging.log4j.core.appender.mom.kafka.KafkaAppender;
+import org.apache.logging.log4j.core.appender.mom.kafka.KafkaManager;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import static io.micrometer.core.instrument.Tag.of;
+import static io.microsphere.annotation.ConfigurationProperty.APPLICATION_SOURCE;
+import static io.microsphere.collection.Lists.ofList;
+import static io.microsphere.constants.PropertyConstants.ENABLED_PROPERTY_NAME;
+import static io.microsphere.constants.SymbolConstants.DOT;
+import static io.microsphere.metrics.micrometer.spring.boot.actuate.autoconfigure.KafkaMetricsAutoConfiguration.KAFKA_METRICS_ENABLED_PROPERTY_NAME;
+import static io.microsphere.metrics.micrometer.spring.boot.actuate.condition.ConditionalOnMicrometerEnabled.PREFIX;
+import static io.microsphere.reflect.FieldUtils.getFieldValue;
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
+
+/**
+ * The Auto-Configuration class for Apache Kafka Metrics
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @see org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration
+ * @see org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration
+ * @see org.springframework.boot.actuate.autoconfigure.metrics.KafkaMetricsAutoConfiguration
+ * @see org.springframework.boot.micrometer.metrics.autoconfigure.MetricsAutoConfiguration
+ * @see org.springframework.boot.kafka.autoconfigure.metrics.KafkaMetricsAutoConfiguration
+ * @see org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration
+ * @see org.springframework.boot.kafka.autoconfigure.metrics.KafkaMetricsAutoConfiguration
+ * @see io.microsphere.observability.logging.log4j2.spring.boot.autoconfigure.Log4j2AutoConfiguration
+ * @since 1.0.0
+ */
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnProperty(name = KAFKA_METRICS_ENABLED_PROPERTY_NAME, matchIfMissing = true)
+@ConditionalOnMicrometerAvailable
+@ConditionalOnClass(name = {
+        "io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics",                                   // Micrometer Core API
+        "org.apache.kafka.clients.KafkaClient",                                                            // Kafka Client API
+        "io.microsphere.observability.logging.log4j2.spring.boot.Log4j2KafkaAppenderProperties"            // Microsphere Observability Logging Spring Boot API
+})
+@AutoConfigureAfter(name = {
+        // Spring Boot Actuator API [2.0, 4.0)
+        "org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration",
+        "org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration",
+        "org.springframework.boot.actuate.autoconfigure.metrics.KafkaMetricsAutoConfiguration",
+        // Spring Boot Actuator API [4.0, )
+        "org.springframework.boot.micrometer.metrics.autoconfigure.MetricsAutoConfiguration",
+        "org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration",
+        "org.springframework.boot.kafka.autoconfigure.metrics.KafkaMetricsAutoConfiguration",
+        // Microsphere Observability Logging Spring Boot API
+        "io.microsphere.observability.logging.log4j2.spring.boot.autoconfigure.Log4j2AutoConfiguration"
+})
+public class KafkaMetricsAutoConfiguration {
+
+    /**
+     * The Property Name of enabling Apache Kafka metrics : "microsphere.metrics.micrometer.kafka.enabled"
+     */
+    @ConfigurationProperty(
+            type = boolean.class,
+            defaultValue = "true",
+            source = APPLICATION_SOURCE
+    )
+    public static final String KAFKA_METRICS_ENABLED_PROPERTY_NAME = PREFIX + "kafka" + DOT + ENABLED_PROPERTY_NAME;
+
+    @ConditionalOnLog4j2Available
+    @ConditionalOnBean(value = {
+            KafkaAppender.class,
+            Log4j2KafkaAppenderProperties.class,
+    })
+    @Bean(destroyMethod = "close")
+    public KafkaClientMetrics kafkaClientMetrics(KafkaAppender kafkaAppender, Log4j2KafkaAppenderProperties properties) {
+        Producer producer = getKafkaProducer(kafkaAppender);
+        String clientId = properties.getProperties().get(CLIENT_ID_CONFIG);
+        // Keep the same behavior of org.springframework.kafka.core.MicrometerProducerListener
+        Iterable<Tag> tags = ofList(of("spring.id", clientId));
+        return new KafkaClientMetrics(producer, tags);
+    }
+
+    private Producer getKafkaProducer(KafkaAppender kafkaAppender) {
+        KafkaManager kafkaManager = getFieldValue(true, kafkaAppender, "manager", KafkaManager.class);
+        Producer producer = getFieldValue(true, kafkaManager, "producer", Producer.class);
+        return producer;
+    }
+}

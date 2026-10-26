@@ -1,0 +1,247 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.spring.config.env.event;
+
+import io.microsphere.annotation.Nonnull;
+import io.microsphere.annotation.Nullable;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.event.ApplicationContextEvent;
+import org.springframework.core.env.MutablePropertySources;
+import org.springframework.core.env.PropertySource;
+
+import java.util.Objects;
+
+import static io.microsphere.spring.config.env.event.PropertySourceChangedEvent.Kind.ADDED;
+import static io.microsphere.spring.config.env.event.PropertySourceChangedEvent.Kind.REMOVED;
+import static io.microsphere.spring.config.env.event.PropertySourceChangedEvent.Kind.REPLACED;
+import static org.springframework.util.Assert.notNull;
+
+/**
+ * Event raised when a {@link PropertySource} is added, removed, or replaced in the environment's property sources.
+ * This event extends {@link ApplicationContextEvent}, which means it is associated with an {@link ApplicationContext}.
+ *
+ * <h3>Example Usage</h3>
+ * <pre>{@code
+ * // Creating an ADDED event
+ * PropertySourceChangedEvent addedEvent = PropertySourceChangedEvent.added(context, newPropertySource);
+ *
+ * // Creating a REPLACED event
+ * PropertySourceChangedEvent replacedEvent = PropertySourceChangedEvent.replaced(context, newPropertySource, oldPropertySource);
+ *
+ * // Creating a REMOVED event
+ * PropertySourceChangedEvent removedEvent = PropertySourceChangedEvent.removed(context, oldPropertySource);
+ * }</pre>
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @see PropertySource
+ * @see ApplicationContextEvent
+ * @since 1.0.0
+ */
+public class PropertySourceChangedEvent extends ApplicationContextEvent {
+
+    private final Kind kind;
+
+    private final PropertySource newPropertySource;
+
+    private final PropertySource oldPropertySource;
+
+    /**
+     * Constructs a new {@link PropertySourceChangedEvent} with the specified application context, kind,
+     * new property source, and old property source.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   PropertySourceChangedEvent event = new PropertySourceChangedEvent(
+     *       context, PropertySourceChangedEvent.Kind.REPLACED, newPropertySource, oldPropertySource);
+     *   assertEquals(PropertySourceChangedEvent.Kind.REPLACED, event.getKind());
+     *   assertSame(newPropertySource, event.getNewPropertySource());
+     *   assertSame(oldPropertySource, event.getOldPropertySource());
+     * }</pre>
+     *
+     * @param source            the {@link ApplicationContext} that published this event
+     * @param kind              the {@link Kind} of property source change
+     * @param newPropertySource the new {@link PropertySource}, or {@code null} if not applicable
+     * @param oldPropertySource the old {@link PropertySource}, or {@code null} if not applicable
+     */
+    protected PropertySourceChangedEvent(ApplicationContext source, Kind kind, @Nullable PropertySource newPropertySource,
+                                         @Nullable PropertySource oldPropertySource) {
+        super(source);
+        this.kind = kind;
+        this.newPropertySource = newPropertySource;
+        this.oldPropertySource = oldPropertySource;
+    }
+
+    /**
+     * Constructs a new {@link PropertySourceChangedEvent} with the specified application context, kind,
+     * and new property source. The old property source is set to {@code null}.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   PropertySourceChangedEvent event = new PropertySourceChangedEvent(
+     *       context, PropertySourceChangedEvent.Kind.ADDED, newPropertySource);
+     *   assertEquals(PropertySourceChangedEvent.Kind.ADDED, event.getKind());
+     *   assertSame(newPropertySource, event.getNewPropertySource());
+     *   assertNull(event.getOldPropertySource());
+     * }</pre>
+     *
+     * @param source            the {@link ApplicationContext} that published this event
+     * @param kind              the {@link Kind} of property source change
+     * @param newPropertySource the new {@link PropertySource}, or {@code null} if not applicable
+     */
+    protected PropertySourceChangedEvent(ApplicationContext source, Kind kind, @Nullable PropertySource newPropertySource) {
+        this(source, kind, newPropertySource, null);
+    }
+
+    /**
+     * @return the new {@link PropertySource}
+     */
+    @Nullable
+    public PropertySource getNewPropertySource() {
+        return newPropertySource;
+    }
+
+    /**
+     * @return the old {@link PropertySource}
+     */
+    @Nullable
+    public PropertySource getOldPropertySource() {
+        return oldPropertySource;
+    }
+
+    /**
+     * @return the Kind of {@link PropertySource} Changed Event
+     */
+    public Kind getKind() {
+        return kind;
+    }
+
+    /**
+     * Compares this event with the specified object for equality. Two {@link PropertySourceChangedEvent} instances
+     * are considered equal if they have the same {@link Kind}, new property source, and old property source.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   PropertySourceChangedEvent event1 = PropertySourceChangedEvent.added(context, newPropertySource);
+     *   PropertySourceChangedEvent event2 = PropertySourceChangedEvent.added(context, newPropertySource);
+     *   assertEquals(event1, event2);
+     *
+     *   PropertySourceChangedEvent event3 = PropertySourceChangedEvent.removed(context, oldPropertySource);
+     *   assertNotEquals(event1, event3);
+     * }</pre>
+     *
+     * @param o the object to compare with
+     * @return {@code true} if the specified object is equal to this event, {@code false} otherwise
+     */
+    @Override
+    public final boolean equals(Object o) {
+        if (!(o instanceof PropertySourceChangedEvent)) return false;
+
+        PropertySourceChangedEvent that = (PropertySourceChangedEvent) o;
+        return kind == that.kind
+                && Objects.equals(newPropertySource, that.newPropertySource)
+                && Objects.equals(oldPropertySource, that.oldPropertySource);
+    }
+
+    /**
+     * Returns a hash code value for this event based on the {@link Kind}, new property source,
+     * and old property source.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   PropertySourceChangedEvent event1 = PropertySourceChangedEvent.added(context, newPropertySource);
+     *   PropertySourceChangedEvent event2 = PropertySourceChangedEvent.added(context, newPropertySource);
+     *   assertEquals(event1.hashCode(), event2.hashCode());
+     * }</pre>
+     *
+     * @return a hash code value for this event
+     */
+    @Override
+    public int hashCode() {
+        int result = Objects.hashCode(kind);
+        result = 31 * result + Objects.hashCode(newPropertySource);
+        result = 31 * result + Objects.hashCode(oldPropertySource);
+        return result;
+    }
+
+    /**
+     * Create an {@link Kind#ADDED added} instance
+     *
+     * @param source            {@link ApplicationContext}
+     * @param newPropertySource the new {@link PropertySource}
+     * @return non-null
+     */
+    public static PropertySourceChangedEvent added(ApplicationContext source, @Nonnull PropertySource newPropertySource) {
+        notNull(newPropertySource, "The 'newPropertySource' must not be null!");
+        return new PropertySourceChangedEvent(source, ADDED, newPropertySource);
+    }
+
+    /**
+     * Create an {@link Kind#REPLACED replaced} instance
+     *
+     * @param source            {@link ApplicationContext}
+     * @param newPropertySource the new {@link PropertySource}
+     * @param oldPropertySource the old {@link PropertySource}
+     * @return non-null
+     */
+    public static PropertySourceChangedEvent replaced(ApplicationContext source, @Nonnull PropertySource newPropertySource, @Nonnull PropertySource oldPropertySource) {
+        notNull(newPropertySource, "The 'newPropertySource' must not be null!");
+        notNull(oldPropertySource, "The 'oldPropertySource' must not be null!");
+        return new PropertySourceChangedEvent(source, REPLACED, newPropertySource, oldPropertySource);
+    }
+
+    /**
+     * Create an {@link Kind#REMOVED removed} instance
+     *
+     * @param source            {@link ApplicationContext}
+     * @param oldPropertySource the old {@link PropertySource}
+     * @return non-null
+     */
+    public static PropertySourceChangedEvent removed(ApplicationContext source, @Nonnull PropertySource oldPropertySource) {
+        notNull(oldPropertySource, "The 'oldPropertySource' must not be null!");
+        return new PropertySourceChangedEvent(source, REMOVED, null, oldPropertySource);
+    }
+
+    /**
+     * The Kind of {@link PropertySource} Changed Event
+     */
+    public static enum Kind {
+
+        /**
+         * The {@link PropertySource} added
+         *
+         * @see MutablePropertySources#addAfter(String, PropertySource)
+         * @see MutablePropertySources#addBefore(String, PropertySource)
+         * @see MutablePropertySources#addFirst(PropertySource)
+         * @see MutablePropertySources#addLast(PropertySource)
+         */
+        ADDED,
+
+        /**
+         * The {@link PropertySource} replaced
+         *
+         * @see MutablePropertySources#replace(String, PropertySource)
+         */
+        REPLACED,
+
+        /**
+         * The {@link PropertySource} deleted
+         *
+         * @see MutablePropertySources#remove(String)
+         */
+        REMOVED;
+    }
+}

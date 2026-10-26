@@ -1,0 +1,71 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.redis.spring.annotation;
+
+import io.microsphere.redis.spring.config.RedisConfiguration;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.ImportBeanDefinitionRegistrar;
+import org.springframework.core.type.AnnotationMetadata;
+
+import static io.microsphere.redis.spring.config.RedisConfiguration.BEAN_NAME;
+import static io.microsphere.redis.spring.metadata.SpringRedisMetadataRepository.init;
+import static io.microsphere.spring.beans.factory.support.BeanRegistrar.registerBeanDefinition;
+
+/**
+ * {@link ImportBeanDefinitionRegistrar} implementation that programmatically registers the
+ * {@link RedisConfiguration} bean.
+ * This registrar is triggered by the {@link EnableRedisConfiguration} annotation via
+ * its {@link Import} meta-annotation.
+ *
+ * <h3>Example Usage</h3>
+ * <pre>{@code
+ *   // Applied automatically when @EnableRedisConfiguration is present on a @Configuration class.
+ *   // Manual registration (e.g. in tests):
+ *   BeanDefinitionRegistry registry = ...; // e.g. GenericApplicationContext
+ *   RedisConfigurationBeanDefinitionRegistrar registrar = new RedisConfigurationBeanDefinitionRegistrar();
+ *   registrar.setBeanClassLoader(getClass().getClassLoader());
+ *   registrar.registerBeanDefinitions(registry);
+ * }</pre>
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @since 1.0.0
+ */
+class RedisConfigurationBeanDefinitionRegistrar implements ImportBeanDefinitionRegistrar {
+
+    static {
+        init();
+    }
+
+    @Override
+    public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
+        registerBeanDefinitions(registry);
+    }
+
+    /**
+     * Registers {@link RedisConfiguration}.
+     *
+     * @param registry the Spring bean-definition registry to register beans into
+     */
+    public void registerBeanDefinitions(BeanDefinitionRegistry registry) {
+        registerRedisConfiguration(registry);
+    }
+
+    private void registerRedisConfiguration(BeanDefinitionRegistry registry) {
+        registerBeanDefinition(registry, BEAN_NAME, RedisConfiguration.class);
+    }
+}

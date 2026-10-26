@@ -1,0 +1,377 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.spring.beans.factory;
+
+import io.microsphere.collection.SetUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.ResolvableType;
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Set;
+
+import static io.microsphere.collection.Sets.ofSet;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.asAutowireCapableBeanFactory;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.asBeanDefinitionRegistry;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.asConfigurableBeanFactory;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.asConfigurableListableBeanFactory;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.asDefaultListableBeanFactory;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.asHierarchicalBeanFactory;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.asListableBeanFactory;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.getBeanClass;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.getBeanClassLoader;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.getBeanDefinition;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.getBeanPostProcessors;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.getBeanTypes;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.getBeans;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.getOptionalBean;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.getResolvableDependencyTypes;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.isBeanDefinitionRegistry;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.isDefaultListableBeanFactory;
+import static io.microsphere.spring.beans.factory.BeanFactoryUtils.nullSafeBeanClassLoader;
+import static io.microsphere.spring.context.ApplicationContextUtils.APPLICATION_CONTEXT_AWARE_PROCESSOR_CLASS_NAME;
+import static io.microsphere.spring.test.util.SpringTestUtils.testInSpringContainer;
+import static io.microsphere.util.ArrayUtils.EMPTY_STRING_ARRAY;
+import static io.microsphere.util.ArrayUtils.of;
+import static io.microsphere.util.ClassLoaderUtils.getDefaultClassLoader;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * {@link BeanFactoryUtils} Test
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @since 1.0.0
+ */
+class BeanFactoryUtilsTest {
+
+    private AnnotationConfigApplicationContext applicationContext;
+
+    private ConfigurableListableBeanFactory beanFactory;
+
+    @BeforeEach
+    void setUp() {
+        this.applicationContext = new AnnotationConfigApplicationContext();
+        this.beanFactory = this.applicationContext.getBeanFactory();
+    }
+
+    @AfterEach
+    void tearDown() {
+        this.applicationContext.close();
+    }
+
+    @Test
+    void testGetOptionalBean() {
+
+        this.applicationContext.register(BaseTestBean.class);
+
+        this.applicationContext.refresh();
+
+        BaseTestBean testBean = getOptionalBean(this.applicationContext, "baseTestBean", BaseTestBean.class);
+
+        assertNotNull(testBean);
+
+        assertEquals("Hello,World", testBean.getName());
+
+    }
+
+    @Test
+    void testGetOptionalBeanIfAbsent() {
+
+        this.applicationContext.refresh();
+
+        BaseTestBean testBean = getOptionalBean(this.applicationContext, "baseTestBean", BaseTestBean.class);
+
+        assertNull(testBean);
+
+        testBean = getOptionalBean(this.applicationContext, "1", BaseTestBean.class);
+
+        assertNull(testBean);
+
+        testBean = getOptionalBean(this.applicationContext, null, BaseTestBean.class);
+
+        assertNull(testBean);
+    }
+
+    @Test
+    void testGetBeans() {
+
+        this.applicationContext.register(BaseTestBean.class, BaseTestBean2.class);
+
+        this.applicationContext.refresh();
+
+        List<BaseTestBean> testBeans = getBeans(this.applicationContext, new String[]{"baseTestBean"}, BaseTestBean.class);
+
+        assertEquals(1, testBeans.size());
+
+        assertEquals("Hello,World", testBeans.get(0).getName());
+
+        testBeans = getBeans(this.applicationContext, null, BaseTestBean.class);
+
+        assertEquals(0, testBeans.size());
+
+        testBeans = getBeans(this.applicationContext, of((String) null), BaseTestBean.class);
+
+        assertEquals(0, testBeans.size());
+
+        testBeans = getBeans(this.applicationContext, of("abc"), BaseTestBean.class);
+
+        assertEquals(0, testBeans.size());
+    }
+
+    @Test
+    void testGetBeansIfAbsent() {
+
+        this.applicationContext.refresh();
+
+        List<BaseTestBean> testBeans = getBeans(this.applicationContext, new String[]{"baseTestBean"}, BaseTestBean.class);
+
+        assertTrue(testBeans.isEmpty());
+
+    }
+
+    @Test
+    void testIsMethods() {
+        assertTrue(isDefaultListableBeanFactory(this.beanFactory));
+        assertTrue(isBeanDefinitionRegistry(this.beanFactory));
+    }
+
+    @Test
+    void testGetResolvableDependencyTypes() {
+        this.applicationContext.refresh();
+        assertEquals(SetUtils.ofSet(BeanFactory.class, ResourceLoader.class, ApplicationEventPublisher.class, ApplicationContext.class),
+                getResolvableDependencyTypes(this.beanFactory));
+
+        assertSame(emptySet(), getResolvableDependencyTypes(new DefaultListableBeanFactory()));
+    }
+
+    @Test
+    void testGetBeanPostProcessors() {
+        this.applicationContext.refresh();
+        List<BeanPostProcessor> beanPostProcessors = getBeanPostProcessors(this.beanFactory);
+        assertFalse(beanPostProcessors.isEmpty());
+        assertEquals(APPLICATION_CONTEXT_AWARE_PROCESSOR_CLASS_NAME, beanPostProcessors.get(0).getClass().getName());
+    }
+
+    @Test
+    void testGetBeanPostProcessorsOnNotAbstractFactory() {
+        List<BeanPostProcessor> beanPostProcessors = getBeanPostProcessors(new BeanFactory() {
+
+            public Object getBean(String name) throws BeansException {
+                return null;
+            }
+
+            public <T> T getBean(String name, Class<T> requiredType) throws BeansException {
+                return null;
+            }
+
+            public Object getBean(String name, Object... args) throws BeansException {
+                return null;
+            }
+
+            public <T> T getBean(Class<T> requiredType) throws BeansException {
+                return null;
+            }
+
+            public <T> T getBean(Class<T> requiredType, Object... args) throws BeansException {
+                return null;
+            }
+
+            public <T> ObjectProvider<T> getBeanProvider(Class<T> requiredType) {
+                return null;
+            }
+
+            public <T> ObjectProvider<T> getBeanProvider(ResolvableType requiredType) {
+                return null;
+            }
+
+            public <T> ObjectProvider<T> getBeanProvider(ParameterizedTypeReference<T> requiredType) {
+                return null;
+            }
+
+            public boolean containsBean(String name) {
+                return false;
+            }
+
+            public boolean isSingleton(String name) throws NoSuchBeanDefinitionException {
+                return false;
+            }
+
+            public boolean isPrototype(String name) throws NoSuchBeanDefinitionException {
+                return false;
+            }
+
+            public boolean isTypeMatch(String name, ResolvableType typeToMatch) throws NoSuchBeanDefinitionException {
+                return false;
+            }
+
+            public boolean isTypeMatch(String name, Class<?> typeToMatch) throws NoSuchBeanDefinitionException {
+                return false;
+            }
+
+            public Class<?> getType(String name) throws NoSuchBeanDefinitionException {
+                return null;
+            }
+
+            public Class<?> getType(String name, boolean allowFactoryBeanInit) throws NoSuchBeanDefinitionException {
+                return null;
+            }
+
+            public String[] getAliases(String name) {
+                return EMPTY_STRING_ARRAY;
+            }
+        });
+
+        assertSame(emptyList(), beanPostProcessors);
+    }
+
+    @Test
+    void testGetBeanClassLoader() {
+        assertNull(getBeanClassLoader(null));
+        assertSame(this.beanFactory.getBeanClassLoader(), getBeanClassLoader(this.beanFactory));
+    }
+
+    @Test
+    void testNullSafeBeanClassLoader() {
+        assertSame(getDefaultClassLoader(), nullSafeBeanClassLoader(null));
+        assertSame(this.beanFactory.getBeanClassLoader(), nullSafeBeanClassLoader(this.beanFactory));
+    }
+
+    @Test
+    void testGetBeanTypes() {
+        testInSpringContainer(context -> {
+            Set<Class<BaseTestBean>> beanTypes = getBeanTypes(context, BaseTestBean.class);
+            assertEquals(ofSet(BaseTestBean.class, BaseTestBean2.class), beanTypes);
+        }, BaseTestBean.class, BaseTestBean2.class);
+
+        testInSpringContainer(context -> {
+            Set<Class<BaseTestBean>> beanTypes = getBeanTypes(context, BaseTestBean.class);
+            assertEquals(ofSet(BaseTestBean.class), beanTypes);
+        }, BaseTestBean.class);
+    }
+
+    @Test
+    void testGetBeanClass() {
+        testInSpringContainer(context -> {
+            ConfigurableListableBeanFactory beanFactory = context.getBeanFactory();
+            assertSame(BaseTestBean.class, getBeanClass(beanFactory, "baseTestBean"));
+            assertNull(getBeanClass(beanFactory, "baseTestBean2"));
+        }, BaseTestBean.class);
+    }
+
+    @Test
+    void testGetBeanDefinition() {
+        testInSpringContainer(context -> {
+            ConfigurableListableBeanFactory beanFactory = context.getBeanFactory();
+            assertNotNull(getBeanDefinition(beanFactory, "baseTestBean"));
+            assertNull(getBeanDefinition(beanFactory, "baseTestBean2"));
+            BeanDefinitionRegistry registry = asBeanDefinitionRegistry(beanFactory);
+            assertNotNull(getBeanDefinition(registry, "baseTestBean"));
+            assertNull(getBeanDefinition(registry, "baseTestBean2"));
+        }, BaseTestBean.class);
+    }
+
+    @Test
+    void testAsAutowireCapableBeanFactory() {
+        this.applicationContext.refresh();
+        assertSame(this.beanFactory, asAutowireCapableBeanFactory(this.applicationContext));
+        assertSame(this.beanFactory, asAutowireCapableBeanFactory(this.beanFactory));
+    }
+
+    @Test
+    void testAsBeanDefinitionRegistry() {
+        this.applicationContext.refresh();
+        assertSame(this.beanFactory, asBeanDefinitionRegistry(this.applicationContext));
+        assertSame(this.beanFactory, asBeanDefinitionRegistry(this.beanFactory));
+    }
+
+    @Test
+    void testAsConfigurableBeanFactory() {
+        this.applicationContext.refresh();
+        assertSame(this.beanFactory, asConfigurableBeanFactory(this.applicationContext));
+        assertSame(this.beanFactory, asConfigurableBeanFactory(this.beanFactory));
+    }
+
+    @Test
+    void testAsConfigurableListableBeanFactory() {
+        this.applicationContext.refresh();
+        assertSame(this.beanFactory, asConfigurableListableBeanFactory(this.applicationContext));
+        assertSame(this.beanFactory, asConfigurableListableBeanFactory(this.beanFactory));
+    }
+
+    @Test
+    void testAsDefaultListableBeanFactory() {
+        this.applicationContext.refresh();
+        assertSame(this.beanFactory, asDefaultListableBeanFactory(this.applicationContext));
+        assertSame(this.beanFactory, asDefaultListableBeanFactory(this.beanFactory));
+    }
+
+    @Test
+    void testAsHierarchicalBeanFactory() {
+        this.applicationContext.refresh();
+        assertSame(this.beanFactory, asHierarchicalBeanFactory(this.applicationContext));
+        assertSame(this.beanFactory, asHierarchicalBeanFactory(this.beanFactory));
+    }
+
+    @Test
+    void testAsListableBeanFactory() {
+        this.applicationContext.refresh();
+        assertSame(this.beanFactory, asListableBeanFactory(this.applicationContext));
+        assertSame(this.beanFactory, asListableBeanFactory(this.beanFactory));
+    }
+
+
+    @Component("baseTestBean2")
+    private static class BaseTestBean2 extends BaseTestBean {
+
+    }
+
+    @Component("baseTestBean")
+    private static class BaseTestBean {
+
+        private String name = "Hello,World";
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+    }
+}

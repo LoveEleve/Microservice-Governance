@@ -1,0 +1,340 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.io;
+
+import io.microsphere.annotation.ConfigurationProperty;
+import io.microsphere.annotation.Nonnull;
+import io.microsphere.event.EventDispatcher;
+import io.microsphere.io.event.FileChangedEvent;
+import io.microsphere.io.event.FileChangedEvent.Kind;
+import io.microsphere.io.event.FileChangedListener;
+import io.microsphere.logging.Logger;
+
+import java.io.File;
+import java.nio.file.FileSystem;
+import java.nio.file.Path;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
+import java.nio.file.Watchable;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static io.microsphere.annotation.ConfigurationProperty.SYSTEM_PROPERTIES_SOURCE;
+import static io.microsphere.collection.MapUtils.newTreeMap;
+import static io.microsphere.collection.SetUtils.newTreeSet;
+import static io.microsphere.concurrent.CustomizedThreadFactory.newThreadFactory;
+import static io.microsphere.concurrent.ExecutorUtils.shutdown;
+import static io.microsphere.concurrent.ExecutorUtils.shutdownOnExit;
+import static io.microsphere.constants.PropertyConstants.MICROSPHERE_PROPERTY_NAME_PREFIX;
+import static io.microsphere.event.EventDispatcher.DIRECT_EXECUTOR;
+import static io.microsphere.event.EventDispatcher.parallel;
+import static io.microsphere.io.event.FileChangedEvent.Kind.CREATED;
+import static io.microsphere.io.event.FileChangedEvent.Kind.DELETED;
+import static io.microsphere.io.event.FileChangedEvent.Kind.MODIFIED;
+import static io.microsphere.logging.LoggerFactory.getLogger;
+import static io.microsphere.text.FormatUtils.format;
+import static io.microsphere.util.ArrayUtils.arrayToString;
+import static io.microsphere.util.ArrayUtils.length;
+import static java.lang.System.getProperty;
+import static java.nio.file.FileSystems.getDefault;
+import static java.nio.file.Files.isDirectory;
+import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
+import static java.util.concurrent.Executors.newSingleThreadExecutor;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
+/**
+ * /**
+ * Standard implementation of the {@link FileWatchService} interface using JDK 7's
+ * {@link WatchService} API. This class monitors files or directories for creation,
+ * modification, and deletion events.
+ *
+ * <h3>Key Features</h3>
+ * <ul>
+ *     <li>Supports watching individual files or entire directories.</li>
+ *     <li>Allows filtering based on event types: CREATED, MODIFIED, DELETED.</li>
+ *     <li>Uses a thread-safe design to handle concurrent listeners and events.</li>
+ *     <li>Provides auto-closeable behavior via the {@link #close()} method.</li>
+ * </ul>
+ *
+ * <h3>Example Usage</h3>
+ * <pre>{@code
+ * // Example 1: Watching a single file for modification events
+ * FileWatchService watchService = new StandardFileWatchService();
+ * File fileToWatch = new File("/path/to/file.txt");
+ * FileChangedListener listener = event -> System.out.println("File changed: " + event.getFile());
+ *
+ * watchService.watch(fileToWatch, listener, FileChangedEvent.Kind.MODIFIED);
+ *
+ * // Example 2: Watching a directory for all types of events with multiple listeners
+ * File dirToWatch = new File("/path/to/directory");
+ * List<FileChangedListener> listeners = Arrays.asList(
+ *     event -> System.out.println("Listener 1 triggered: " + event),
+ *     event -> System.out.println("Listener 2 triggered: " + event)
+ * );
+ *
+ * watchService.watch(dirToWatch, listeners); // All kinds by default
+ * }</pre>
+ *
+ * <p>
+ * Make sure to call {@link #close()} when you're done using the service to release resources.
+ * </p>
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @see WatchService
+ * @since 1.0.0
+ */
+public class StandardFileWatchService implements FileWatchService, AutoCloseable {
+
+    private static final Logger logger = getLogger(StandardFileWatchService.class);
+
+    /**
+     * The default thread name prefix : "microsphere-file-watch-service"
+     */
+    public static final String DEFAULT_THREAD_NAME_PREFIX = "microsphere-file-watch-service";
+
+    /**
+     * The thread name prefix property name : "microsphere.file-watch-service.thread-name-prefix
+     */
+    public static final String THREAD_NAME_PREFIX_PROPERTY_NAME = MICROSPHERE_PROPERTY_NAME_PREFIX + "file-watch-service.thread-name-prefix";
+
+    /**
+     * The thread name prefix , default value : "microsphere-file-watch-service-"
+     */
+    @ConfigurationProperty(
+            name = THREAD_NAME_PREFIX_PROPERTY_NAME,
+            defaultValue = DEFAULT_THREAD_NAME_PREFIX,
+            description = "The thread name prefix for FileWatchService",
+            source = SYSTEM_PROPERTIES_SOURCE
+    )
+    public static final String THREAD_NAME_PREFIX = getProperty(THREAD_NAME_PREFIX_PROPERTY_NAME, DEFAULT_THREAD_NAME_PREFIX);
+
+    static final WatchEvent.Kind<?>[] ALL_WATCH_EVENT_KINDS = {
+            ENTRY_CREATE,
+            ENTRY_DELETE,
+            ENTRY_MODIFY
+    };
+
+    private WatchService watchService;
+
+    private final Executor eventHandlerExecutor;
+
+    private final ExecutorService eventLoopExecutor;
+
+    private final Map<Path, FileChangedMetadata> fileChangedMetadataCache = newTreeMap();
+
+    private final AtomicBoolean started;
+
+    private volatile Future eventLoopFuture;
+
+    public StandardFileWatchService() {
+        this(DIRECT_EXECUTOR);
+    }
+
+    public StandardFileWatchService(@Nonnull Executor eventHandlerExecutor) {
+        this(eventHandlerExecutor, newSingleThreadExecutor(newThreadFactory(THREAD_NAME_PREFIX, true)));
+    }
+
+    public StandardFileWatchService(@Nonnull Executor eventHandlerExecutor, @Nonnull ExecutorService eventLoopExecutor) {
+        this.eventHandlerExecutor = eventHandlerExecutor;
+        this.eventLoopExecutor = eventLoopExecutor;
+        this.started = new AtomicBoolean(false);
+        // shutdown the ExecutorService when JVM exits
+        shutdownOnExit(eventLoopExecutor, eventHandlerExecutor);
+    }
+
+    public void start() throws Exception {
+        if (!this.started.compareAndSet(false, true)) {
+            throw new IllegalStateException("StandardFileWatchService has started");
+        }
+
+        logger.info("Start to watch the file system.");
+
+        FileSystem fileSystem = getDefault();
+
+        WatchService watchService = fileSystem.newWatchService();
+
+        registerDirectoriesToWatchService(watchService);
+
+        dispatchFileChangedEvents(watchService);
+
+        this.watchService = watchService;
+
+    }
+
+    public void stop() throws Exception {
+        // set the flag "started" to false
+        while (this.started.compareAndSet(true, false)) {
+            // wait for the event loop to complete
+            this.eventLoopExecutor.awaitTermination(100, MILLISECONDS);
+            // if the event loop is not done, try to cancel the task
+            this.eventLoopFuture.cancel(true);
+        }
+    }
+
+    public boolean isStarted() {
+        return this.started.get();
+    }
+
+    @Override
+    public void close() throws Exception {
+        this.stop();
+        IOUtils.close(this.watchService);
+        this.fileChangedMetadataCache.clear();
+        shutdown(this.eventLoopExecutor);
+        shutdown(this.eventHandlerExecutor);
+    }
+
+    private void dispatchFileChangedEvents(WatchService watchService) {
+        this.eventLoopFuture = this.eventLoopExecutor.submit(() -> {
+            while (isStarted()) {
+                WatchKey watchKey = null;
+                try {
+                    watchKey = watchService.take();
+                    if (watchKey.isValid()) {
+                        for (WatchEvent event : watchKey.pollEvents()) {
+                            Watchable watchable = watchKey.watchable();
+                            Path dirPath = (Path) watchable;
+                            Path fileRelativePath = (Path) event.context();
+
+                            FileChangedMetadata metadata = this.fileChangedMetadataCache.get(dirPath);
+
+                            if (metadata != null) {
+                                Path filePath = dirPath.resolve(fileRelativePath);
+                                if (isDirectory(dirPath, NOFOLLOW_LINKS) || metadata.filePaths.contains(filePath)) {
+                                    EventDispatcher eventDispatcher = metadata.eventDispatcher;
+                                    WatchEvent.Kind watchEventKind = event.kind();
+                                    dispatchFileChangedEvent(filePath, watchEventKind, eventDispatcher);
+                                }
+                            }
+                        }
+                    }
+                } finally {
+                    if (watchKey != null) {
+                        watchKey.reset();
+                    }
+                }
+            }
+            return null;
+        });
+    }
+
+    private void dispatchFileChangedEvent(Path filePath, WatchEvent.Kind watchEventKind, EventDispatcher eventDispatcher) {
+        File file = filePath.toFile();
+        Kind kind = toKind(watchEventKind);
+        FileChangedEvent fileChangedEvent = new FileChangedEvent(file, kind);
+        eventDispatcher.dispatch(fileChangedEvent);
+        if (logger.isTraceEnabled()) {
+            logger.trace("The {} was dispatched", fileChangedEvent);
+        }
+    }
+
+    private void registerDirectoriesToWatchService(WatchService watchService) throws Exception {
+        for (Map.Entry<Path, FileChangedMetadata> entry : this.fileChangedMetadataCache.entrySet()) {
+            Path directoryPath = entry.getKey();
+            FileChangedMetadata metadata = entry.getValue();
+            WatchEvent.Kind[] kinds = metadata.watchEventKinds;
+            directoryPath.register(watchService, kinds);
+            if (logger.isTraceEnabled()) {
+                logger.trace("The directory[path : '{}' , event kinds : {}] registers the WatchService : {}",
+                        directoryPath, arrayToString(kinds), watchService);
+            }
+        }
+    }
+
+    @Override
+    public void watch(@Nonnull File file, @Nonnull FileChangedListener listener, Kind... kinds) {
+        Path filePath = file.toPath();
+        FileChangedMetadata metadata = getMetadata(filePath, kinds);
+        metadata.filePaths.add(filePath);
+        metadata.eventDispatcher.addEventListener(listener);
+    }
+
+    private FileChangedMetadata getMetadata(Path filePath, Kind... kinds) {
+        final Path dirPath = isDirectory(filePath, NOFOLLOW_LINKS) ? filePath : filePath.getParent();
+        return this.fileChangedMetadataCache.computeIfAbsent(dirPath, k -> {
+            FileChangedMetadata metadata = new FileChangedMetadata();
+            metadata.eventDispatcher = parallel(this.eventHandlerExecutor);
+            metadata.watchEventKinds = toWatchEventKinds(kinds);
+            return metadata;
+        });
+    }
+
+    @Nonnull
+    static WatchEvent.Kind<?>[] toWatchEventKinds(Kind... kinds) {
+        int size = length(kinds);
+        if (size < 1) {
+            return ALL_WATCH_EVENT_KINDS;
+        }
+        WatchEvent.Kind<?>[] watchEventKinds = new WatchEvent.Kind[size];
+        for (int i = 0; i < size; i++) {
+            Kind kind = kinds[i];
+            watchEventKinds[i] = toWatchEventKind(kind);
+        }
+        return watchEventKinds;
+    }
+
+    @Nonnull
+    static WatchEvent.Kind<?> toWatchEventKind(Kind kind) {
+        final WatchEvent.Kind<?> watchEventKind;
+        switch (kind) {
+            case CREATED:
+                watchEventKind = ENTRY_CREATE;
+                break;
+            case MODIFIED:
+                watchEventKind = ENTRY_MODIFY;
+                break;
+            default:
+                watchEventKind = ENTRY_DELETE;
+                break;
+        }
+        return watchEventKind;
+    }
+
+    @Nonnull
+    static Kind toKind(WatchEvent.Kind<?> watchEventKind) {
+        final Kind kind;
+        if (ENTRY_CREATE.equals(watchEventKind)) {
+            kind = CREATED;
+        } else if (ENTRY_MODIFY.equals(watchEventKind)) {
+            kind = MODIFIED;
+        } else if (ENTRY_DELETE.equals(watchEventKind)) {
+            kind = DELETED;
+        } else {
+            String errorMessage = format("The invalid kind of WatchEvent : {}", watchEventKind);
+            throw new IllegalArgumentException(errorMessage);
+        }
+        return kind;
+    }
+
+    private static class FileChangedMetadata {
+
+        private final Set<Path> filePaths = newTreeSet();
+
+        private EventDispatcher eventDispatcher;
+
+        private WatchEvent.Kind<?>[] watchEventKinds;
+    }
+
+}

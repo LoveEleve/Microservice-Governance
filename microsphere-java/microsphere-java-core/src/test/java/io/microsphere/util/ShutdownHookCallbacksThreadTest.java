@@ -1,0 +1,34 @@
+package io.microsphere.util;
+
+import io.microsphere.LoggingTest;
+
+import org.junit.jupiter.api.Test;
+
+import static io.microsphere.util.ShutdownHookCallbacksThread.INSTANCE;
+import static io.microsphere.util.ShutdownHookUtils.addShutdownHookCallback;
+import static io.microsphere.util.ShutdownHookUtils.getShutdownHookCallbacks;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * {@link ShutdownHookCallbacksThread} Test
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy<a/>
+ * @see ShutdownHookCallbacksThread
+ * @since 1.0.0
+ */
+class ShutdownHookCallbacksThreadTest extends LoggingTest {
+
+    @Test
+    void testRun() {
+        ShutdownHookCallbacksThread thread = INSTANCE;
+
+        ShutdownHookUtilsTest test = new ShutdownHookUtilsTest();
+        int times = 3;
+        for (int i = 0; i < times; i++) {
+            addShutdownHookCallback(new ShutdownHookCallback(i));
+        }
+
+        thread.run();
+        assertTrue(getShutdownHookCallbacks().isEmpty());
+    }
+}

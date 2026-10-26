@@ -1,0 +1,120 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.microsphere.metrics.micrometer.spring.boot.actuate.autoconfigure;
+
+import io.microsphere.annotation.ConfigurationProperty;
+import io.microsphere.metrics.micrometer.instrument.binder.system.NetworkStatisticsMetrics;
+import io.microsphere.metrics.micrometer.instrument.binder.system.SystemMemoryMetrics;
+import io.microsphere.metrics.micrometer.spring.boot.actuate.condition.ConditionalOnMicrometerAvailable;
+import io.microsphere.metrics.micrometer.spring.boot.actuate.condition.ConditionalOnPlatformMXBeanAvailable;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnResource;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
+
+import java.io.File;
+import java.io.IOException;
+import java.time.Duration;
+
+import static io.microsphere.annotation.ConfigurationProperty.APPLICATION_SOURCE;
+import static io.microsphere.constants.PropertyConstants.ENABLED_PROPERTY_NAME;
+import static io.microsphere.constants.SymbolConstants.DOT;
+import static io.microsphere.metrics.micrometer.instrument.binder.system.SystemMemoryMetrics.OPERATING_SYSTEM_MXBEAN_CLASS_NAME;
+import static io.microsphere.metrics.micrometer.instrument.binder.system.constants.SystemConstants.DEFAULT_METRICS_COLLECTION_INTERVAL_PROPERTY_VALUE;
+import static io.microsphere.metrics.micrometer.instrument.binder.system.constants.SystemConstants.DEFAULT_NETWORK_STATS_FILE_PATH;
+import static io.microsphere.metrics.micrometer.instrument.binder.system.constants.SystemConstants.METRICS_COLLECTION_INTERVAL_PROPERTY_NAME;
+import static io.microsphere.metrics.micrometer.instrument.binder.system.constants.SystemConstants.NETWORK_STATS_FILE_PATH_PROPERTY_NAME;
+import static io.microsphere.metrics.micrometer.spring.boot.actuate.autoconfigure.SystemMetricsAutoConfiguration.SYSTEM_METRICS_ENABLED_PROPERTY_NAME;
+import static io.microsphere.metrics.micrometer.spring.boot.actuate.condition.ConditionalOnMicrometerEnabled.PREFIX;
+
+/**
+ * The Auto-Configuration class for System Metrics
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @see org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration
+ * @see org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration
+ * @see org.springframework.boot.actuate.autoconfigure.metrics.SystemMetricsAutoConfiguration
+ * @see org.springframework.boot.micrometer.metrics.autoconfigure.MetricsAutoConfiguration
+ * @see org.springframework.boot.micrometer.metrics.autoconfigure.system.SystemMetricsAutoConfiguration
+ * @see org.springframework.boot.micrometer.metrics.autoconfigure.system.SystemMetricsAutoConfiguration
+ * @since 1.0.0
+ */
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnMicrometerAvailable
+@ConditionalOnProperty(name = SYSTEM_METRICS_ENABLED_PROPERTY_NAME, matchIfMissing = true)
+@AutoConfigureAfter(name = {
+        // Spring Boot Actuator API [2.0, 4.0)
+        "org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration",
+        "org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration",
+        "org.springframework.boot.actuate.autoconfigure.metrics.SystemMetricsAutoConfiguration",
+        // Spring Boot Actuator API [4.0, )
+        "org.springframework.boot.micrometer.metrics.autoconfigure.MetricsAutoConfiguration",
+        "org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration",
+        "org.springframework.boot.micrometer.metrics.autoconfigure.system.SystemMetricsAutoConfiguration"
+})
+public class SystemMetricsAutoConfiguration {
+
+    /**
+     * The Property Name Prefix of System Metrics : "microsphere.metrics.micrometer.system."
+     */
+    public static final String SYSTEM_METRICS_PROPERTY_NAME_PREFIX = PREFIX + "system" + DOT;
+
+    /**
+     * The Property Name of enabling System metrics : "microsphere.metrics.micrometer.system.enabled"
+     */
+    @ConfigurationProperty(
+            type = boolean.class,
+            defaultValue = "true",
+            source = APPLICATION_SOURCE
+    )
+    public static final String SYSTEM_METRICS_ENABLED_PROPERTY_NAME = SYSTEM_METRICS_PROPERTY_NAME_PREFIX + ENABLED_PROPERTY_NAME;
+
+    /**
+     * The Placeholder of Network Stats File Location : "${system.network.stats.file:file:///proc/net/dev}"
+     */
+    public static final String NETWORK_STATS_FILE_LOCATION_PLACEHOLDER = "${" + NETWORK_STATS_FILE_PATH_PROPERTY_NAME + ":file://" + DEFAULT_NETWORK_STATS_FILE_PATH + "}";
+
+    /**
+     * The Property Placeholder of metrics collection interval : "${system.metrics.collection.interval:60000}"
+     */
+    public static final String METRICS_COLLECTION_INTERVAL_PLACEHOLDER = "${" + METRICS_COLLECTION_INTERVAL_PROPERTY_NAME + ":" + DEFAULT_METRICS_COLLECTION_INTERVAL_PROPERTY_VALUE + "}";
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnResource(resources = NETWORK_STATS_FILE_LOCATION_PLACEHOLDER)
+    public NetworkStatisticsMetrics networkStatisticsMetrics(
+            @Value(NETWORK_STATS_FILE_LOCATION_PLACEHOLDER) String networkStatsFileLocation,
+            @Value(METRICS_COLLECTION_INTERVAL_PLACEHOLDER) Duration interval,
+            ResourceLoader resourceLoader) throws IOException {
+        Resource resource = resourceLoader.getResource(networkStatsFileLocation);
+        File file = resource.getFile();
+        return new NetworkStatisticsMetrics(file.toPath(), interval.toMillis());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnPlatformMXBeanAvailable(type = OPERATING_SYSTEM_MXBEAN_CLASS_NAME)
+    public SystemMemoryMetrics systemMemoryMetrics() {
+        return new SystemMemoryMetrics();
+    }
+}

@@ -1,0 +1,117 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.redis.spring.annotation;
+
+import io.microsphere.redis.spring.beans.RedisTemplateWrapper;
+import io.microsphere.redis.spring.beans.StringRedisTemplateWrapper;
+import io.microsphere.redis.spring.event.RedisCommandEvent;
+import io.microsphere.redis.spring.interceptor.RedisCommandInterceptor;
+import io.microsphere.redis.spring.interceptor.RedisConnectionInterceptor;
+import io.microsphere.redis.spring.util.RedisConstants;
+import io.microsphere.spring.beans.BeanSource;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.RedisTemplate;
+
+import java.lang.annotation.Documented;
+import java.lang.annotation.Inherited;
+import java.lang.annotation.Retention;
+import java.lang.annotation.Target;
+
+import static io.microsphere.spring.beans.BeanSource.BEAN_FACTORY;
+import static io.microsphere.spring.beans.BeanSource.SPRING_FACTORIES;
+import static java.lang.annotation.ElementType.ANNOTATION_TYPE;
+import static java.lang.annotation.ElementType.TYPE;
+import static java.lang.annotation.RetentionPolicy.RUNTIME;
+
+/**
+ * Meta-annotation that activates the Redis interceptor infrastructure, enabling transparent
+ * interception of all Redis commands executed through Spring Data Redis.  Transitively enables
+ * {@link EnableRedisContext} (and therefore {@link EnableRedisConfiguration}).
+ *
+ * <p>Depending on the {@link #wrapRedisTemplates()} attribute the interceptor registers:
+ * <ul>
+ *   <li>a {@link io.microsphere.redis.spring.beans.RedisTemplateWrapperBeanPostProcessor} when specific
+ *       {@link RedisTemplate} bean names are provided, or</li>
+ *   <li>a {@link io.microsphere.redis.spring.beans.RedisConnectionFactoryProxyBeanPostProcessor} to proxy
+ *       all {@link org.springframework.data.redis.connection.RedisConnectionFactory} beans when no
+ *       templates are named.</li>
+ * </ul>
+ *
+ * <h3>Example Usage</h3>
+ * <pre>{@code
+ *   // Intercept all RedisTemplate beans and publish RedisCommandEvents
+ *   @Configuration
+ *   @EnableRedisInterceptor(wrapRedisTemplates = "*", exposeCommandEvent = true)
+ *   public class MyRedisConfig { }
+ *
+ *   // Intercept only a specific RedisTemplate bean
+ *   @Configuration
+ *   @EnableRedisInterceptor(wrapRedisTemplates = "myRedisTemplate")
+ *   public class MyRedisConfig { }
+ *
+ *   // Use a Spring property placeholder for the template bean names
+ *   @Configuration
+ *   @EnableRedisInterceptor(wrapRedisTemplates = "${microsphere.redis.wrapped-redis-templates}")
+ *   public class MyRedisConfig { }
+ * }</pre>
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @see RedisInterceptorBeanDefinitionRegistrar
+ * @since 1.0.0
+ */
+@Target({TYPE, ANNOTATION_TYPE})
+@Retention(RUNTIME)
+@Documented
+@Inherited
+@EnableRedisContext
+@Import(RedisInterceptorBeanDefinitionRegistrar.class)
+public @interface EnableRedisInterceptor {
+
+    /**
+     * The bean names of {@link RedisTemplateWrapper} or {@link StringRedisTemplateWrapper} that will be wrapped
+     * for interception. The default value is empty.
+     * <p>
+     * Each attribute value can be :
+     * <ul>
+     *     <li>the string presenting bean name</li>
+     *     <li>the Spring property placeholder, like : {@link RedisConstants#WRAPPED_REDIS_TEMPLATE_BEAN_NAMES_PROPERTY_NAME "microsphere.redis.wrapped-redis-templates"}</li>
+     *     <li>{@link RedisConstants#ALL_WRAPPED_REDIS_TEMPLATE_BEAN_NAMES "*"} indicates all {@link RedisTemplate} beans</li>
+     *  </ul>
+     *
+     * @return If the value is empty, it indicates no  {@link RedisTemplateWrapper} or {@link StringRedisTemplateWrapper} being wrapped.
+     */
+    String[] wrapRedisTemplates() default {};
+
+    /**
+     * Expose {@link RedisCommandEvent} or not
+     *
+     * @return If {@link RedisCommandEvent} is required to be exposed, return <code>true</code>, or <code>false</code>
+     */
+    boolean exposeCommandEvent() default true;
+
+    /**
+     * The sources that will be used to register the beans of Interceptor, such as:
+     * <ul>
+     *     <li>{@link RedisCommandInterceptor}</li>
+     *     <li>{@link RedisConnectionInterceptor}</li>
+     * </ul>
+     *
+     * @return default is {@link BeanSource#BEAN_FACTORY} and {@link BeanSource#SPRING_FACTORIES}
+     */
+    BeanSource[] sources() default {BEAN_FACTORY, SPRING_FACTORIES};
+
+}

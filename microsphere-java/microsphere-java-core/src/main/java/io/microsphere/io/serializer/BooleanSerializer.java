@@ -1,0 +1,40 @@
+package io.microsphere.io.serializer;
+
+import io.microsphere.annotation.Nonnull;
+
+import static io.microsphere.util.SizeUtils.BOOLEAN_BYTES_SIZE;
+
+/**
+ * Java {@code boolean} or {@link Boolean} type {@link Serializer} and {@link Deserializer} Class
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy<a/>
+ * @see AbstractSerializer
+ * @since 1.0.0
+ */
+public final class BooleanSerializer extends AbstractSerializer<Boolean> {
+
+    public static final BooleanSerializer BOOLEAN_SERIALIZER = new BooleanSerializer();
+
+    private static final byte TRUE_VALUE = 1;
+
+    private static final byte FALSE_VALUE = 0;
+
+    @Override
+    protected int calcBytesLength() {
+        return BOOLEAN_BYTES_SIZE;
+    }
+
+    @Override
+    @Nonnull
+    protected byte[] doSerialize(@Nonnull Boolean booleanValue) {
+        byte byteValue = booleanValue ? TRUE_VALUE : FALSE_VALUE;
+        return new byte[]{byteValue};
+    }
+
+    @Override
+    @Nonnull
+    protected Boolean doDeserialize(@Nonnull byte[] bytes) {
+        byte byteValue = bytes[0];
+        return byteValue == TRUE_VALUE;
+    }
+}

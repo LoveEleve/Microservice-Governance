@@ -1,0 +1,83 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.spring.beans.factory.annotation;
+
+import io.microsphere.spring.context.config.DefaultConfigurationBeanBinder;
+import io.microsphere.spring.test.domain.User;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.Bean;
+
+import java.util.Collection;
+
+import static io.microsphere.spring.beans.BeanUtils.getSortedBeans;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * {@link io.microsphere.spring.beans.factory.annotation.EnableConfigurationBeanBinding} Test
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @since 1.0.0
+ */
+@EnableConfigurationBeanBinding(prefix = "users", type = User.class, multiple = true, ignoreUnknownFields = false,
+        ignoreInvalidFields = false)
+class EnableConfigurationBeanBindingTestForMultipleBinding extends AbstractEnableConfigurationBeanBindingTest {
+
+    @Bean
+    public ConfigurationBeanBindingPostProcessor configurationBeanBindingPostProcessor() {
+        ConfigurationBeanBindingPostProcessor processor = new ConfigurationBeanBindingPostProcessor();
+        processor.setConfigurationBeanBinder(new DefaultConfigurationBeanBinder());
+        return processor;
+    }
+
+    private User aUser;
+
+    private User bUser;
+
+    private User mUser;
+
+    private Collection<User> users;
+
+    private ConfigurationBeanBindingPostProcessor configurationBeanBindingPostProcessor;
+
+    @BeforeEach
+    void setUp() {
+        super.setUp();
+        aUser = context.getBean("a", User.class);
+        bUser = context.getBean("b", User.class);
+        users = getSortedBeans(context, User.class);
+        configurationBeanBindingPostProcessor = context.getBean("configurationBeanBindingPostProcessor", ConfigurationBeanBindingPostProcessor.class);
+    }
+
+    @Test
+    void testUser() {
+
+        assertEquals(2, users.size());
+        assertTrue(users.contains(aUser));
+        assertTrue(users.contains(bUser));
+
+        assertEquals("name-a", aUser.getName());
+        assertEquals(1, aUser.getAge());
+
+        assertEquals("name-b", bUser.getName());
+        assertEquals(2, bUser.getAge());
+
+        assertNotNull(configurationBeanBindingPostProcessor.getConfigurationBeanBinder());
+    }
+}

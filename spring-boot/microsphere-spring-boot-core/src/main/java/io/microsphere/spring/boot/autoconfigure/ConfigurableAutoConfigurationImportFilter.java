@@ -1,0 +1,278 @@
+package io.microsphere.spring.boot.autoconfigure;
+
+import io.microsphere.annotation.ConfigurationProperty;
+import org.springframework.boot.autoconfigure.AutoConfigurationImportFilter;
+import org.springframework.boot.autoconfigure.AutoConfigurationMetadata;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.context.EnvironmentAware;
+import org.springframework.core.Ordered;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.MutablePropertySources;
+import org.springframework.core.env.PropertySource;
+
+import java.util.Set;
+
+import static io.microsphere.annotation.ConfigurationProperty.APPLICATION_SOURCE;
+import static io.microsphere.collection.SetUtils.newLinkedHashSet;
+import static io.microsphere.spring.core.env.EnvironmentUtils.asConfigurableEnvironment;
+import static io.microsphere.util.ArrayUtils.EMPTY_STRING_ARRAY;
+import static io.microsphere.util.ArrayUtils.combine;
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.unmodifiableSet;
+import static org.springframework.boot.context.properties.bind.Binder.get;
+import static org.springframework.util.Assert.isInstanceOf;
+import static org.springframework.util.StringUtils.collectionToCommaDelimitedString;
+import static org.springframework.util.StringUtils.commaDelimitedListToSet;
+import static org.springframework.util.StringUtils.hasText;
+
+/**
+ * Configurable {@link AutoConfigurationImportFilter} for excluding specific Spring Boot auto-configuration classes.
+ *
+ * <h3>Example Usage</h3>
+ * <h4>Exclude auto-configuration classes via property</h4>
+ * <pre>{@code
+ * microsphere.autoconfigure.exclude=com.example.FooAutoConfiguration,com.example.BarAutoConfiguration
+ * }</pre>
+ * or
+ * <pre>{@code
+ * microsphere.autoconfigure.exclude[0]=com.example.FooAutoConfiguration
+ * microsphere.autoconfigure.exclude[1]=com.example.BarAutoConfiguration
+ * }</pre>
+ *
+ * <h4>Programmatically exclude classes</h4>
+ * <pre>{@code
+ * ConfigurableAutoConfigurationImportFilter.addExcludedAutoConfigurationClass(environment, "com.example.FooAutoConfiguration");
+ * ConfigurableAutoConfigurationImportFilter.addExcludedAutoConfigurationClasses(environment, "com.example.BarAutoConfiguration", "com.example.BazAutoConfiguration");
+ * }</pre>
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy<a/>
+ * @since 1.0.0
+ */
+public class ConfigurableAutoConfigurationImportFilter implements AutoConfigurationImportFilter, EnvironmentAware, Ordered {
+
+    @ConfigurationProperty(
+            type = String[].class,
+            description = "The property to exclude the classes of Spring Boot Auto-Configuration",
+            source = APPLICATION_SOURCE
+    )
+    public static final String AUTO_CONFIGURE_EXCLUDE_PROPERTY_NAME = "microsphere.autoconfigure.exclude";
+
+    private Set<String> excludedAutoConfigurationClasses;
+
+    /**
+     * Filters the given auto-configuration classes, returning an array of booleans indicating
+     * which classes should be imported ({@code true}) and which are excluded ({@code false}).
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   String[] candidates = {"com.example.FooAutoConfiguration", "com.example.BarAutoConfiguration"};
+     *   boolean[] results = filter.match(candidates, metadata);
+     *   // results[i] is false if candidate[i] is excluded
+     * }</pre>
+     *
+     * @param autoConfigurationClasses  the candidate auto-configuration class names
+     * @param autoConfigurationMetadata the auto-configuration metadata
+     * @return a boolean array where {@code true} means the class is not excluded
+     */
+    @Override
+    public boolean[] match(String[] autoConfigurationClasses, AutoConfigurationMetadata autoConfigurationMetadata) {
+        int size = autoConfigurationClasses.length;
+        boolean[] results = new boolean[size];
+        for (int i = 0; i < size; i++) {
+            String autoConfigurationClass = autoConfigurationClasses[i];
+            results[i] = !isExcluded(autoConfigurationClass);
+        }
+        return results;
+    }
+
+    /**
+     * Sets the {@link Environment} and resolves the set of excluded auto-configuration
+     * class names from the configured properties.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   ConfigurableAutoConfigurationImportFilter filter =
+     *       new ConfigurableAutoConfigurationImportFilter();
+     *   filter.setEnvironment(applicationContext.getEnvironment());
+     * }</pre>
+     *
+     * @param environment the environment to read exclusion properties from
+     */
+    @Override
+    public void setEnvironment(Environment environment) {
+        this.excludedAutoConfigurationClasses = getExcludedAutoConfigurationClasses(environment);
+    }
+
+    /**
+     * Retrieves the complete set of excluded auto-configuration class names from the
+     * given {@link Environment}, combining property source values and {@link Binder} results.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   Set<String> excluded =
+     *       ConfigurableAutoConfigurationImportFilter.getExcludedAutoConfigurationClasses(environment);
+     *   excluded.forEach(cls -> System.out.println("Excluded: " + cls));
+     * }</pre>
+     *
+     * @param environment the environment to read exclusion properties from
+     * @return an unmodifiable set of excluded class names, or an empty set if none are configured
+     */
+    public static Set<String> getExcludedAutoConfigurationClasses(Environment environment) {
+        ConfigurableEnvironment configurableEnvironment = asConfigurableEnvironment(environment);
+        Set<String> allExcludedClasses = newLinkedHashSet();
+        addExcludedAutoConfigurationClasses(environment, getExcludedAutoConfigurationClasses(configurableEnvironment), allExcludedClasses);
+        addExcludedAutoConfigurationClasses(environment, getExcludedAutoConfigurationClassesFromBinder(configurableEnvironment), allExcludedClasses);
+        return allExcludedClasses.isEmpty() ? emptySet() : unmodifiableSet(allExcludedClasses);
+    }
+
+    private static void addExcludedAutoConfigurationClasses(Environment environment, String[] excludedClasses,
+                                                            Set<String> allExcludedClasses) {
+        for (String excludedClass : excludedClasses) {
+            String resolvedExcludeClass = environment.resolvePlaceholders(excludedClass);
+            allExcludedClasses.addAll(commaDelimitedListToSet(resolvedExcludeClass));
+        }
+    }
+
+    private static String[] getExcludedAutoConfigurationClasses(ConfigurableEnvironment environment) {
+        Set<String> excludedClasses = newLinkedHashSet();
+        MutablePropertySources propertySources = environment.getPropertySources();
+        for (PropertySource propertySource : propertySources) {
+            Object property = propertySource.getProperty(AUTO_CONFIGURE_EXCLUDE_PROPERTY_NAME);
+            if (property instanceof String exclude) {
+                String resolvedExclude = environment.resolvePlaceholders(exclude);
+                Set<String> classes = commaDelimitedListToSet(resolvedExclude);
+                excludedClasses.addAll(classes);
+            }
+        }
+        return excludedClasses.isEmpty() ? EMPTY_STRING_ARRAY : excludedClasses.toArray(EMPTY_STRING_ARRAY);
+    }
+
+    private static String[] getExcludedAutoConfigurationClassesFromBinder(ConfigurableEnvironment environment) {
+        Binder binder = get(environment);
+        return binder.bind(AUTO_CONFIGURE_EXCLUDE_PROPERTY_NAME, String[].class).orElse(EMPTY_STRING_ARRAY);
+    }
+
+    /**
+     * Add a class name to exclude Spring Boot Auto-Configuration
+     *
+     * @param environment {@link Environment}
+     * @param className   the name of class
+     */
+    public static void addExcludedAutoConfigurationClass(Environment environment, String className) {
+        addExcludedAutoConfigurationClasses(environment, className);
+    }
+
+    /**
+     * Add one or more class names to exclude Spring Boot Auto-Configuration
+     *
+     * @param environment     {@link Environment}
+     * @param className       one class name
+     * @param otherClassNames more class names
+     */
+    public static void addExcludedAutoConfigurationClasses(Environment environment, String className, String... otherClassNames) {
+        addExcludedAutoConfigurationClasses(environment, asList(combine(className, otherClassNames)));
+    }
+
+    /**
+     * Add the class names to exclude Spring Boot Auto-Configuration
+     *
+     * @param environment {@link Environment}
+     * @param classNames  the class names
+     */
+    public static void addExcludedAutoConfigurationClasses(Environment environment, Iterable<String> classNames) {
+        ExcludedAutoConfigurationClassPropertySource propertySource = ExcludedAutoConfigurationClassPropertySource.get(environment);
+        propertySource.addClasses(classNames);
+    }
+
+    private static MutablePropertySources getPropertySources(Environment environment) {
+        return getConfigurableEnvironment(environment).getPropertySources();
+    }
+
+    private static ConfigurableEnvironment getConfigurableEnvironment(Environment environment) {
+        isInstanceOf(ConfigurableEnvironment.class, environment);
+        return (ConfigurableEnvironment) environment;
+    }
+
+    private static class ExcludedAutoConfigurationClassPropertySource extends PropertySource<Set<String>> {
+
+        private static final String NAME = AUTO_CONFIGURE_EXCLUDE_PROPERTY_NAME;
+
+        private ExcludedAutoConfigurationClassPropertySource() {
+            super(NAME, newLinkedHashSet());
+        }
+
+        @Override
+        public Object getProperty(String name) {
+            if (AUTO_CONFIGURE_EXCLUDE_PROPERTY_NAME.equals(name)) {
+                return collectionToCommaDelimitedString(this.source);
+            }
+            return null;
+        }
+
+        /**
+         * Adds the given auto-configuration class names to the exclusion set.
+         *
+         * <h3>Example Usage</h3>
+         * <pre>{@code
+         *   ExcludedAutoConfigurationClassPropertySource source =
+         *       ExcludedAutoConfigurationClassPropertySource.get(environment);
+         *   source.addClasses(Arrays.asList(
+         *       "com.example.FooAutoConfiguration",
+         *       "com.example.BarAutoConfiguration"
+         *   ));
+         * }</pre>
+         *
+         * @param classNames the auto-configuration class names to exclude
+         */
+        public void addClasses(Iterable<String> classNames) {
+            Set<String> allClassNames = this.source;
+            classNames.forEach(allClassNames::add);
+        }
+
+        static ExcludedAutoConfigurationClassPropertySource get(Environment environment) {
+            MutablePropertySources propertySources = getPropertySources(environment);
+            ExcludedAutoConfigurationClassPropertySource propertySource = (ExcludedAutoConfigurationClassPropertySource) propertySources.get(NAME);
+            if (propertySource == null) {
+                propertySource = new ExcludedAutoConfigurationClassPropertySource();
+                propertySources.addFirst(propertySource);
+            }
+            return propertySource;
+        }
+    }
+
+    /**
+     * Checks whether the given auto-configuration class name is in the exclusion set.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   ConfigurableAutoConfigurationImportFilter filter = new ConfigurableAutoConfigurationImportFilter();
+     *   filter.setEnvironment(environment);
+     *   boolean excluded = filter.isExcluded("com.example.FooAutoConfiguration");
+     * }</pre>
+     *
+     * @param autoConfigurationClassName the fully qualified class name to check
+     * @return {@code true} if the class is excluded, {@code false} otherwise
+     */
+    boolean isExcluded(String autoConfigurationClassName) {
+        return hasText(autoConfigurationClassName) && excludedAutoConfigurationClasses.contains(autoConfigurationClassName);
+    }
+
+    /**
+     * Returns the order of this filter. Uses {@link Ordered#HIGHEST_PRECEDENCE} + 99 to
+     * ensure it runs early in the auto-configuration import filtering chain.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   int order = filter.getOrder();
+     *   // returns Ordered.HIGHEST_PRECEDENCE + 99
+     * }</pre>
+     *
+     * @return the order value
+     */
+    @Override
+    public int getOrder() {
+        return HIGHEST_PRECEDENCE + 99;
+    }
+}

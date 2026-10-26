@@ -1,0 +1,341 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.reflect;
+
+import io.microsphere.LoggingTest;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Field;
+import java.util.Set;
+
+import static io.microsphere.reflect.FieldUtils.assertFieldMatchType;
+import static io.microsphere.reflect.FieldUtils.findAllDeclaredFields;
+import static io.microsphere.reflect.FieldUtils.findAllFields;
+import static io.microsphere.reflect.FieldUtils.findField;
+import static io.microsphere.reflect.FieldUtils.getDeclaredField;
+import static io.microsphere.reflect.FieldUtils.getFieldValue;
+import static io.microsphere.reflect.FieldUtils.getStaticFieldValue;
+import static io.microsphere.reflect.FieldUtils.setFieldValue;
+import static io.microsphere.reflect.FieldUtils.setStaticFieldValue;
+import static io.microsphere.util.VersionUtils.CURRENT_JAVA_VERSION;
+import static io.microsphere.util.VersionUtils.JAVA_VERSION_8;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * {@link FieldUtils} Test
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @since 1.0.0
+ */
+class FieldUtilsTest extends LoggingTest {
+
+    private static String value = "1";
+
+    private final ReflectionTest test = new ReflectionTest();
+
+    @AfterEach
+    void tearDown() {
+        ReflectionTest.staticField = "staticField";
+    }
+
+    @Test
+    void testFindFieldOnObject() {
+        assertFindField(test, "privateField");
+        assertFindField(test, "packagePrivateField");
+        assertFindField(test, "protectedField");
+        assertFindField(test, "publicField");
+        assertFindField(test, "staticField");
+
+        assertNull(findField(test, "unknownField"));
+    }
+
+    @Test
+    void testFindFieldOnClass() {
+        assertFindField(ReflectionTest.class, "privateField");
+        assertFindField(ReflectionTest.class, "packagePrivateField");
+        assertFindField(ReflectionTest.class, "protectedField");
+        assertFindField(ReflectionTest.class, "publicField");
+        assertFindField(ReflectionTest.class, "staticField");
+
+        assertNull(findField(ReflectionTest.class, "unknownField"));
+    }
+
+    @Test
+    void testFindFieldOnClassAndFieldType() {
+        assertFindField(ReflectionTest.class, "privateField", String.class);
+        assertFindField(ReflectionTest.class, "packagePrivateField", String.class);
+        assertFindField(ReflectionTest.class, "protectedField", String.class);
+        assertFindField(ReflectionTest.class, "publicField", String.class);
+        assertFindField(ReflectionTest.class, "staticField", String.class);
+
+        assertNull(findField(ReflectionTest.class, "staticField", Object.class));
+    }
+
+    @Test
+    void testFindFieldOnPredicate() {
+        assertFindField(ReflectionTest.class, "privateField", true);
+        assertFindField(ReflectionTest.class, "packagePrivateField", true);
+        assertFindField(ReflectionTest.class, "protectedField", true);
+        assertFindField(ReflectionTest.class, "publicField", true);
+        assertFindField(ReflectionTest.class, "staticField", true);
+
+        assertFindField(ReflectionTest.class, "privateField", false);
+        assertFindField(ReflectionTest.class, "packagePrivateField", false);
+        assertFindField(ReflectionTest.class, "protectedField", false);
+        assertFindField(ReflectionTest.class, "publicField", false);
+        assertFindField(ReflectionTest.class, "staticField", false);
+    }
+
+    @Test
+    void testFindFieldsOnNull() {
+        assertNull(findField(null, null));
+    }
+
+    @Test
+    void testFindFieldsOnObjectClass() {
+        assertNull(findField(Object.class, null));
+    }
+
+    @Test
+    void testFindAllFields() {
+        Set<Field> fields = findAllFields(ReflectionTest.class, p -> false);
+        assertEquals(0, fields.size());
+
+        fields = findAllFields(ReflectionTestExt.class, p -> false);
+        assertEquals(0, fields.size());
+    }
+
+    @Test
+    void testFindAllFieldsWithoutPredicate() {
+        Set<Field> fields = findAllFields(ReflectionTest.class);
+        assertEquals(1, fields.size());
+
+        fields = findAllFields(ReflectionTestExt.class);
+        assertEquals(1, fields.size());
+    }
+
+    @Test
+    void testFindAllDeclaredFieldsWithoutPredicate() {
+        Set<Field> fields = findAllDeclaredFields(ReflectionTest.class);
+        assertTrue(fields.size() >= 5);
+
+        fields = findAllDeclaredFields(ReflectionTestExt.class);
+        assertTrue(fields.size() >= 7);
+    }
+
+    @Test
+    void testGetDeclaredField() {
+        assertGetDeclaredField(ReflectionTest.class, "privateField");
+        assertGetDeclaredField(ReflectionTest.class, "packagePrivateField");
+        assertGetDeclaredField(ReflectionTest.class, "protectedField");
+        assertGetDeclaredField(ReflectionTest.class, "publicField");
+        assertGetDeclaredField(ReflectionTest.class, "staticField");
+
+        assertThrows(RuntimeException.class, () -> getDeclaredField(ReflectionTestExt.class, "unknownField"));
+
+        assertGetDeclaredField(ReflectionTestExt.class, "integerField");
+        assertGetDeclaredField(ReflectionTestExt.class, "stringField");
+
+        assertThrows(RuntimeException.class, () -> getDeclaredField(ReflectionTestExt.class, "privateField"));
+        assertThrows(RuntimeException.class, () -> getDeclaredField(ReflectionTestExt.class, "packagePrivateField"));
+        assertThrows(RuntimeException.class, () -> getDeclaredField(ReflectionTestExt.class, "protectedField"));
+        assertThrows(RuntimeException.class, () -> getDeclaredField(ReflectionTestExt.class, "publicField"));
+        assertThrows(RuntimeException.class, () -> getDeclaredField(ReflectionTestExt.class, "staticField"));
+        assertThrows(RuntimeException.class, () -> getDeclaredField(ReflectionTestExt.class, "unknownField"));
+    }
+
+    @Test
+    void testGetStaticFieldValue() {
+        assertSame(System.in, getStaticFieldValue(System.class, "in"));
+        assertSame(System.out, getStaticFieldValue(System.class, "out"));
+        assertSame(ReflectionTest.staticField, getStaticFieldValue(ReflectionTest.class, "staticField"));
+
+        assertGetStaticFieldValue(ReflectionTest.class, "staticField");
+    }
+
+    @Test
+    void testGetStaticFieldValueOnField() {
+        Field field = findField(ReflectionTest.class, "staticField");
+        assertSame("staticField", getStaticFieldValue(field));
+        assertSame(ReflectionTest.staticField, getStaticFieldValue(field));
+    }
+
+    @Test
+    void testGetFieldValue() {
+        String value = "Hello,World";
+        if (CURRENT_JAVA_VERSION.le(JAVA_VERSION_8)) {
+            assertArrayEquals(value.toCharArray(), getFieldValue(true, value, "value", char[].class));
+        } else {
+            assertArrayEquals(value.getBytes(), getFieldValue(true, value, "value", byte[].class));
+        }
+
+        assertGetFieldValue(test, "privateField", true);
+        assertGetFieldValue(test, "packagePrivateField", false);
+        assertGetFieldValue(test, "protectedField", false);
+        assertGetFieldValue(test, "publicField", false);
+
+        assertNotNull(getFieldValue(test, "packagePrivateField", String.class));
+        assertNotNull(getFieldValue(test, "protectedField", String.class));
+        assertNotNull(getFieldValue(test, "publicField", String.class));
+    }
+
+    @Test
+    void testGetFieldValueWithDefaultValue() {
+        ReflectionTestExt testExt = new ReflectionTestExt();
+        assertGetFieldValue(testExt, "integerField", 0, true);
+        assertGetFieldValue(testExt, "stringField", "test", true);
+    }
+
+    @Test
+    void testGetFieldValueOnIllegalArgumentException() {
+        Field field = findField(test, "privateField");
+        assertThrows(IllegalArgumentException.class, () -> getFieldValue(true, "test", field));
+    }
+
+    @Test
+    void testGetFieldValueOnIllegalStateException() {
+        assertThrows(IllegalStateException.class, () -> getFieldValue(this, "value", String.class));
+    }
+
+    @Test
+    void testGetFieldValueOnNull() {
+        assertThrows(NullPointerException.class, () -> getFieldValue(null, (String) null));
+    }
+
+    @Test
+    void testSetFieldValue() {
+        Integer value = 999;
+        setFieldValue(true, value, "value", 2);
+        assertEquals(value.intValue(), setFieldValue(true, value, "value", 2));
+
+        assertSetFieldValue(test, "privateField", "test", true);
+        assertSetFieldValue(test, "packagePrivateField", "test", false);
+        assertSetFieldValue(test, "protectedField", "test", false);
+        assertSetFieldValue(test, "publicField", "test", false);
+    }
+
+    @Test
+    void testSetFieldValueOnFieldNotFound() {
+        assertNull(setFieldValue(test, "notFoundField", null));
+    }
+
+    @Test
+    void testSetFieldValueOnIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> setFieldValue(test, "privateField", 1));
+    }
+
+    @Test
+    void testSetStaticFieldValue() {
+        setStaticFieldValue(true, getClass(), "value", "abc");
+        assertEquals("abc", value);
+
+        assertSetStaticFieldValue(ReflectionTest.class, "staticField", "test", false);
+    }
+
+    @Test
+    void testAssertFieldMatchType() {
+        assertFieldMatchType(test, "privateField", String.class);
+        assertFieldMatchType(test, "packagePrivateField", String.class);
+        assertFieldMatchType(test, "protectedField", String.class);
+        assertFieldMatchType(test, "publicField", String.class);
+        assertFieldMatchType(test, "staticField", String.class);
+        assertFieldMatchType(ReflectionTestExt.class, "integerField", Integer.class);
+        assertFieldMatchType(ReflectionTestExt.class, "stringField", String.class);
+    }
+
+    @Test
+    void testAssertFieldMatchTypeOnIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> assertFieldMatchType(test, "not-found-field", Integer.class));
+        assertThrows(IllegalArgumentException.class, () -> assertFieldMatchType(test, "privateField", Integer.class));
+    }
+
+    private void assertFindField(Object object, String fieldName) {
+        assertNotNull(findField(object, fieldName));
+    }
+
+    private void assertFindField(Class<?> klass, String fieldName) {
+        assertNotNull(findField(klass, fieldName));
+    }
+
+    private void assertFindField(Class<?> klass, String fieldName, Class<?> fieldType) {
+        assertNotNull(findField(klass, fieldName, fieldType));
+    }
+
+    private void assertFindField(Class<?> klass, String fieldName, boolean found) {
+        assertEquals(found, findField(klass, fieldName, f -> found) != null);
+    }
+
+    private void assertGetStaticFieldValue(Class<?> klass, String fieldName) {
+        assertEquals(fieldName, getStaticFieldValue(klass, fieldName));
+    }
+
+    private void assertGetFieldValue(ReflectionTest test, String fieldName, boolean forceAccess) {
+        if (forceAccess) {
+            assertEquals(fieldName, getFieldValue(true, test, fieldName));
+            assertEquals(fieldName, getFieldValue(true, test, fieldName, (Object) null));
+        } else {
+            assertEquals(fieldName, getFieldValue(test, fieldName));
+            assertEquals(fieldName, getFieldValue(test, fieldName, (Object) null));
+        }
+    }
+
+    private void assertGetFieldValue(ReflectionTest test, String fieldName, Object defaultValue, boolean forceAccess) {
+        if (forceAccess) {
+            assertEquals(defaultValue, getFieldValue(true, test, fieldName, defaultValue));
+        } else {
+            assertEquals(defaultValue, getFieldValue(test, fieldName, defaultValue));
+        }
+    }
+
+    private void assertSetFieldValue(ReflectionTest test, String fieldName, String fieldValue, boolean forceAccess) {
+        Field field = findField(test, fieldName);
+        if (forceAccess) {
+            assertEquals(fieldName, setFieldValue(true, test, fieldName, fieldValue));
+            setFieldValue(true, test, field, fieldValue);
+        } else {
+            assertEquals(fieldName, setFieldValue(test, fieldName, fieldValue));
+            setFieldValue(test, field, fieldValue);
+        }
+    }
+
+    private void assertSetStaticFieldValue(Class<?> klass, String fieldName, String fieldValue, boolean forceAccess) {
+        if (forceAccess) {
+            assertEquals(fieldName, setStaticFieldValue(true, klass, fieldName, fieldValue));
+        } else {
+            assertEquals(fieldName, setStaticFieldValue(klass, fieldName, fieldValue));
+        }
+    }
+
+    private void assertGetDeclaredField(Class<?> klass, String fieldName) {
+        assertNotNull(getDeclaredField(klass, fieldName));
+    }
+
+    static class ReflectionTestExt extends ReflectionTest {
+
+        private Integer integerField;
+
+        private String stringField;
+
+    }
+}

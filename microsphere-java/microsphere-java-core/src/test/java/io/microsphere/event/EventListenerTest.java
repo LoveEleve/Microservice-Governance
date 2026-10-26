@@ -1,0 +1,79 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.event;
+
+import io.microsphere.io.event.FileChangedEvent;
+import org.junit.jupiter.api.Test;
+
+import static io.microsphere.event.EventListener.findEventType;
+import static io.microsphere.lang.Prioritized.NORMAL_PRIORITY;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+/**
+ * {@link EventListener} Test
+ *
+ * @since 1.0.0
+ */
+class EventListenerTest {
+
+    @Test
+    void testFindEventTypeOnHierarchicalClasses() {
+        assertEquals(EchoEvent.class, findEventType(new EchoEventListener()));
+        assertEquals(Event.class, findEventType(new EchoEventListener2()));
+
+        assertEquals(EchoEvent.class, findEventType(EchoEventListener.class));
+        assertEquals(Event.class, findEventType(EchoEventListener2.class));
+    }
+
+    @Test
+    void testFindEventTypeOnLambda() {
+        EventListener<Event> listener = (event) -> {
+        };
+        assertEquals(Event.class, findEventType(listener));
+
+        EventListener<EchoEvent> listener2 = (event) -> {
+        };
+        assertEquals(EchoEvent.class, findEventType(listener2));
+
+        EventListener<FileChangedEvent> listener3 = (event) -> {
+        };
+        assertEquals(FileChangedEvent.class, findEventType(listener3));
+    }
+
+    @Test
+    void testFindEventTypeOnNull() {
+        assertNull(findEventType((Class) null));
+    }
+
+    @Test
+    void testGetPriority() {
+        EventListener<Event> listener = new EventListener<Event>() {
+            @Override
+            public void onEvent(Event event) {
+            }
+
+            @Override
+            public int getPriority() {
+                return EventListener.super.getPriority();
+            }
+        };
+
+        assertEquals(NORMAL_PRIORITY, listener.getPriority());
+    }
+
+}

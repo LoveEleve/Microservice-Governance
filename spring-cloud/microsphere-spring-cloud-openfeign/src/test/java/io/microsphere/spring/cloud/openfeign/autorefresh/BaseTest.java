@@ -1,0 +1,106 @@
+package io.microsphere.spring.cloud.openfeign.autorefresh;
+
+import io.microsphere.logging.Logger;
+import io.microsphere.spring.cloud.openfeign.BaseClient;
+import io.microsphere.spring.cloud.openfeign.FeignComponentAssert;
+import io.microsphere.spring.cloud.openfeign.ObservableFeignInvocationHandler;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.context.environment.EnvironmentChangeEvent;
+import org.springframework.cloud.endpoint.event.RefreshEvent;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.MutablePropertySources;
+import org.springframework.test.context.TestPropertySource;
+
+import java.util.Map;
+import java.util.Set;
+
+import static io.microsphere.collection.MapUtils.newHashMap;
+import static io.microsphere.logging.LoggerFactory.getLogger;
+import static java.util.Collections.singleton;
+
+/**
+ * @author <a href="mailto:maimengzzz@gmail.com">韩超</a>
+ * @since 1.0.0
+ */
+@TestPropertySource(properties = {
+        "spring.main.allow-bean-definition-overriding=true",
+        "spring.cloud.openfeign.client.config.default.encoder=io.microsphere.spring.cloud.openfeign.encoder.AEncoder",
+        "spring.cloud.openfeign.client.config.default.error-decoder=io.microsphere.spring.cloud.openfeign.errordecoder.AErrorDecoder",
+        "spring.cloud.openfeign.client.config.default.query-map-encoder=io.microsphere.spring.cloud.openfeign.querymapencoder.AQueryMapEncoder",
+        "spring.cloud.openfeign.client.config.default.retryer=io.microsphere.spring.cloud.openfeign.retryer.ARetry",
+        "spring.cloud.openfeign.client.config.default.decoder=io.microsphere.spring.cloud.openfeign.decoder.ADecoder",
+        "spring.cloud.openfeign.client.config.default.request-interceptors[0]=io.microsphere.spring.cloud.openfeign.requestInterceptor.ARequestInterceptor",
+        "spring.cloud.openfeign.client.config.default.default-request-headers.app=my-app",
+        "spring.cloud.openfeign.client.config.default.default-query-parameters.sign=my-sign",
+})
+@ComponentScan(basePackages = "io.microsphere.spring.cloud.openfeign")
+@EnableFeignClients(clients = BaseClient.class)
+@EnableFeignAutoRefresh
+public abstract class BaseTest<T> {
+
+    private static final Logger log = getLogger(BaseTest.class);
+
+    @Autowired
+    private ApplicationEventPublisher publisher;
+
+    @Autowired
+    private Environment environment;
+
+    @Autowired
+    private BaseClient client;
+
+    protected abstract String afterTestComponentConfigKey();
+
+    protected abstract Class<? extends T> beforeTestComponentClass();
+
+    protected abstract Class<? extends T> afterTestComponent();
+
+    protected abstract FeignComponentAssert<T> loadFeignComponentAssert();
+
+    public void replaceConfig() {
+        final String key = afterTestComponentConfigKey();
+        Set<String> keys = singleton(key);
+        final String className = afterTestComponent().getName();
+        MutablePropertySources propertySources = ((ConfigurableEnvironment) this.environment).getPropertySources();
+        Map<String, Object> map = newHashMap();
+        log.trace("replacing config key {} with value {}", key, className);
+        map.put(key, className);
+        propertySources.addFirst(new MapPropertySource("after", map));
+
+        EnvironmentChangeEvent event = new EnvironmentChangeEvent(keys);
+
+        triggerRefreshEvent();
+
+        this.publisher.publishEvent(event);
+    }
+
+    @Test
+    protected void testInternal() {
+        ObservableFeignInvocationHandler.componentAssert = loadFeignComponentAssert();
+
+        ObservableFeignInvocationHandler.expectComponentClass = beforeTestComponentClass();
+        try {
+            this.client.echo("hello", "1.0");
+        } catch (Exception ignored) {
+        }
+        replaceConfig();
+
+        ObservableFeignInvocationHandler.expectComponentClass = afterTestComponent();
+        try {
+            this.client.echo("world", "1.0");
+        } catch (Exception ignored) {
+
+        }
+    }
+
+    protected void triggerRefreshEvent() {
+        this.publisher.publishEvent(new RefreshEvent(new Object(), new Object(), "test"));
+    }
+
+}

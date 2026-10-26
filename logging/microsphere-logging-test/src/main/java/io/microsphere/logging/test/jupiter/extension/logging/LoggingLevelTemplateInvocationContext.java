@@ -1,0 +1,123 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.microsphere.logging.test.jupiter.extension.logging;
+
+import io.microsphere.logging.Logging;
+import org.junit.jupiter.api.extension.ClassTemplateInvocationContext;
+import org.junit.jupiter.api.extension.Extension;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
+
+import java.util.List;
+
+import static io.microsphere.collection.ListUtils.newArrayList;
+
+/**
+ * The facade class of {@link ClassTemplateInvocationContext} and {@link TestTemplateInvocationContext} to set the
+ * logging level.
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @see ClassTemplateInvocationContext
+ * @see TestTemplateInvocationContext
+ * @since 1.0.0
+ */
+class LoggingLevelTemplateInvocationContext implements ClassTemplateInvocationContext, TestTemplateInvocationContext {
+
+    private final List<Logging> loggins;
+
+    private final String[] loggerName;
+
+    private final String level;
+
+    private final int index;
+
+    private final boolean isClassTemplate;
+
+    /**
+     * Creates a new {@link LoggingLevelTemplateInvocationContext}.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   List<Logging> loggings = LoggingUtils.loadAll();
+     *   LoggingLevelTemplateInvocationContext ctx =
+     *       new LoggingLevelTemplateInvocationContext(loggings, new String[]{"io.microsphere"}, "DEBUG", 0, false);
+     * }</pre>
+     *
+     * @param loggings        the list of {@link Logging} instances to configure
+     * @param loggerName      the logger names to apply the level to
+     * @param level           the logging level string (e.g. "DEBUG", "INFO")
+     * @param index           the zero-based index of this level in the levels array
+     * @param isClassTemplate {@code true} if this is a class template context
+     *
+     */
+    LoggingLevelTemplateInvocationContext(List<Logging> loggings, String[] loggerName, String level, int index, boolean isClassTemplate) {
+        this.loggins = loggings;
+        this.loggerName = loggerName;
+        this.level = level;
+        this.index = index;
+        this.isClassTemplate = isClassTemplate;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   LoggingLevelTemplateInvocationContext ctx = ...;
+     *   String displayName = ctx.getDisplayName(1); // e.g. "[DEBUG]"
+     * }</pre>
+     */
+    @Override
+    public String getDisplayName(int invocationIndex) {
+        return "[" + this.level + "]";
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   LoggingLevelTemplateInvocationContext ctx = ...;
+     *   List<Extension> extensions = ctx.getAdditionalExtensions();
+     * }</pre>
+     */
+    @Override
+    public List<Extension> getAdditionalExtensions() {
+        List<Extension> extensions = newArrayList(this.isClassTemplate ? 2 : 1);
+        extensions.add(new LoggingLevelCallback(this.loggins, this.loggerName, this.level));
+        if (this.isClassTemplate) {
+            extensions.add(new LoggingLevelParameterResolver(this.level, this.index));
+        }
+        return extensions;
+    }
+
+    /**
+     * Prepares the invocation context before each test execution.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   LoggingLevelTemplateInvocationContext ctx = ...;
+     *   ctx.prepareInvocation(extensionContext);
+     * }</pre>
+     *
+     * @param context the current {@link ExtensionContext}
+     *
+     */
+    public void prepareInvocation(ExtensionContext context) {
+    }
+}

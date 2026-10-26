@@ -1,0 +1,32 @@
+package io.microsphere.io;
+
+import io.microsphere.Loggable;
+import io.microsphere.io.event.LoggingFileChangedListener;
+import org.junit.jupiter.api.Test;
+
+import java.io.File;
+
+import static io.microsphere.AbstractTestCase.newRandomTempFile;
+import static io.microsphere.collection.Lists.ofList;
+import static io.microsphere.io.event.FileChangedEvent.Kind.values;
+
+/**
+ * {@link FileWatchService} Test
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy<a/>
+ * @see FileWatchService
+ * @since 1.0.0
+ */
+class FileWatchServiceTest implements Loggable {
+
+    private FileWatchService service = (file, listener, kinds) -> {
+        log("Watching : {} , listener : {} , kinds : {}", file, listener, kinds);
+    };
+
+    @Test
+    void testWatch() {
+        File file = newRandomTempFile();
+        service.watch(file, new LoggingFileChangedListener(), values());
+        service.watch(file, ofList(new LoggingFileChangedListener()), values());
+    }
+}

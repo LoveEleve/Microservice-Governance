@@ -1,0 +1,161 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.spring.config.context.annotation;
+
+import io.microsphere.annotation.Nonnull;
+import io.microsphere.annotation.Nullable;
+import io.microsphere.spring.context.annotation.AnnotatedBeanCapableImportSelector;
+import io.microsphere.spring.core.annotation.ResolvablePlaceholderAnnotationAttributes;
+import org.springframework.beans.factory.BeanCreationException;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.AnnotationAttributes;
+import org.springframework.core.env.MutablePropertySources;
+import org.springframework.core.env.PropertySource;
+import org.springframework.core.type.AnnotationMetadata;
+
+import java.lang.annotation.Annotation;
+import java.util.Set;
+
+import static org.springframework.util.StringUtils.hasText;
+
+/**
+ * Abstract base class implementations that load a {@link PropertySource}
+ * when a {@link Configuration} class is annotated with a specific annotation.
+ *
+ * <p>This class provides a foundation for conditionally adding property sources to the Spring environment
+ * based on annotations present on configuration classes. Subclasses must implement the
+ * {@link #loadPropertySource(AnnotationAttributes, AnnotationMetadata, String, MutablePropertySources)} method
+ * to define how the property source is loaded.
+ *
+ * <h3>Example Usage</h3>
+ *
+ * <pre>{@code
+ * public class MyPropertySourceLoader extends AnnotatedPropertySourceLoader<MyPropertySource> {
+ *
+ *     @Override
+ *     protected void loadPropertySource(AnnotationAttributes attributes,
+ *                                       AnnotationMetadata metadata,
+ *                                       String propertySourceName,
+ *                                       MutablePropertySources propertySources) throws Throwable {
+ *         // Create and add a custom PropertySource
+ *         PropertySource<?> propertySource = new CustomPropertySource(propertySourceName);
+ *         propertySources.addLast(propertySource);
+ *     }
+ * }
+ * }</pre>
+ *
+ * @param <A> The type of annotation that triggers property source loading
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @see ResourcePropertySourceLoader
+ * @see PropertySourceExtensionLoader
+ * @since 1.0.0
+ */
+public abstract class AnnotatedPropertySourceLoader<A extends Annotation> extends AnnotatedBeanCapableImportSelector<A> {
+
+    protected static final String NAME_ATTRIBUTE_NAME = "name";
+
+    private String propertySourceName;
+
+    @Override
+    public final void selectImports(AnnotationMetadata metadata, ResolvablePlaceholderAnnotationAttributes<A> annotationAttributes,
+                                    Set<String> imports) {
+        String propertySourceName = resolvePropertySourceName(annotationAttributes, metadata);
+        this.propertySourceName = propertySourceName;
+        MutablePropertySources propertySources = getEnvironment().getPropertySources();
+        try {
+            loadPropertySource(annotationAttributes, metadata, propertySourceName, propertySources);
+        } catch (Throwable e) {
+            String errorMessage = "The Configuration bean[class : '" + metadata.getClassName() + "', annotated : @" + annotationType.getName() + "] can't load the PropertySource[name : '" + propertySourceName + "']";
+            if (logger.isErrorEnabled()) {
+                logger.error(errorMessage, e);
+            }
+            throw new BeanCreationException(errorMessage, e);
+        }
+    }
+
+    /**
+     * Resolve the name of {@link PropertySource}
+     *
+     * @param attributes {@link AnnotationAttributes}
+     * @param metadata   {@link AnnotationMetadata}
+     * @return non-null
+     */
+    @Nonnull
+    protected final String resolvePropertySourceName(AnnotationAttributes attributes, AnnotationMetadata metadata) {
+        String name = buildPropertySourceName(attributes, metadata);
+        if (!hasText(name)) {
+            name = buildDefaultPropertySourceName(attributes, metadata);
+        }
+        return name;
+    }
+
+    /**
+     * Build the name of {@link PropertySource}
+     *
+     * @param attributes {@link AnnotationAttributes}
+     * @param metadata   {@link AnnotationMetadata}
+     * @return the attribute value of annotation if the {@link #NAME_ATTRIBUTE_NAME "name"} attribute present, or <code>null</code>
+     */
+    @Nullable
+    protected String buildPropertySourceName(AnnotationAttributes attributes, AnnotationMetadata metadata) {
+        if (attributes.containsKey(NAME_ATTRIBUTE_NAME)) {
+            return attributes.getString(NAME_ATTRIBUTE_NAME);
+        }
+        return null;
+    }
+
+    /**
+     * Build the default name of {@link PropertySource}
+     *
+     * @param attributes {@link AnnotationAttributes}
+     * @param metadata   {@link AnnotationMetadata}
+     * @return non-null
+     */
+    @Nonnull
+    protected String buildDefaultPropertySourceName(AnnotationAttributes attributes, AnnotationMetadata metadata) {
+        String annotationClassName = annotationType.getName();
+        String introspectedClassName = metadata.getClassName();
+        return introspectedClassName + "@" + annotationClassName;
+    }
+
+    /**
+     * Load the {@link PropertySource}
+     *
+     * @param attributes         {@link AnnotationAttributes}
+     * @param metadata           {@link AnnotationMetadata}
+     * @param propertySourceName the name of {@link PropertySource}
+     * @param propertySources    {@link MutablePropertySources} to be added
+     * @throws Throwable the failure of the loading
+     */
+    @Nullable
+    protected abstract void loadPropertySource(AnnotationAttributes attributes, AnnotationMetadata metadata,
+                                               String propertySourceName, MutablePropertySources propertySources) throws Throwable;
+
+    /**
+     * The annotation type
+     *
+     * @return non-null
+     */
+    @Nonnull
+    public final Class<A> getAnnotationType() {
+        return annotationType;
+    }
+
+    protected String getPropertySourceName() {
+        return this.propertySourceName;
+    }
+}

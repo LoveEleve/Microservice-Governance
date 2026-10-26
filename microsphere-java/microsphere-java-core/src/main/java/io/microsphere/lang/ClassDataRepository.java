@@ -1,0 +1,246 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.lang;
+
+import io.microsphere.annotation.Immutable;
+import io.microsphere.annotation.Nonnull;
+import io.microsphere.annotation.Nullable;
+import io.microsphere.util.ClassPathUtils;
+
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.jar.JarFile;
+
+import static io.microsphere.collection.CollectionUtils.isEmpty;
+import static io.microsphere.collection.MapUtils.newLinkedHashMap;
+import static io.microsphere.collection.SetUtils.newLinkedHashSet;
+import static io.microsphere.util.ClassPathUtils.getBootstrapClassPaths;
+import static io.microsphere.util.ClassPathUtils.getClassPaths;
+import static io.microsphere.util.ClassUtils.findClassNamesInClassPath;
+import static io.microsphere.util.ClassUtils.resolvePackageName;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.unmodifiableMap;
+import static java.util.Collections.unmodifiableSet;
+
+/**
+ * A repository class that manages and provides access to classpath and class-related metadata.
+ * <p>
+ * This class offers methods for retrieving class names, package names, and their respective locations
+ * within the classpath. It maintains mappings such as:
+ * </p>
+ * <ul>
+ *     <li><strong>Class path to class names:</strong> Maps directories or JAR files to the set of fully qualified class names contained within.</li>
+ *     <li><strong>Class name to class path:</strong> Maps each fully qualified class name to its defining class path entry (e.g., a JAR file or directory).</li>
+ *     <li><strong>Package name to class names:</strong> Maps package names to the set of fully qualified class names belonging to them.</li>
+ * </ul>
+ *
+ * <h3>Example Usage</h3>
+ * <pre>{@code
+ * // Get the singleton instance
+ * ClassDataRepository repository = ClassDataRepository.INSTANCE;
+ *
+ * // Get all package names discovered in the classpath
+ * Set<String> packages = repository.getAllPackageNamesInClassPaths();
+ *
+ * // Get all class names under a specific package
+ * Set<String> classesInPackage = repository.getClassNamesInPackage("java.lang");
+ *
+ * // Find the classpath where a specific class is located
+ * String classPath = repository.findClassPath(String.class);
+ *
+ * // Get all class names found in a specific classpath entry
+ * Set<String> classNames = repository.getClassNamesInClassPath("/usr/lib/jvm/rt.jar", false);
+ *
+ * // Get code source location URL for a given class
+ * URL location = repository.getCodeSourceLocation(ArrayList.class);
+ * }</pre>
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @see ClassPathUtils
+ * @since 1.0.0
+ */
+@Immutable
+public class ClassDataRepository {
+
+    /**
+     * Singleton instance of {@link ClassDataRepository}
+     */
+    public static final ClassDataRepository INSTANCE = new ClassDataRepository();
+
+    private final Map<String, Set<String>> classPathToClassNamesMap = initClassPathToClassNamesMap();
+
+    private final Map<String, String> classNameToClassPathsMap = initClassNameToClassPathsMap();
+
+    private final Map<String, Set<String>> packageNameToClassNamesMap = initPackageNameToClassNamesMap();
+
+    /**
+     * Get all package names in {@link ClassPathUtils#getClassPaths() class paths}
+     *
+     * @return all package names in class paths
+     */
+    @Nonnull
+    @Immutable
+    public Set<String> getAllPackageNamesInClassPaths() {
+        return unmodifiableSet(packageNameToClassNamesMap.keySet());
+    }
+
+    /**
+     * Find class path under specified class name
+     *
+     * @param type class
+     * @return class path
+     */
+    @Nullable
+    public String findClassPath(@Nonnull Class<?> type) {
+        return findClassPath(type.getName());
+    }
+
+    /**
+     * Find class path under specified class name
+     *
+     * @param className class name
+     * @return class path
+     */
+    @Nullable
+    public String findClassPath(@Nullable String className) {
+        return classNameToClassPathsMap.get(className);
+    }
+
+    /**
+     * Gets class name {@link Set} under specified class path
+     *
+     * @param classPath class path
+     * @param recursive is recursive on sub directories
+     * @return non-null {@link Set}
+     */
+    @Nonnull
+    @Immutable
+    public Set<String> getClassNamesInClassPath(@Nonnull String classPath, boolean recursive) {
+        Set<String> classNames = classPathToClassNamesMap.get(classPath);
+        if (isEmpty(classNames)) {
+            classNames = findClassNamesInClassPath(classPath, recursive);
+        }
+        return classNames;
+    }
+
+    /**
+     * Gets class name {@link Set} under specified package
+     *
+     * @param onePackage one package
+     * @return non-null {@link Set}
+     */
+    @Nonnull
+    @Immutable
+    public Set<String> getClassNamesInPackage(@Nonnull Package onePackage) {
+        return getClassNamesInPackage(onePackage.getName());
+    }
+
+    /**
+     * Gets class name {@link Set} under specified package name
+     *
+     * @param packageName package name
+     * @return non-null {@link Set}
+     */
+    @Nonnull
+    @Immutable
+    public Set<String> getClassNamesInPackage(@Nullable String packageName) {
+        Set<String> classNames = packageNameToClassNamesMap.get(packageName);
+        return classNames == null ? emptySet() : unmodifiableSet(classNames);
+    }
+
+    /**
+     * The map of all class names in {@link ClassPathUtils#getClassPaths() class path} , the class path for one {@link
+     * JarFile} or classes directory as key , the class names set as value
+     *
+     * @return Read-only
+     */
+    @Nonnull
+    @Immutable
+    public Map<String, Set<String>> getClassPathToClassNamesMap() {
+        return classPathToClassNamesMap;
+    }
+
+    /**
+     * The set of all class names in {@link ClassPathUtils#getClassPaths() class path}
+     *
+     * @return Read-only
+     */
+    @Nonnull
+    @Immutable
+    public Set<String> getAllClassNamesInClassPaths() {
+        LinkedHashSet<String> allClassNames = new LinkedHashSet();
+        for (Set<String> classNames : classPathToClassNamesMap.values()) {
+            allClassNames.addAll(classNames);
+        }
+        return unmodifiableSet(allClassNames);
+    }
+
+    @Nonnull
+    @Immutable
+    private Map<String, Set<String>> initClassPathToClassNamesMap() {
+        LinkedHashMap<String, Set<String>> classPathToClassNamesMap = newLinkedHashMap();
+        LinkedHashSet<String> classPaths = newLinkedHashSet();
+        classPaths.addAll(getBootstrapClassPaths());
+        classPaths.addAll(getClassPaths());
+        for (String classPath : classPaths) {
+            Set<String> classNames = findClassNamesInClassPath(classPath, true);
+            classPathToClassNamesMap.put(classPath, classNames);
+        }
+        return unmodifiableMap(classPathToClassNamesMap);
+    }
+
+    @Nonnull
+    @Immutable
+    private Map<String, String> initClassNameToClassPathsMap() {
+        LinkedHashMap<String, String> classNameToClassPathsMap = newLinkedHashMap();
+
+        for (Entry<String, Set<String>> entry : classPathToClassNamesMap.entrySet()) {
+            String classPath = entry.getKey();
+            Set<String> classNames = entry.getValue();
+            for (String className : classNames) {
+                classNameToClassPathsMap.put(className, classPath);
+            }
+        }
+
+        return unmodifiableMap(classNameToClassPathsMap);
+    }
+
+    @Nonnull
+    @Immutable
+    private Map<String, Set<String>> initPackageNameToClassNamesMap() {
+        LinkedHashMap<String, Set<String>> packageNameToClassNamesMap = new LinkedHashMap();
+        for (Entry<String, String> entry : classNameToClassPathsMap.entrySet()) {
+            String className = entry.getKey();
+            String packageName = resolvePackageName(className);
+            Set<String> classNamesInPackage = packageNameToClassNamesMap.computeIfAbsent(packageName, k -> new LinkedHashSet<>());
+            classNamesInPackage.add(className);
+        }
+
+        for (Entry<String, Set<String>> entry : packageNameToClassNamesMap.entrySet()) {
+            Set<String> classNames = entry.getValue();
+            entry.setValue(unmodifiableSet(classNames));
+        }
+
+        return unmodifiableMap(packageNameToClassNamesMap);
+    }
+
+    private ClassDataRepository() {
+    }
+}

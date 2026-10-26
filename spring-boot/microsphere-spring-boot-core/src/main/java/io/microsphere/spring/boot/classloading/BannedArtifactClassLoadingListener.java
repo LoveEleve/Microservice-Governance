@@ -1,0 +1,166 @@
+package io.microsphere.spring.boot.classloading;
+
+import io.microsphere.annotation.ConfigurationProperty;
+import io.microsphere.classloading.BannedArtifactClassLoadingExecutor;
+import io.microsphere.logging.Logger;
+import io.microsphere.spring.boot.listener.SpringApplicationRunListenerAdapter;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.context.event.ApplicationStartingEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.core.Ordered;
+
+import java.util.concurrent.ConcurrentMap;
+
+import static io.microsphere.annotation.ConfigurationProperty.SYSTEM_PROPERTIES_SOURCE;
+import static io.microsphere.collection.MapUtils.newConcurrentHashMap;
+import static io.microsphere.logging.LoggerFactory.getLogger;
+import static io.microsphere.spring.boot.constants.PropertyConstants.MICROSPHERE_SPRING_BOOT_PROPERTY_NAME_PREFIX;
+import static io.microsphere.util.ArrayUtils.arrayToString;
+import static io.microsphere.util.ShutdownHookUtils.addShutdownHookCallback;
+import static java.lang.Boolean.FALSE;
+import static java.lang.Boolean.TRUE;
+import static java.lang.Boolean.getBoolean;
+import static java.lang.Thread.currentThread;
+
+/**
+ * {@link ApplicationStartingEvent} {@link ApplicationListener} that bans loading of artifact collision classes.
+ * <h3>Example Usage</h3>
+ * <h4>Enable artifact banning via system property</h4>
+ * <pre>{@code
+ * -Dmicrosphere.spring.boot.banned-artifacts.enabled=true
+ * }</pre>
+ *
+ * <h4>Register listener in Spring Boot application</h4>
+ * <pre>{@code
+ * SpringApplication app = new SpringApplication(MyApplication.class);
+ * app.addListeners(new BannedArtifactClassLoadingListener(app));
+ * app.run(args);
+ * }</pre>
+ * <p>
+ * When enabled, this listener will prevent loading of banned artifacts during application startup.
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy<a/>
+ * @since 1.0.0
+ */
+public class BannedArtifactClassLoadingListener extends SpringApplicationRunListenerAdapter implements Ordered {
+
+    private static final Logger logger = getLogger(BannedArtifactClassLoadingListener.class);
+
+    @ConfigurationProperty(
+            type = boolean.class,
+            defaultValue = "false",
+            description = "Whether to ban the artifacts from class loading",
+            source = SYSTEM_PROPERTIES_SOURCE
+    )
+    public static final String BANNED_ARTIFACTS_ENABLED_PROPERTY_NAME = MICROSPHERE_SPRING_BOOT_PROPERTY_NAME_PREFIX + "banned-artifacts.enabled";
+
+    private static final ConcurrentMap<SpringApplication, Boolean> processedMap = newConcurrentHashMap();
+
+    static {
+        addShutdownHookCallback(processedMap::clear);
+    }
+
+    /**
+     * Construct a new {@link BannedArtifactClassLoadingListener} with the given application and arguments.
+     * The listener is set to {@link Ordered#HIGHEST_PRECEDENCE} to execute as early as possible.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   SpringApplication app = new SpringApplication(MyApplication.class);
+     *   BannedArtifactClassLoadingListener listener =
+     *       new BannedArtifactClassLoadingListener(app, args);
+     * }</pre>
+     *
+     * @param springApplication the {@link SpringApplication} instance
+     * @param args              the command line arguments
+     */
+    public BannedArtifactClassLoadingListener(SpringApplication springApplication, String... args) {
+        super(springApplication, args);
+        setOrder(HIGHEST_PRECEDENCE);
+    }
+
+    /**
+     * Called when the application is starting. If the
+     * {@link #BANNED_ARTIFACTS_ENABLED_PROPERTY_NAME banned-artifacts.enabled} system
+     * property is {@code true}, banned artifacts are detected and excluded from class loading.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   System.setProperty("microsphere.spring.boot.banned-artifacts.enabled", "true");
+     *   BannedArtifactClassLoadingListener listener =
+     *       new BannedArtifactClassLoadingListener(app, args);
+     *   listener.starting(); // triggers artifact banning
+     * }</pre>
+     */
+    @Override
+    public void starting() {
+        if (isProcessed()) {
+            if (logger.isTraceEnabled()) {
+                logger.trace("Current application's artifacts have been processed!");
+            }
+            return;
+        }
+
+        if (bannedArtifactsEnabled()) {
+            banArtifacts();
+        } else {
+            if (logger.isTraceEnabled()) {
+                logger.trace("The artifacts will not be banned, caused by the JDK System property('{}') is missing or 'false'",
+                        BANNED_ARTIFACTS_ENABLED_PROPERTY_NAME);
+            }
+        }
+        markProcessed();
+    }
+
+    /**
+     * Check whether the current {@link SpringApplication} has already been processed
+     * by this listener, to avoid duplicate artifact banning.
+     *
+     * <h3>Example Usage</h3>
+     * <pre>{@code
+     *   BannedArtifactClassLoadingListener listener =
+     *       new BannedArtifactClassLoadingListener(app, args);
+     *   if (!listener.isProcessed()) {
+     *       // artifacts have not been processed yet
+     *   }
+     * }</pre>
+     *
+     * @return {@code true} if the application's artifacts have already been processed
+     */
+    boolean isProcessed() {
+        Boolean processed = processedMap.getOrDefault(getSpringApplication(), FALSE);
+        return TRUE.equals(processed);
+    }
+
+    private boolean bannedArtifactsEnabled() {
+        return getBoolean(BANNED_ARTIFACTS_ENABLED_PROPERTY_NAME);
+    }
+
+    private void markProcessed() {
+        processedMap.put(getSpringApplication(), TRUE);
+    }
+
+    private void banArtifacts() {
+
+        SpringApplication springApplication = getSpringApplication();
+
+        if (logger.isTraceEnabled()) {
+            logger.trace("Current SpringApplication(Main class: '{}', arguments: {}) tries to ban the artifacts!",
+                    springApplication.getMainApplicationClass(), arrayToString(args));
+        }
+
+        ClassLoader classLoader = springApplication.getClassLoader();
+
+        ClassLoader contextClassLoader = currentThread().getContextClassLoader();
+
+        if (classLoader != contextClassLoader) {
+            logger.info("The artifacts will not be banned, caused by the SpringApplication's ClassLoader[{}] is different " +
+                    "from the current thread context ClassLoader[{}].", classLoader, contextClassLoader);
+            return;
+        }
+
+        BannedArtifactClassLoadingExecutor discoverer = new BannedArtifactClassLoadingExecutor(classLoader);
+
+        discoverer.execute();
+    }
+}

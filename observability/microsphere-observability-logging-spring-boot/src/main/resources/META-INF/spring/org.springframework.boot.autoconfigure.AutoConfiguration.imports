@@ -1,0 +1,4 @@
+io.microsphere.observability.logging.spring.boot.autoconfigure.ApplicationLoggingAutoConfiguration
+io.microsphere.observability.logging.spring.boot.autoconfigure.WebMvcLoggingAutoConfiguration
+io.microsphere.observability.logging.spring.boot.autoconfigure.WebServerLoggingAutoConfiguration
+io.microsphere.observability.logging.log4j2.spring.boot.autoconfigure.Log4j2AutoConfiguration

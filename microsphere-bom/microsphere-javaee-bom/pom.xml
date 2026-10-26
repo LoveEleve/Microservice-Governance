@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.microsphere-projects</groupId>
+        <artifactId>microsphere-bom</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <groupId>io.github.microsphere-projects</groupId>
+    <artifactId>microsphere-javaee-bom</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+
+    <name>Microsphere :: BOM :: Java EE</name>
+    <description>Microsphere BOM of Java EE</description>
+
+    <properties>
+        <!-- Java EE API Versions -->
+        <!-- Web Profile APIs -->
+        <javax.servlet-api.version>4.0.1</javax.servlet-api.version>
+        <javax.servlet.jsp-api.version>2.3.3</javax.servlet.jsp-api.version>
+        <javax.el-api.version>3.0.0</javax.el-api.version>
+        <javax.servlet.jsp.jstl-api.version>1.2.2</javax.servlet.jsp.jstl-api.version>
+        <javax.jsf-api.version>2.1</javax.jsf-api.version>
+        <javax.ws.rs-api.version>2.1.1</javax.ws.rs-api.version>
+        <javax.jaxws-api.version>2.3.1</javax.jaxws-api.version>
+        <javax.websocket-api.version>1.1</javax.websocket-api.version>
+        <javax.json-api.version>1.1.4</javax.json-api.version>
+        <javax.json.bind-api.version>1.0</javax.json.bind-api.version>
+        <javax.annotation-api.version>1.3.2</javax.annotation-api.version>
+        <javax.ejb-api.version>3.2.2</javax.ejb-api.version>
+        <javax.transaction-api.version>1.3</javax.transaction-api.version>
+        <javax.persistence-api.version>2.2</javax.persistence-api.version>
+        <javax.validation-api.version>2.0.1.Final</javax.validation-api.version>
+        <javax.interceptor-api.version>1.2.2</javax.interceptor-api.version>
+        <javax.cdi-api.version>2.0.SP1</javax.cdi-api.version>
+        <javax.inject.version>1</javax.inject.version>
+        <javax.security.auth.message-api.version>1.1.1</javax.security.auth.message-api.version>
+        <javax.security.enterprise-api.version>1.0</javax.security.enterprise-api.version>
+
+        <!-- Full Platform APIs -->
+        <javax.messaging-api.version>2.0.1</javax.messaging-api.version>
+        <javax.mail-api.version>1.6.2</javax.mail-api.version>
+        <javax.resource-api.version>1.7.1</javax.resource-api.version>
+        <javax.management.j2ee-api.version>1.1.2</javax.management.j2ee-api.version>
+        <javax.enterprise.concurrent-api.version>1.1</javax.enterprise.concurrent-api.version>
+        <javax.batch-api.version>1.0.1</javax.batch-api.version>
+
+        <!-- Optional APIs -->
+        <javax.enterprise.deploy-api.version>1.7</javax.enterprise.deploy-api.version>
+        <javax.xml.registry-api.version>1.0.8</javax.xml.registry-api.version>
+        <javax.xml.rpc-api.version>1.1.2</javax.xml.rpc-api.version>
+        <jsr305.version>3.0.2</jsr305.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+
+            <!--  Web Profile  -->
+            <dependency>
+                <groupId>javax.servlet</groupId>
+                <artifactId>javax.servlet-api</artifactId>
+                <version>${javax.servlet-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.servlet.jsp</groupId>
+                <artifactId>javax.servlet.jsp-api</artifactId>
+                <version>${javax.servlet.jsp-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.el</groupId>
+                <artifactId>javax.el-api</artifactId>
+                <version>${javax.el-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.servlet.jsp.jstl</groupId>
+                <artifactId>javax.servlet.jsp.jstl-api</artifactId>
+                <version>${javax.servlet.jsp.jstl-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.faces</groupId>
+                <artifactId>jsf-api</artifactId>
+                <version>${javax.jsf-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.ws.rs</groupId>
+                <artifactId>javax.ws.rs-api</artifactId>
+                <version>${javax.ws.rs-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.xml.ws</groupId>
+                <artifactId>jaxws-api</artifactId>
+                <version>${javax.jaxws-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.websocket</groupId>
+                <artifactId>javax.websocket-api</artifactId>
+                <version>${javax.websocket-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.json</groupId>
+                <artifactId>javax.json-api</artifactId>
+                <version>${javax.json-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.json.bind</groupId>
+                <artifactId>javax.json.bind-api</artifactId>
+                <version>${javax.json.bind-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.annotation</groupId>
+                <artifactId>javax.annotation-api</artifactId>
+                <version>${javax.annotation-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.ejb</groupId>
+                <artifactId>javax.ejb-api</artifactId>
+                <version>${javax.ejb-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.transaction</groupId>
+                <artifactId>javax.transaction-api</artifactId>
+                <version>${javax.transaction-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.persistence</groupId>
+                <artifactId>javax.persistence-api</artifactId>
+                <version>${javax.persistence-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.validation</groupId>
+                <artifactId>validation-api</artifactId>
+                <version>${javax.validation-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.interceptor</groupId>
+                <artifactId>javax.interceptor-api</artifactId>
+                <version>${javax.interceptor-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.enterprise</groupId>
+                <artifactId>cdi-api</artifactId>
+                <version>${javax.cdi-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.inject</groupId>
+                <artifactId>javax.inject</artifactId>
+                <version>${javax.inject.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.security.auth.message</groupId>
+                <artifactId>javax.security.auth.message-api</artifactId>
+                <version>${javax.security.auth.message-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.security.enterprise</groupId>
+                <artifactId>javax.security.enterprise-api</artifactId>
+                <version>${javax.security.enterprise-api.version}</version>
+            </dependency>
+
+            <!--  Full Platform  -->
+            <dependency>
+                <groupId>javax.jms</groupId>
+                <artifactId>javax.jms-api</artifactId>
+                <version>${javax.messaging-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.mail</groupId>
+                <artifactId>javax.mail-api</artifactId>
+                <version>${javax.mail-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.sun.mail</groupId>
+                <artifactId>javax.mail</artifactId>
+                <version>${javax.mail-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.resource</groupId>
+                <artifactId>javax.resource-api</artifactId>
+                <version>${javax.resource-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.management.j2ee</groupId>
+                <artifactId>javax.management.j2ee-api</artifactId>
+                <version>${javax.management.j2ee-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.enterprise.concurrent</groupId>
+                <artifactId>javax.enterprise.concurrent-api</artifactId>
+                <version>${javax.enterprise.concurrent-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.batch</groupId>
+                <artifactId>javax.batch-api</artifactId>
+                <version>${javax.batch-api.version}</version>
+            </dependency>
+
+            <!--  Optional APIs  -->
+            <dependency>
+                <groupId>javax.enterprise.deploy</groupId>
+                <artifactId>javax.enterprise.deploy-api</artifactId>
+                <version>${javax.enterprise.deploy-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.xml.registry</groupId>
+                <artifactId>javax.xml.registry-api</artifactId>
+                <version>${javax.xml.registry-api.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.xml.rpc</groupId>
+                <artifactId>javax.xml.rpc-api</artifactId>
+                <version>${javax.xml.rpc-api.version}</version>
+            </dependency>
+
+            <!-- JSR 305 -->
+            <dependency>
+                <groupId>com.google.code.findbugs</groupId>
+                <artifactId>jsr305</artifactId>
+                <version>${jsr305.version}</version>
+            </dependency>
+
+        </dependencies>
+    </dependencyManagement>
+
+</project>

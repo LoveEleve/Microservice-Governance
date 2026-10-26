@@ -1,0 +1,83 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.microsphere.spring.web.rule;
+
+import org.springframework.web.context.request.NativeWebRequest;
+
+import java.util.List;
+import java.util.Set;
+
+import static io.microsphere.collection.ListUtils.newArrayList;
+import static io.microsphere.collection.SetUtils.newHashSet;
+import static io.microsphere.util.ArrayUtils.isEmpty;
+import static java.util.Collections.emptyList;
+import static org.springframework.util.ObjectUtils.containsElement;
+import static org.springframework.web.util.WebUtils.SUBMIT_IMAGE_SUFFIXES;
+
+/**
+ * {@link NativeWebRequest WebRequest} Parameter {@link NameValueExpression}
+ *
+ * @author <a href="mailto:mercyblitz@gmail.com">Mercy</a>
+ * @see NameValueExpression
+ * @since 1.0.0
+ */
+public class WebRequestParamExpression extends AbstractNameValueExpression<String> {
+
+    private final Set<String> namesToMatch = newHashSet(SUBMIT_IMAGE_SUFFIXES.length + 1);
+
+    public WebRequestParamExpression(String expression) {
+        super(expression, true);
+        this.namesToMatch.add(getName());
+        for (String suffix : SUBMIT_IMAGE_SUFFIXES) {
+            this.namesToMatch.add(getName() + suffix);
+        }
+    }
+
+    @Override
+    protected String parseValue(String valueExpression) {
+        return valueExpression;
+    }
+
+    @Override
+    protected boolean matchName(NativeWebRequest request) {
+        for (String current : this.namesToMatch) {
+            if (request.getParameter(current) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    protected boolean matchValue(NativeWebRequest request) {
+        String[] parameterValues = request.getParameterValues(this.name);
+        return containsElement(parameterValues, this.value);
+    }
+
+    public static List<WebRequestParamExpression> parseExpressions(String... params) {
+        if (isEmpty(params)) {
+            return emptyList();
+        }
+        int length = params.length;
+        List<WebRequestParamExpression> expressions = newArrayList(length);
+        for (int i = 0; i < length; i++) {
+            String param = params[i];
+            expressions.add(new WebRequestParamExpression(param));
+        }
+        return expressions;
+    }
+}
