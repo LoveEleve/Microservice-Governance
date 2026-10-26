@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.loveeleve</groupId>
+    <artifactId>microservice-governance</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Microservice Governance</name>
+    <description>Microsphere + Poly service governance source snapshot</description>
+
+    <modules>
+        <module>dynamic</module>
+        <module>java-enterprise</module>
+        <module>logging</module>
+        <module>microsphere-bom</module>
+        <module>microsphere-build</module>
+        <module>microsphere-configuration</module>
+        <module>microsphere-druid</module>
+        <module>microsphere-gateway</module>
+        <module>microsphere-java</module>
+        <module>microsphere-multiactive</module>
+        <module>microsphere-mybatis</module>
+        <module>microsphere-nacos</module>
+        <module>microsphere-redis</module>
+        <module>microsphere-resilience4j</module>
+        <module>microsphere-spring</module>
+        <module>microsphere-tools</module>
+        <module>observability</module>
+        <module>poly</module>
+        <module>sentinel</module>
+        <module>spring-boot</module>
+        <module>spring-cloud</module>
+    </modules>
+</project>

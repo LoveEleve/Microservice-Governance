@@ -5,6 +5,12 @@ Microsphere + Poly 服务治理源码学习快照（2026-10-26）。
 > 来源：https://github.com/microsphere-projects ；Poly 来自 /data/workspace/source-code/poly。
 > 本仓库为工作树快照，不含各子项目的 `.git` 历史、`target/`、`build/` 等构建产物；原始仓库请以 GitHub 为准。
 
+## Maven 导入
+
+根目录 `pom.xml` 是聚合工程（`packaging=pom`），已列出全部顶层项目；IDEA 直接打开根目录后执行 **Reload All Maven Projects** 即可一次性识别。
+
+`poly` 作为独立子聚合器保留：根 POM 只引用 `poly`，Poly 自己的 `pom.xml` 再列出 `polyzone/polyconfig/polydata/polycache/polygateway`。IDEA 会递归识别，不需要把 Poly 内部项目平铺到根目录。
+
 ## 目录
 
 ### Poly（多活/治理扩展，独立工程）
