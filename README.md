@@ -13,7 +13,7 @@ Microsphere + Poly 服务治理源码学习快照（2026-10-26）。
 
 ## 文档
 
-文档总入口：[`docs/README.md`](docs/README.md)。Spring 前置在 [`docs/spring/`](docs/spring/00-覆盖报告.md)，Microsphere 主线在 [`docs/microsphere/`](docs/microsphere/README.md)，Poly 对照在 [`docs/poly/`](docs/poly/README.md)。
+文档总入口：[`docs/README.md`](docs/README.md)。Microsphere 主线在 [`docs/microsphere/`](docs/microsphere/README.md)，Poly 对照在 [`docs/poly/`](docs/poly/README.md)。
 
 ## Maven 导入
 
