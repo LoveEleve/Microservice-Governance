@@ -2,6 +2,10 @@
 
 本仓库文档按“项目 → 系列 → 篇章”组织；源码在仓库根目录，文档在 `docs/`。
 
+## Spring 源码（前置）
+
+- [Spring 源码覆盖报告](spring/00-覆盖报告.md)
+
 ## Microsphere（主线）
 
 - [Microsphere 文档总览](microsphere/README.md)
