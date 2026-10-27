@@ -5,7 +5,7 @@
 ## Microsphere（主线）
 
 - [Microsphere 文档总览](microsphere/README.md)
-- [Microsphere 系列规划（89 篇，A/B/P 三线）](microsphere/00-系列规划.md)
+- [Microsphere 系列规划（42 篇，聚焦项目）](microsphere/00-系列规划.md)
 - [L3 总览终稿](microsphere/00-overview/L3总览终稿.md)
 - [stage-1 服务治理完整梳理](microsphere/00-overview/course/stage-1-服务治理-完整梳理.md)
 - [microsphere-spring-cloud 知识大纲](microsphere/03-source-outline/05-microsphere-spring-cloud-服务治理知识大纲.md)
