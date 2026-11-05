@@ -10,12 +10,15 @@ Redisson Book 的配套用法工程。**只展示怎么接线/怎么用，不复
 |---|---|---|
 | `BasicLockLab` | 02 定位/03 API | `getLock`、`lock`、`try/finally/unlock` |
 | `TryLockLab` | 03 RLock API | `tryLock(waitTime, leaseTime, unit)`、失败降级 |
+| `WaitLockLab` | 06 解锁/等待 | 两个线程：持锁者 + 有界等待者 |
 | `ReentrantLockLab` | 04 加锁/重入 | 同线程重入、`getHoldCount`、配对 unlock |
 | `WatchdogLockLab` | 05 watchdog | `lock()` 默认续期 vs 显式 lease |
 | `FairReadWriteLab` | 07 公平锁/读写锁 | `getFairLock`、`getReadWriteLock` |
+| `SpinLockLab` | 07 SpinLock | `getSpinLock`，BackOff 轮询（非忙自旋） |
 | `MultiLockLab` | 08 MultiLock | 多把锁组合、统一加/解锁 |
 | `FencedLockLab` | 08 FencedLock | `lockAndGetToken`、fencing token |
 | `SemaphoreLatchLab` | 09 同步器 | `RSemaphore`、`RCountDownLatch` |
+| `PermitExpirableLab` | 09 PermitExpirable | `acquire(lease)` 返回 permitId、按 id release |
 
 ## 运行边界
 

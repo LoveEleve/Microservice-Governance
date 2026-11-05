@@ -8,8 +8,9 @@ public final class SemaphoreLatchLab {
 
     public static void main(String[] args) throws InterruptedException {
         RedissonClient client = RedissonLabSupport.createClient();
+        String suffix = Long.toHexString(System.nanoTime());
         try {
-            RSemaphore semaphore = client.getSemaphore("lab:sem:permits");
+            RSemaphore semaphore = client.getSemaphore("lab:sem:permits:" + suffix);
             semaphore.trySetPermits(2);
             semaphore.acquire();
             try {
@@ -18,7 +19,7 @@ public final class SemaphoreLatchLab {
                 semaphore.release();
             }
 
-            RCountDownLatch latch = client.getCountDownLatch("lab:latch");
+            RCountDownLatch latch = client.getCountDownLatch("lab:latch:" + suffix);
             latch.trySetCount(1);
             latch.countDown();
             latch.await();
