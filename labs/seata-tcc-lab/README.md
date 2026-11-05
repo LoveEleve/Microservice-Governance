@@ -11,7 +11,7 @@ Seata TC            :8091
 ```
 
 ```text
-order-service       lab_order
+order-service       lab_order + tcc_fence_log
 inventory-service   lab_stock + tcc_fence_log
 ```
 
@@ -22,7 +22,8 @@ POST /lab/seata/tcc/orders
   ↓
 OrderService.createOrder()
   @GlobalTransactional
-  ├── insert lab_order
+  ├── OrderTccAction.tryCreate()
+  │     → insert lab_order，状态 CREATED
   └── HTTP POST inventory-service /internal/tcc/inventory/try
         → InventoryTccAction.tryDeduct()
         → available - count, reserved + count
@@ -32,11 +33,15 @@ OrderService.createOrder()
 
 ```text
 全部成功：
-  TC → inventory-service 的 TCC RM → confirm()
+  TC → order-service 的 TCC RM → OrderTccAction.confirm()
+  → 订单状态 CREATED → CONFIRMED
+  TC → inventory-service 的 TCC RM → InventoryTccAction.confirm()
   → reserved - count, used + count
 
 任一失败：
-  TC → inventory-service 的 TCC RM → cancel()
+  TC → order-service 的 TCC RM → OrderTccAction.cancel()
+  → 订单状态 CREATED → CANCELLED
+  TC → inventory-service 的 TCC RM → InventoryTccAction.cancel()
   → reserved - count, available + count
 ```
 
