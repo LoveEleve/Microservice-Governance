@@ -9,6 +9,7 @@
 | [`microsphere-spring-cloud-lab`](microsphere-spring-cloud-lab/README.md) | Multiple Service Registry / Union Discovery / Registration Events / OpenFeign Auto-Refresh | 两个内存注册中心 + 两个内存 DiscoveryClient，不依赖真实 Nacos/Eureka |
 | [`redisson-lab`](redisson-lab/README.md) | RLock / tryLock / watchdog / fair / RW / multi / fenced / semaphore / latch | Redisson Book 配套使用工程；需要一个 Redis，不默认启动 |
 | [`seata-overview-lab`](seata-overview-lab/README.md) | TC/TM/RM、XID、AT、`@GlobalTransactional`、DataSourceProxy | Seata 小册第 1 章配套；需要 MySQL + Seata Server，不默认启动 |
+| [`seata-tcc-lab`](seata-tcc-lab/README.md) | Seata TCC、`@LocalTCC`、`@TwoPhaseBusinessAction`、fence 表 | Seata 小册第 4 章配套；需要 MySQL + Seata Server，不默认启动 |
 
 ## 约定
 
