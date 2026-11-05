@@ -1,0 +1,28 @@
+server:
+  port: 18082
+
+spring:
+  application:
+    name: mybatis-plus-lab
+  sql:
+    init:
+      mode: always
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/mybatis_plus_lab?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&characterEncoding=utf8
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0

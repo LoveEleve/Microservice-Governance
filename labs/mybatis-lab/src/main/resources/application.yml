@@ -1,0 +1,24 @@
+server:
+  port: 18081
+
+spring:
+  application:
+    name: mybatis-lab
+  sql:
+    init:
+      mode: always
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/mybatis_lab?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&characterEncoding=utf8
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: io.microsphere.labs.mybatis.domain
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl

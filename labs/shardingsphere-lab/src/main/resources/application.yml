@@ -1,0 +1,9 @@
+server:
+  port: 18083
+
+spring:
+  application:
+    name: shardingsphere-lab
+  datasource:
+    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    url: jdbc:shardingsphere:classpath:shardingsphere.yaml

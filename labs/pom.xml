@@ -13,6 +13,9 @@
     <description>Usage labs for Microsphere service governance</description>
 
     <modules>
+        <module>mybatis-lab</module>
+        <module>mybatis-plus-lab</module>
+        <module>shardingsphere-lab</module>
         <module>microsphere-spring-cloud-lab</module>
         <module>redisson-lab</module>
         <module>seata-at-multiservice-lab</module>

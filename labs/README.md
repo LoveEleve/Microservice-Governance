@@ -8,6 +8,9 @@
 |---|---|---|
 | [`microsphere-spring-cloud-lab`](microsphere-spring-cloud-lab/README.md) | Multiple Service Registry / Union Discovery / Registration Events / OpenFeign Auto-Refresh | 两个内存注册中心 + 两个内存 DiscoveryClient，不依赖真实 Nacos/Eureka |
 | [`redisson-lab`](redisson-lab/README.md) | RLock / tryLock / watchdog / fair / RW / multi / fenced / semaphore / latch | Redisson Book 配套使用工程；需要一个 Redis，不默认启动 |
+| [`mybatis-lab`](mybatis-lab/README.md) | MyBatis XML Mapper / 动态 SQL / resultMap 嵌套 / Interceptor | MyBatis 小册 02-06 配套；需要 MySQL，不默认启动 |
+| [`mybatis-plus-lab`](mybatis-plus-lab/README.md) | BaseMapper / LambdaQueryWrapper / 分页 / 逻辑删除 | MyBatis-Plus 书配套；需要 MySQL，不默认启动 |
+| [`shardingsphere-lab`](shardingsphere-lab/README.md) | JDBC 分片 / binding table / broadcast table / Snowflake | ShardingSphere book 配套；需要 MySQL，不默认启动 |
 | [`seata-at-multiservice-lab`](seata-at-multiservice-lab/README.md) | 三服务、三数据源、AT、XID 透传、`@GlobalTransactional` | Seata 小册第 2 章配套；需要 3 个 MySQL 库 + Seata Server，不默认启动 |
 | [`seata-tcc-lab`](seata-tcc-lab/README.md) | 两服务、两数据源、Seata TCC、`@LocalTCC`、fence 表、XID 透传 | Seata 小册第 4 章配套；需要 2 个 MySQL 库 + Seata Server，不默认启动 |
 | [`seata-saga-lab`](seata-saga-lab/README.md) | 编排服务 + 机票/酒店/租车三服务、状态机、补偿链 | Seata 小册第 5 章配套；不依赖 MySQL，默认不启动 |

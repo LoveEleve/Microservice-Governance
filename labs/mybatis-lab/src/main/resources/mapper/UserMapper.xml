@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.microsphere.labs.mybatis.mapper.UserMapper">
+
+    <resultMap id="UserWithOrdersMap" type="User">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="age" property="age"/>
+        <collection property="orders" ofType="Order">
+            <id column="order_id" property="id"/>
+            <result column="order_no" property="orderNo"/>
+            <result column="amount" property="amount"/>
+            <collection property="items" ofType="OrderItem">
+                <id column="item_id" property="id"/>
+                <result column="product_name" property="productName"/>
+                <result column="quantity" property="quantity"/>
+            </collection>
+        </collection>
+    </resultMap>
+
+    <select id="selectById" resultType="User">
+        select id, name, age
+        from users
+        where id = #{id}
+    </select>
+
+    <select id="search" resultType="User">
+        select id, name, age
+        from users
+        <where>
+            <if test="name != null and name != ''">
+                and name like concat('%', #{name}, '%')
+            </if>
+            <if test="age != null">
+                and age = #{age}
+            </if>
+        </where>
+        order by id
+    </select>
+
+    <select id="selectWithOrders" resultMap="UserWithOrdersMap">
+        select u.id,
+               u.name,
+               u.age,
+               o.id         as order_id,
+               o.order_no   as order_no,
+               o.amount     as amount,
+               i.id         as item_id,
+               i.product_name as product_name,
+               i.quantity   as quantity
+        from users u
+        left join orders o on o.user_id = u.id
+        left join order_item i on i.order_id = o.id
+        where u.id = #{id}
+        order by o.id, i.id
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into users (name, age)
+        values (#{name}, #{age})
+    </insert>
+
+    <update id="updateName">
+        update users
+        set name = #{name}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from users
+        where id = #{id}
+    </delete>
+
+</mapper>
