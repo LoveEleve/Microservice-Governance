@@ -13,7 +13,7 @@
 | [`shardingsphere-lab`](shardingsphere-lab/README.md) | JDBC 分片 / binding table / broadcast table / Snowflake | ShardingSphere book 配套；需要 MySQL，不默认启动 |
 | [`seata-at-multiservice-lab`](seata-at-multiservice-lab/README.md) | 三服务、三数据源、AT、XID 透传、`@GlobalTransactional` | Seata 小册第 2 章配套；需要 3 个 MySQL 库 + Seata Server，不默认启动 |
 | [`seata-tcc-lab`](seata-tcc-lab/README.md) | 两服务、两数据源、Seata TCC、`@LocalTCC`、fence 表、XID 透传 | Seata 小册第 4 章配套；需要 2 个 MySQL 库 + Seata Server，不默认启动 |
-| [`seata-saga-lab`](seata-saga-lab/README.md) | 编排服务 + 机票/酒店/租车三服务、状态机、补偿链 | Seata 小册第 5 章配套；不依赖 MySQL，默认不启动 |
+| [`seata-saga-lab`](seata-saga-lab/README.md) | 单编排服务 + 本地 DB + TC、状态机、补偿链 | Seata 小册第 5 章配套；需要 MySQL + Seata Server，不默认启动 |
 
 ## 约定
 

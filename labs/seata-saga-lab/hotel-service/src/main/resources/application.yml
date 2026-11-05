@@ -1,6 +1,0 @@
-server:
-  port: 18086
-
-spring:
-  application:
-    name: saga-hotel-service

@@ -1,0 +1,37 @@
+server:
+  port: 18082
+
+spring:
+  application:
+    name: saga-orchestrator-service
+  sql:
+    init:
+      mode: always
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/seata_saga_lab?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
+seata:
+  enabled: true
+  application-id: saga-orchestrator-service
+  tx-service-group: seata_saga_lab_tx_group
+  enable-auto-data-source-proxy: false
+  saga:
+    enabled: true
+    state-machine:
+      resources:
+        - classpath*:statelang/*.json
+  service:
+    vgroup-mapping:
+      seata_saga_lab_tx_group: default
+    grouplist:
+      default: 127.0.0.1:8091
+  registry:
+    type: file
+  config:
+    type: file

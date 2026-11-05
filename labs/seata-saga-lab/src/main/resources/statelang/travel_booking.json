@@ -1,0 +1,77 @@
+{
+  "Name": "travelBooking",
+  "Comment": "Travel booking Saga with local DB and Seata TC",
+  "Version": "0.0.1",
+  "StartState": "BookFlight",
+  "States": {
+    "BookFlight": {
+      "Type": "ServiceTask",
+      "ServiceName": "travelBookingService",
+      "ServiceMethod": "bookFlight",
+      "CompensateState": "CancelFlight",
+      "Catch": [
+        {
+          "Exceptions": ["java.lang.Exception"],
+          "Next": "CompensationTrigger"
+        }
+      ],
+      "Next": "BookHotel"
+    },
+    "BookHotel": {
+      "Type": "ServiceTask",
+      "ServiceName": "travelBookingService",
+      "ServiceMethod": "bookHotel",
+      "CompensateState": "CancelHotel",
+      "Catch": [
+        {
+          "Exceptions": ["java.lang.Exception"],
+          "Next": "CompensationTrigger"
+        }
+      ],
+      "Next": "BookCar"
+    },
+    "BookCar": {
+      "Type": "ServiceTask",
+      "ServiceName": "travelBookingService",
+      "ServiceMethod": "bookCar",
+      "CompensateState": "CancelCar",
+      "Catch": [
+        {
+          "Exceptions": ["java.lang.Exception"],
+          "Next": "CompensationTrigger"
+        }
+      ],
+      "Next": "Success"
+    },
+    "CancelCar": {
+      "Type": "ServiceTask",
+      "ServiceName": "travelBookingService",
+      "ServiceMethod": "cancelCar",
+      "IsForCompensation": true
+    },
+    "CancelHotel": {
+      "Type": "ServiceTask",
+      "ServiceName": "travelBookingService",
+      "ServiceMethod": "cancelHotel",
+      "IsForCompensation": true
+    },
+    "CancelFlight": {
+      "Type": "ServiceTask",
+      "ServiceName": "travelBookingService",
+      "ServiceMethod": "cancelFlight",
+      "IsForCompensation": true
+    },
+    "CompensationTrigger": {
+      "Type": "CompensationTrigger",
+      "Next": "CompensateEnd"
+    },
+    "CompensateEnd": {
+      "Type": "Fail",
+      "ErrorCode": "StateCompensated",
+      "Message": "Travel booking compensated"
+    },
+    "Success": {
+      "Type": "Succeed"
+    }
+  }
+}

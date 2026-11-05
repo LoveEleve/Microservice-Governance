@@ -1,50 +1,66 @@
-# Seata Saga Multi-Service Lab
+# Seata Saga Lab
 
-对应 Seata 小册第 5 章：编排服务 + 机票/酒店/租车三个服务，正向预订、失败反向补偿。
+对应 Seata 小册第 5 章：一个编排服务 + 本地 DB + Seata TC。
 
 ## 结构
 
 ```text
-orchestrator-service  :18082   状态机引擎 + TravelBookingGateway
-flight-service        :18085   机票服务
-hotel-service         :18086   酒店服务
-car-service           :18087   租车服务
+saga-orchestrator-service  :18082
+  ├── StateMachineEngine（Seata Saga）
+  ├── TravelBookingService（本地 DB）
+  └── travel_booking.json
+Seata TC                   :8091
+MySQL                      seata_saga_lab
 ```
 
-状态机：
+这版按官方执行模型：
 
 ```text
-travel_booking.json
-  BookFlight → BookHotel → BookCar → Success
-
-失败：
-  Catch → CompensationTrigger
-  → CancelHotel → CancelFlight
-  → 已完成的步骤才补偿
+状态机引擎
+  → 开启全局事务，拿 XID
+  → 执行 ServiceTask
+  → 本地 DB 记录状态机实例/状态
+  → 向 TC 注册 SAGA 分支/上报状态
+  → 失败时 CompensationTrigger
+  → TC 二阶段 branchRollback
 ```
 
-`TravelBookingGateway` 负责把状态机的 `ServiceTask` 转成 HTTP 调用：
+机票/酒店/租车不是独立服务，而是状态机里的 `ServiceTask`，由本地 `TravelBookingService` 操作本地三张表：
 
 ```text
-bookFlight  → POST flight-service /internal/flight/book
-bookHotel   → POST hotel-service  /internal/hotel/book
-bookCar     → POST car-service    /internal/car/book
-
-cancelFlight → POST flight-service /internal/flight/cancel
-cancelHotel  → POST hotel-service  /internal/hotel/cancel
-cancelCar    → POST car-service    /internal/car/cancel
+flight_booking
+hotel_booking
+car_booking
 ```
 
-## 启动顺序
+## 关键配置
+
+```yaml
+seata:
+  enabled: true
+  saga:
+    enabled: true
+    state-machine:
+      resources:
+        - classpath*:statelang/*.json
+```
+
+`seata.enabled=true` 接 TC，`seata.saga.enabled=true` 让 Starter 自动创建：
 
 ```text
-1. flight-service   :18085
-2. hotel-service    :18086
-3. car-service      :18087
-4. orchestrator-service :18082
+DbStateMachineConfig
+StateMachineEngine
+DbAndReportTcStateLogStore
 ```
 
-不需要 MySQL，也不需要 Seata TC；这个 lab 演示状态机编排和补偿链。
+## 启动前
+
+```text
+1. 建库 seata_saga_lab
+2. 启动 Seata Server，默认 127.0.0.1:8091
+3. 修改 application.yml 的数据库账号密码
+4. schema.sql 会自动建业务表 + 状态机三张表
+```
 
 ## 请求
 
@@ -60,24 +76,26 @@ curl -X POST 'http://127.0.0.1:18082/lab/seata/saga/travel?userId=u-1'
 curl -X POST 'http://127.0.0.1:18082/lab/seata/saga/travel?userId=u-1&failCar=true'
 ```
 
-观察各服务状态：
+观察：
 
 ```text
-GET http://127.0.0.1:18085/internal/flight/bookings
-GET http://127.0.0.1:18086/internal/hotel/bookings
-GET http://127.0.0.1:18087/internal/car/bookings
+GET /lab/seata/saga/bookings
+GET /lab/seata/saga/state-instances
+GET /lab/seata/saga/state-nodes
 ```
 
-失败请求下：
+## 失败路径
 
 ```text
-flight: BOOKED → CANCELLED
-hotel:  BOOKED → CANCELLED
-car:    没有 BOOKED（在提交前失败）
+BookFlight 成功：flight_booking = BOOKED
+BookHotel  成功：hotel_booking = BOOKED
+BookCar    失败：car_booking 没有记录
+CompensationTrigger
+→ cancelHotel：hotel_booking = CANCELLED
+→ cancelFlight：flight_booking = CANCELLED
 ```
 
 ## 说明
 
-- 这是教学 lab，不是生产工程；没有持久化状态机日志、幂等表、对账和人工补偿台。
-- `orchestrator-service` 的 `seata.enabled=false` 只关闭 TC 集成，状态机引擎仍由 Seata Saga 提供。
-- 生产使用 Seata Saga 时，应配置状态机存储、TC 高可用和补偿幂等。
+- 这是教学 lab，不是生产工程；没有幂等表、对账、人工补偿台。
+- 生产使用 Seata Saga 时，需要配置 TC 高可用、状态机存储、补偿重试和人工处理。
