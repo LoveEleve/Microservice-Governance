@@ -14,5 +14,6 @@
 
     <modules>
         <module>microsphere-spring-cloud-lab</module>
+        <module>redisson-lab</module>
     </modules>
 </project>

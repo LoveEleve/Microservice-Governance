@@ -10,6 +10,7 @@ Microsphere + Poly 服务治理源码学习快照（2026-10-26）。
 用法展示工程在 [`labs/`](labs/README.md)：
 
 - [`microsphere-spring-cloud-lab`](labs/microsphere-spring-cloud-lab/README.md)：多注册中心、Union Discovery、注册事件、OpenFeign 动态刷新。
+- [`redisson-lab`](labs/redisson-lab/README.md)：Redisson Book 配套 RLock/watchdog/fair/RW/multi/fenced/semaphore/latch 用法工程。
 
 ## 文档
 

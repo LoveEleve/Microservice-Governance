@@ -7,6 +7,7 @@
 | Lab | 对应能力 | 说明 |
 |---|---|---|
 | [`microsphere-spring-cloud-lab`](microsphere-spring-cloud-lab/README.md) | Multiple Service Registry / Union Discovery / Registration Events / OpenFeign Auto-Refresh | 两个内存注册中心 + 两个内存 DiscoveryClient，不依赖真实 Nacos/Eureka |
+| [`redisson-lab`](redisson-lab/README.md) | RLock / tryLock / watchdog / fair / RW / multi / fenced / semaphore / latch | Redisson Book 配套使用工程；需要一个 Redis，不默认启动 |
 
 ## 约定
 
