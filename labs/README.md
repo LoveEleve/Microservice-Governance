@@ -10,6 +10,7 @@
 | [`redisson-lab`](redisson-lab/README.md) | RLock / tryLock / watchdog / fair / RW / multi / fenced / semaphore / latch | Redisson Book 配套使用工程；需要一个 Redis，不默认启动 |
 | [`seata-overview-lab`](seata-overview-lab/README.md) | TC/TM/RM、XID、AT、`@GlobalTransactional`、DataSourceProxy | Seata 小册第 1 章配套；需要 MySQL + Seata Server，不默认启动 |
 | [`seata-tcc-lab`](seata-tcc-lab/README.md) | Seata TCC、`@LocalTCC`、`@TwoPhaseBusinessAction`、fence 表 | Seata 小册第 4 章配套；需要 MySQL + Seata Server，不默认启动 |
+| [`seata-saga-lab`](seata-saga-lab/README.md) | Seata Saga 状态机、ServiceTask、CompensateState、CompensationTrigger | Seata 小册第 5 章配套；不依赖 MySQL，默认不启动 |
 
 ## 约定
 
