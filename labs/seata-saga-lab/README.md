@@ -10,7 +10,8 @@ travel_booking.json
 
 失败：
   Catch → CompensationTrigger
-  → CancelCar → CancelHotel → CancelFlight
+  → 补偿已完成的步骤（通常是 CancelHotel → CancelFlight）
+  → BookCar 若在提交前失败，不会执行 CancelCar
 ```
 
 `TravelBookingService` 提供：
