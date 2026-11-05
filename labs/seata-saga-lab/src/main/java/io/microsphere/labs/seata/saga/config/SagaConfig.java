@@ -14,7 +14,7 @@ public class SagaConfig {
     public StateMachineEngine stateMachineEngine(ApplicationContext applicationContext) throws Exception {
         DefaultStateMachineConfig config = new DefaultStateMachineConfig();
         config.setApplicationContext(applicationContext);
-        config.setResources(new String[]{"classpath:statelang/*.json"});
+        config.setResources(new String[]{"classpath*:statelang/*.json"});
         config.afterPropertiesSet();
 
         ProcessCtrlStateMachineEngine engine = new ProcessCtrlStateMachineEngine();

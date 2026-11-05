@@ -29,7 +29,7 @@ Seata Server 2.1.2（或 2.0.x）
 
 ```text
 1. 建库 seata_overview_lab
-2. 执行 src/main/resources/schema.sql
+2. 执行 src/main/resources/schema.sql 和 data.sql
 3. 启动 Seata Server，默认 127.0.0.1:8091
 4. 修改 application.yml 的数据库账号密码
 ```
@@ -52,6 +52,10 @@ GET /lab/seata/at/undo-log         最近 20 条 undo_log
 ```
 
 这些端点用于对照第 2 章：一阶段提交后 `undo_log` 是否存在、二阶段提交后是否被删除、回滚后业务表是否恢复。
+
+## 配置文件
+
+`src/main/resources/` 下包含 `registry.conf` 和 `file.conf`，与 `application.yml` 一起作为 Seata 客户端配置；不要只改其中一个。
 
 ## 说明
 

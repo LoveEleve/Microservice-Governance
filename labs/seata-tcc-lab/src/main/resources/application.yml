@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: seata-tcc-lab
+  sql:
+    init:
+      mode: always
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/seata_tcc_lab?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
     username: root

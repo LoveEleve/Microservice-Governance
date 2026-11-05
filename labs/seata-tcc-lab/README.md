@@ -17,6 +17,8 @@ OrderService.createOrder()
   → 失败抛异常，由 Seata 调 cancel
 ```
 
+TCC 使用普通 DataSource + 本地事务，不套 AT 的 `DataSourceProxy`。
+
 三个方法分别做什么：
 
 ```text
@@ -37,7 +39,7 @@ Seata Server 2.1.2（或 2.0.x）
 
 ```text
 1. 建库 seata_tcc_lab
-2. 执行 src/main/resources/schema.sql
+2. 执行 src/main/resources/schema.sql 和 data.sql
 3. 启动 Seata Server，默认 127.0.0.1:8091
 4. 修改 application.yml 的数据库账号密码
 ```
@@ -66,6 +68,10 @@ Confirm 后：reserved 减少，used 增加
 Cancel 后：reserved 减少，available 增加
 tcc_fence_log：TRIED / COMMITTED / ROLLBACKED / SUSPENDED
 ```
+
+## 配置文件
+
+`src/main/resources/` 下包含 `registry.conf` 和 `file.conf`，与 `application.yml` 一起作为 Seata 客户端配置；不要只改其中一个。
 
 ## 说明
 

@@ -1,0 +1,9 @@
+server:
+  port: 18082
+
+spring:
+  application:
+    name: seata-saga-lab
+
+seata:
+  enabled: false

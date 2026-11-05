@@ -43,13 +43,15 @@ public class TravelBookingService {
     }
 
     private Map<String, Object> book(String type, Map<String, Object> input) {
-        String bookingId = type + ":" + input.get("userId");
+        Map<String, Object> safeInput = input == null ? Map.of() : input;
+        String bookingId = type + ":" + safeInput.get("userId");
         bookings.put(bookingId, "BOOKED");
         return result(bookingId, "BOOKED");
     }
 
     private Map<String, Object> cancel(String type, Map<String, Object> input) {
-        String bookingId = type + ":" + input.get("userId");
+        Map<String, Object> safeInput = input == null ? Map.of() : input;
+        String bookingId = type + ":" + safeInput.get("userId");
         bookings.put(bookingId, "CANCELLED");
         return result(bookingId, "CANCELLED");
     }
