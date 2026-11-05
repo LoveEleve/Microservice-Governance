@@ -7,10 +7,17 @@
     <groupId>io.microsphere.labs</groupId>
     <artifactId>seata-saga-lab</artifactId>
     <version>1.0.0-SNAPSHOT</version>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
-    <name>Seata Saga Lab</name>
-    <description>Seata Saga state machine and compensation lab</description>
+    <name>Seata Saga Multi-Service Lab</name>
+    <description>Orchestrator plus flight, hotel and car services</description>
+
+    <modules>
+        <module>orchestrator-service</module>
+        <module>flight-service</module>
+        <module>hotel-service</module>
+        <module>car-service</module>
+    </modules>
 
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
@@ -34,16 +41,21 @@
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.seata</groupId>
-            <artifactId>seata-spring-boot-starter</artifactId>
-            <version>${seata.version}</version>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+            </plugin>
+        </plugins>
+    </build>
 </project>
