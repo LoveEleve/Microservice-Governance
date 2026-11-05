@@ -15,5 +15,6 @@
     <modules>
         <module>microsphere-spring-cloud-lab</module>
         <module>redisson-lab</module>
+        <module>seata-overview-lab</module>
     </modules>
 </project>
