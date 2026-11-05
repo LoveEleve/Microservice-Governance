@@ -1,21 +1,20 @@
 package io.microsphere.labs.seata.tcc.order;
 
-import io.microsphere.labs.seata.tcc.inventory.InventoryTccAction;
-import io.seata.rm.tcc.api.BusinessActionContext;
 import io.seata.spring.annotation.GlobalTransactional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 @Service
 public class OrderService {
 
     private final JdbcTemplate jdbcTemplate;
-    private final InventoryTccAction inventoryTccAction;
+    private final RestTemplate restTemplate;
 
-    public OrderService(JdbcTemplate jdbcTemplate, InventoryTccAction inventoryTccAction) {
+    public OrderService(JdbcTemplate jdbcTemplate, RestTemplate restTemplate) {
         this.jdbcTemplate = jdbcTemplate;
-        this.inventoryTccAction = inventoryTccAction;
+        this.restTemplate = restTemplate;
     }
 
     @GlobalTransactional(name = "tcc-create-order", rollbackFor = Exception.class)
@@ -25,8 +24,11 @@ public class OrderService {
                 "INSERT INTO lab_order (order_id, sku_id, user_id, count, status) VALUES (?, ?, ?, ?, ?)",
                 orderId, skuId, userId, count, "CREATED");
 
-        boolean reserved = inventoryTccAction.tryDeduct(new BusinessActionContext(), skuId, count);
-        if (!reserved) {
+        Boolean reserved = restTemplate.postForObject(
+                "http://127.0.0.1:18084/internal/tcc/inventory/try?skuId={skuId}&count={count}",
+                null, Boolean.class, skuId, count);
+
+        if (!Boolean.TRUE.equals(reserved)) {
             throw new IllegalStateException("stock is not enough: " + skuId);
         }
     }

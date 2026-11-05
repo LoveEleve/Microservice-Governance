@@ -1,14 +1,3 @@
-CREATE TABLE IF NOT EXISTS lab_order (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    order_id VARCHAR(64) NOT NULL,
-    sku_id VARCHAR(64) NOT NULL,
-    user_id VARCHAR(64) NOT NULL,
-    count INT NOT NULL,
-    status VARCHAR(32) NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_order_id (order_id)
-);
-
 CREATE TABLE IF NOT EXISTS lab_stock (
     sku_id VARCHAR(64) PRIMARY KEY,
     available INT NOT NULL,

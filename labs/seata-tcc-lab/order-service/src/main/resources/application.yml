@@ -1,14 +1,14 @@
 server:
-  port: 18081
+  port: 18083
 
 spring:
   application:
-    name: seata-tcc-lab
+    name: seata-tcc-order-service
   sql:
     init:
       mode: always
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/seata_tcc_lab?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
+    url: jdbc:mysql://127.0.0.1:3306/seata_tcc_order?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
     username: root
     password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -18,7 +18,7 @@ spring:
 
 seata:
   enabled: true
-  application-id: seata-tcc-lab
+  application-id: seata-tcc-order-service
   tx-service-group: seata_tcc_lab_tx_group
   enable-auto-data-source-proxy: false
   service:

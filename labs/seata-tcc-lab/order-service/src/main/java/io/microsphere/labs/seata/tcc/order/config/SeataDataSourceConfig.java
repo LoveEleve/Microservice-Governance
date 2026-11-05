@@ -1,4 +1,4 @@
-package io.microsphere.labs.seata.tcc.config;
+package io.microsphere.labs.seata.tcc.order.config;
 
 import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
@@ -23,5 +23,4 @@ public class SeataDataSourceConfig {
                 .type(HikariDataSource.class)
                 .build();
     }
-
 }

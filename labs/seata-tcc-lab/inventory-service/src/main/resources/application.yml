@@ -1,0 +1,32 @@
+server:
+  port: 18084
+
+spring:
+  application:
+    name: seata-tcc-inventory-service
+  sql:
+    init:
+      mode: always
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/seata_tcc_inventory?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
+seata:
+  enabled: true
+  application-id: seata-tcc-inventory-service
+  tx-service-group: seata_tcc_lab_tx_group
+  enable-auto-data-source-proxy: false
+  service:
+    vgroup-mapping:
+      seata_tcc_lab_tx_group: default
+    grouplist:
+      default: 127.0.0.1:8091
+  registry:
+    type: file
+  config:
+    type: file
