@@ -42,6 +42,17 @@ curl -X POST 'http://127.0.0.1:18080/lab/seata/orders?orderId=o-1&skuId=sku-1&us
 
 失败路径：把 `amount` 调到账户余额不足，`AccountService` 抛异常，观察订单和库存是否被 Seata 回滚。
 
+## AT 观察端点
+
+```text
+GET /lab/seata/at/xid              当前线程的 XID
+GET /lab/seata/at/stock/{skuId}    库存
+GET /lab/seata/at/account/{userId} 账户余额
+GET /lab/seata/at/undo-log         最近 20 条 undo_log
+```
+
+这些端点用于对照第 2 章：一阶段提交后 `undo_log` 是否存在、二阶段提交后是否被删除、回滚后业务表是否恢复。
+
 ## 说明
 
 - 这是教学 lab，不是生产工程；没有鉴权、幂等、对账、重试治理。
