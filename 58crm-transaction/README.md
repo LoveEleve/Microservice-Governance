@@ -1,6 +1,6 @@
 # 58crm-transaction
 
-CRM 跨服务一致性框架：TCC + MySQL 本地消息表 + Redis List + 对账。
+CRM 跨服务一致性框架：TCC + MySQL 本地消息表 + Redis Stream + 对账。
 
 ## 先看什么
 
@@ -22,9 +22,9 @@ CRM 跨服务一致性框架：TCC + MySQL 本地消息表 + Redis List + 对账
 
 ```text
 MySQL 是正本：业务事实、TCC 日志、Outbox、幂等、对账
-Redis 是传送带：业务线 List，可丢、可重放
-一条事件只进一个业务线 List
-不使用消费者组，不做 fan-out
+Redis Stream 是传送带：PEL + XACK，可恢复
+一条事件只进一个业务线 Stream
+一个业务线一个消费组，不做 fan-out
 ```
 
 ## 生产形态
@@ -47,8 +47,8 @@ Prometheus + Grafana + 链路追踪
 
 ```text
 C-001.1：OutboxPublisher（已完成）
-C-001.2：Relay + Redis List + 批量 ACK（已完成）
-C-001.3：消费方 Inbox + 幂等（下一步）
+C-001.2：Scanner + Buffer + Sender + Redis Stream（已完成）
+C-001.3：StreamConsumer + XACK/PEL + 消费方 Inbox（下一步）
 ```
 
 TCC 协调器、参与方 barrier、业务示例在后续变更中实现。
@@ -59,7 +59,7 @@ TCC 协调器、参与方 barrier、业务示例在后续变更中实现。
 tx-common        通用模型/状态/错误码
 tx-coordinator   TCC 协调器
 tx-participant   参与方 SDK/barrier
-tx-outbox        Outbox/Relay/Redis List/消费
+tx-outbox        Outbox/Scanner/Buffer/Sender/Stream/消费
 tx-demo          线索分配示例
 ```
 

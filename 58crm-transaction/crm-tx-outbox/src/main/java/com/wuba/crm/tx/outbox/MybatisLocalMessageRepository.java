@@ -16,7 +16,7 @@ import java.util.Map;
 /**
  * 基于 MyBatis-Plus 的生产方 Outbox 仓储。
  *
- * <p>所有更新都带状态条件，保证 Relay 重投和 ACK 重复调用不会把终态改回去。</p>
+ * <p>所有更新都带状态条件，保证发送重投不会把 DEAD 改回 SENT。</p>
  */
 public class MybatisLocalMessageRepository implements LocalMessageRepository {
 
@@ -100,34 +100,6 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
                             + " THEN 'DEAD' ELSE 'SENT' END")
                     .setSql("retry_count = retry_count + 1")
                     .set(LocalMessageEntity::getNextRetryAt, toLocalDateTime(nextRetryAt))
-                    .set(LocalMessageEntity::getUpdatedAt, now);
-            affected += localMessageMapper.update(null, update);
-        }
-        return affected;
-    }
-
-    @Override
-    public int ackBatch(List<MessageAck> acks) {
-        if (acks == null || acks.isEmpty()) {
-            return 0;
-        }
-
-        Map<String, List<String>> byBizId = new LinkedHashMap<>();
-        for (MessageAck ack : acks) {
-            byBizId.computeIfAbsent(ack.bizId(), ignored -> new ArrayList<>())
-                    .add(ack.msgId());
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        int affected = 0;
-        for (Map.Entry<String, List<String>> entry : byBizId.entrySet()) {
-            LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
-            update.eq(LocalMessageEntity::getBizId, entry.getKey())
-                    .in(LocalMessageEntity::getMsgId, entry.getValue())
-                    .in(LocalMessageEntity::getStatus,
-                            MessageStatus.INIT.name(),
-                            MessageStatus.SENT.name())
-                    .set(LocalMessageEntity::getStatus, MessageStatus.CONSUMED.name())
                     .set(LocalMessageEntity::getUpdatedAt, now);
             affected += localMessageMapper.update(null, update);
         }

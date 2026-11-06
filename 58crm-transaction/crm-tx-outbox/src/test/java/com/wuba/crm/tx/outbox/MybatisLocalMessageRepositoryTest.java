@@ -58,17 +58,21 @@ class MybatisLocalMessageRepositoryTest {
     }
 
     @Test
-    void ackBatch_acceptsInitBecauseAckCanBeatMarkSent() {
+    void initialSend_marksSentWithoutIncrementingRetry() {
         insert("m-1", MessageStatus.INIT, 0);
 
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
             LocalMessageMapper mapper = session.getMapper(LocalMessageMapper.class);
             MybatisLocalMessageRepository repository = new MybatisLocalMessageRepository(mapper);
+            LocalMessage message = new LocalMessage(
+                    "m-1", "event-m-1", "lead", "lead-1", "LEAD_ASSIGNED",
+                    "{}", null, MessageStatus.INIT, 0);
 
-            int affected = repository.ackBatch(List.of(new MessageAck("lead-1", "m-1")));
+            repository.markSentBatch(List.of(message), Instant.now().plusSeconds(30));
 
-            assertEquals(1, affected);
-            assertEquals(MessageStatus.CONSUMED.name(), statusOf(mapper, "m-1"));
+            LocalMessageEntity saved = mapper.selectById("m-1");
+            assertEquals(MessageStatus.SENT.name(), saved.getStatus());
+            assertEquals(0, saved.getRetryCount());
         }
     }
 
@@ -129,9 +133,5 @@ class MybatisLocalMessageRepositoryTest {
                 retryCount,
                 now,
                 now);
-    }
-
-    private String statusOf(LocalMessageMapper mapper, String msgId) {
-        return mapper.selectById(msgId).getStatus();
     }
 }

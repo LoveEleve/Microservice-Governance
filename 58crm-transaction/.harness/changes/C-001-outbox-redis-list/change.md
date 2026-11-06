@@ -1,4 +1,4 @@
-# C-001：可靠消息闭环
+# C-001：可靠消息闭环（Stream 版）
 
 ## 用户故事
 
@@ -8,11 +8,12 @@
 
 ```text
 本地消息表写入
-Outbox Relay 扫描
-Redis List 投递
-消费幂等
-状态回写
-重试/租约
+Outbox Scanner 扫描
+有界 Buffer
+Outbox Sender
+Redis Stream XADD
+消费 XACK/PEL
+重试/DEAD
 ```
 
 ## Out of Scope
@@ -38,11 +39,11 @@ AC6 重复投递 → t_idempotent 拦截
 AC7 Redis 丢消息 → MySQL 可重放
 AC8 同一事件只进一个业务线 List，不 fan-out
 AC9 10ms 窗口内按业务线合并，单批最多 256，一次 pipeline 发送
-AC10 消费方按 100~500 条批量拉取、批量 ACK
-AC11 ACK 到达时消息还是 INIT，也能推进 CONSUMED
+AC10 消费方按 100~500 条 XREADGROUP 批量拉取
+AC11 XACK 与消费记录可补偿
 AC12 SENT 重投必须递增 retry_count
 AC13 retry_count 达到上限必须进入 DEAD
-AC14 ACK 批次超过 1000 条直接拒绝
+AC14 pending 超时通过 XCLAIM/XAUTOCLAIM 转移
 AC15 真实 H2 + MyBatis-Plus SQL 验证状态迁移
 AC16 真实 Spring 事务代理验证：无事务拒绝、回滚无消息、提交有消息
 ```
@@ -73,15 +74,16 @@ payload 超过阈值，改存 payload_ref
 
 ```text
 MySQL 是正本
-Redis List 只做可重放缓冲
-一条事件一个业务线 List
-一个逻辑消费者
-不使用消费者组
+Redis Stream 只做可重放传输
+一条事件一个业务线 Stream
+一个业务线一个消费组
+组内竞争消费
 
 生产方 t_local_message：INIT/SENT/DEAD
 消费方 t_consume_record：PROCESSING/CONSUMED/DEAD
 消费租约和 consumer_id 只在消费方库
 消费方不远程写生产方库
+ACK 由 XACK + PEL 维护
 ```
 
 ## 契约
@@ -122,7 +124,7 @@ PROCESSING → CONSUMED / DEAD
   重试
 
 集成测试：
-  MySQL Outbox → Relay → Redis List → Consumer
+  MySQL Outbox → Scanner → Buffer → Sender → Redis Stream → Consumer
 
 故障测试：
   Redis 丢消息
@@ -135,7 +137,7 @@ PROCESSING → CONSUMED / DEAD
 
 ```text
 C-001.1 消息模型 + Mapper + OutboxPublisher：已完成
-C-001.2 OutboxRelay + Redis List + 批量 ACK：已完成
+C-001.2 Scanner + Buffer + Sender + Redis Stream：已完成
 C-001.3 MessageConsumer + 消费方 Inbox + 幂等：未开始
 ```
 

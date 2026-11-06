@@ -10,7 +10,7 @@ import java.util.Objects;
  * {@link OutboxPublisher#publish(BusinessEvent)}，保证业务数据和消息同时提交。</p>
  *
  * @param eventKey  全局唯一事件键，建议包含业务主键和版本/分配 ID
- * @param bizCode   业务编码，同时作为 Redis List 的路由键
+ * @param bizCode   业务编码，同时作为 Redis Stream 的路由键
  * @param bizId     业务单号，消息表分片键
  * @param eventType 事件类型，例如 LEAD_ASSIGNED
  * @param payload   事件正文；大消息应由业务方转成 payloadRef 后传空正文

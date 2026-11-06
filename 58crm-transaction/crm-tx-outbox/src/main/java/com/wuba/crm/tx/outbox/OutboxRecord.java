@@ -1,0 +1,62 @@
+package com.wuba.crm.tx.outbox;
+
+import com.wuba.crm.tx.common.MessageStatus;
+
+import java.util.Objects;
+
+/**
+ * 发送线程处理的不可变消息记录。
+ *
+ * <p>它从 {@link LocalMessage} 转换而来，保留消息正本字段和当前状态。
+ * 拦截器可以返回新的 record，但不直接修改数据库实体。</p>
+ */
+public record OutboxRecord(
+        String msgId,
+        String eventKey,
+        String bizCode,
+        String bizId,
+        String eventType,
+        String payload,
+        String payloadRef,
+        MessageStatus status,
+        int retryCount) {
+
+    public OutboxRecord {
+        Objects.requireNonNull(msgId, "msgId");
+        Objects.requireNonNull(eventKey, "eventKey");
+        Objects.requireNonNull(bizCode, "bizCode");
+        Objects.requireNonNull(bizId, "bizId");
+        Objects.requireNonNull(eventType, "eventType");
+        Objects.requireNonNull(status, "status");
+        if ((payload == null || payload.isBlank())
+                && (payloadRef == null || payloadRef.isBlank())) {
+            throw new IllegalArgumentException("payload or payloadRef is required");
+        }
+    }
+
+    public static OutboxRecord from(LocalMessage message) {
+        return new OutboxRecord(
+                message.msgId(),
+                message.eventKey(),
+                message.bizCode(),
+                message.bizId(),
+                message.eventType(),
+                message.payload(),
+                message.payloadRef(),
+                message.status(),
+                message.retryCount());
+    }
+
+    public LocalMessage toLocalMessage() {
+        return new LocalMessage(
+                msgId,
+                eventKey,
+                bizCode,
+                bizId,
+                eventType,
+                payload,
+                payloadRef,
+                status,
+                retryCount);
+    }
+}
