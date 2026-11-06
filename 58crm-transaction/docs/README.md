@@ -12,6 +12,7 @@
 | 看文档需求映射与差距 | `02-设计/02-需求映射与差距.md` |
 | 看 Redis Stream 决策 | `02-设计/03-Redis-Stream-决策.md` |
 | 看包结构 | `02-设计/05-包结构.md` |
+| 看 bizCode 白名单 | `02-设计/07-BizCodeRegistry.md` |
 | 学 Redis Stream 原理 | `06-Redis-Stream/01-原理与使用.md` |
 | Redis Stream 命令大全 | `06-Redis-Stream/02-命令大全.md` |
 | 看表和分片 | `03-数据/01-数据模型.md` |
@@ -34,7 +35,8 @@ docs/
 │   ├── 01-核心模型.md
 │   ├── 02-需求映射与差距.md
 │   ├── 03-Redis-Stream-决策.md
-│   └── 05-包结构.md
+│   ├── 05-包结构.md
+│   └── 07-BizCodeRegistry.md
 ├── 03-数据/
 │   └── 01-数据模型.md
 ├── 04-验证/

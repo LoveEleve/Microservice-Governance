@@ -4,6 +4,9 @@ import com.wuba.crm.tx.outbox.api.BusinessEvent;
 import com.wuba.crm.tx.outbox.api.OutboxPublisher;
 
 import com.wuba.crm.tx.common.MessageStatus;
+import com.wuba.crm.tx.outbox.api.BusinessEvent;
+import com.wuba.crm.tx.outbox.api.OutboxPublisher;
+import com.wuba.crm.tx.outbox.config.BizCodeRegistry;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,9 +23,13 @@ import java.util.UUID;
 public class MybatisOutboxPublisher implements OutboxPublisher {
 
     private final LocalMessageMapper localMessageMapper;
+    private final BizCodeRegistry bizCodeRegistry;
 
-    public MybatisOutboxPublisher(LocalMessageMapper localMessageMapper) {
+    public MybatisOutboxPublisher(
+            LocalMessageMapper localMessageMapper,
+            BizCodeRegistry bizCodeRegistry) {
         this.localMessageMapper = localMessageMapper;
+        this.bizCodeRegistry = bizCodeRegistry;
     }
 
     /**
@@ -33,6 +40,9 @@ public class MybatisOutboxPublisher implements OutboxPublisher {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public String publish(BusinessEvent event) {
+        // 先在事务内校验业务线，未知 bizCode 不允许写入消息表。
+        bizCodeRegistry.require(event.bizCode());
+
         // msgId 是消息记录身份；eventKey 才是业务事件幂等键，两者不能混用。
         String msgId = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();

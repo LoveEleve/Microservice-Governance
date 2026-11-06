@@ -1,6 +1,7 @@
 package com.wuba.crm.tx.outbox.persistence;
 
 import com.wuba.crm.tx.outbox.api.*;
+import com.wuba.crm.tx.outbox.config.*;
 import com.wuba.crm.tx.outbox.domain.*;
 import com.wuba.crm.tx.outbox.persistence.*;
 import com.wuba.crm.tx.outbox.producer.*;

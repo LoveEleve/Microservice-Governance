@@ -1,6 +1,7 @@
 package com.wuba.crm.tx.outbox.persistence;
 
 import com.wuba.crm.tx.outbox.api.*;
+import com.wuba.crm.tx.outbox.config.*;
 import com.wuba.crm.tx.outbox.domain.*;
 import com.wuba.crm.tx.outbox.persistence.*;
 import com.wuba.crm.tx.outbox.producer.*;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * C-001.1 的核心验收：业务事件必须被写成一条 INIT 消息。
@@ -33,7 +35,7 @@ class MybatisOutboxPublisherTest {
 
     @Test
     void publish_writesInitMessageWithBusinessFields() {
-        MybatisOutboxPublisher publisher = new MybatisOutboxPublisher(localMessageMapper);
+        MybatisOutboxPublisher publisher = new MybatisOutboxPublisher(localMessageMapper, BizCodeRegistry.of("lead"));
         BusinessEvent event = new BusinessEvent(
                 "lead-assigned:lead-1:assign-1",
                 "lead",
@@ -62,12 +64,24 @@ class MybatisOutboxPublisherTest {
 
     @Test
     void publish_rejectsBlankEventKeyBeforeWriting() {
-        MybatisOutboxPublisher publisher = new MybatisOutboxPublisher(localMessageMapper);
+        MybatisOutboxPublisher publisher = new MybatisOutboxPublisher(localMessageMapper, BizCodeRegistry.of("lead"));
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
                 () -> new BusinessEvent(" ", "lead", "lead-1", "LEAD_ASSIGNED", "{}"));
 
         assertTrue(error.getMessage().contains("eventKey"));
+    }
+
+    @Test
+    void publish_rejectsUnknownBizCodeBeforeWriting() {
+        MybatisOutboxPublisher publisher = new MybatisOutboxPublisher(
+                localMessageMapper, BizCodeRegistry.of("lead"));
+
+        assertThrows(UnknownBizCodeException.class,
+                () -> publisher.publish(new BusinessEvent(
+                        "event-1", "lead-typo", "lead-1", "LEAD_ASSIGNED", "{}")));
+
+        verifyNoInteractions(localMessageMapper);
     }
 }
