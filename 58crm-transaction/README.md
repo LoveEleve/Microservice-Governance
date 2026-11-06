@@ -7,13 +7,15 @@ CRM 跨服务一致性框架：TCC + MySQL 本地消息表 + Redis List + 对账
 按使用顺序读，不要先读源码：
 
 ```text
-1. README.md                 项目是什么、边界是什么
-2. docs/00-阅读指南.md       不同角色怎么读
-3. docs/01-使用手册.md       业务方怎么接入
-4. docs/02-核心模型.md       TCC / Outbox / Redis / MySQL 的职责
-5. docs/03-数据模型.md       表、键、状态
-6. docs/04-验证与测试.md     AC 怎么验证
-7. docs/05-代码地图.md       源码从哪里开始看
+1. README.md                              项目是什么、边界是什么
+2. docs/README.md                         文档目录
+3. docs/00-阅读指南.md                    不同角色怎么读
+4. docs/01-使用/01-接入手册.md            业务方怎么接入
+5. docs/02-设计/01-核心模型.md            TCC / Outbox / Redis / MySQL 的职责
+6. docs/03-数据/01-数据模型.md            表、键、状态
+7. docs/04-验证/01-测试与验收.md          AC 怎么验证
+8. docs/05-代码讲解/00-代码地图.md        源码从哪里开始看
+9. docs/05-代码讲解/C-001.1-OutboxPublisher.md
 ```
 
 ## 一句话模型
