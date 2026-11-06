@@ -114,6 +114,13 @@ public final class OutboxProducer implements AutoCloseable {
         }
     }
 
+    /**
+     * 当前实际启动的 Sender shard 数，用于指标和测试。
+     */
+    public int senderCount() {
+        return senders.size();
+    }
+
     @Override
     public void close() {
         running.set(false);
