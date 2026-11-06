@@ -46,8 +46,9 @@ Prometheus + Grafana + 链路追踪
 ## 当前阶段
 
 ```text
-C-001：可靠消息闭环
-  MySQL Outbox → Relay → Redis List → 消费幂等
+C-001.1：OutboxPublisher（已完成）
+C-001.2：Relay + Redis List + 批量 ACK（已完成）
+C-001.3：消费方 Inbox + 幂等（下一步）
 ```
 
 TCC 协调器、参与方 barrier、业务示例在后续变更中实现。

@@ -13,6 +13,7 @@
 | 看 AC 和测试 | `04-验证/01-测试与验收.md` |
 | 读代码 | `05-代码讲解/00-代码地图.md` |
 | 看 C-001.1 代码讲解 | `05-代码讲解/C-001.1-OutboxPublisher.md` |
+| 看 C-001.2 代码讲解 | `05-代码讲解/C-001.2-RelayAndAck.md` |
 | 看变更范围 | `.harness/changes/C-001-outbox-redis-list/change.md` |
 
 ## 目录结构
@@ -31,7 +32,8 @@ docs/
 │   └── 01-测试与验收.md
 └── 05-代码讲解/
     ├── 00-代码地图.md
-    └── C-001.1-OutboxPublisher.md
+    ├── C-001.1-OutboxPublisher.md
+    └── C-001.2-RelayAndAck.md
 ```
 
 ## 写作约定

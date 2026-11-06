@@ -127,8 +127,8 @@ PROCESSING → CONSUMED / DEAD
 
 ```text
 C-001.1 消息模型 + Mapper + OutboxPublisher：已完成
-C-001.2 OutboxRelay + Redis List：未开始
-C-001.3 MessageConsumer + 幂等：未开始
+C-001.2 OutboxRelay + Redis List + 批量 ACK：已完成
+C-001.3 MessageConsumer + 消费方 Inbox + 幂等：未开始
 ```
 
 ## 验收用例

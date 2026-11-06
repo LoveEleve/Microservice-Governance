@@ -5,10 +5,10 @@ import com.wuba.crm.tx.common.MessageStatus;
 import java.util.Objects;
 
 /**
- * 本地消息的领域视图，用于消费侧和测试侧读取。
+ * 生产方本地消息（Outbox）的领域视图。
  *
  * <p>数据库实体是 {@link LocalMessageEntity}；这个 record 不参与 ORM 映射，
- * 目的是把状态、租约、重试等字段以只读形式暴露给业务代码。</p>
+ * 目的是把消息正本字段以只读形式暴露给 Relay 和测试代码。消费租约不在这个对象里。</p>
  */
 public record LocalMessage(
         String msgId,
