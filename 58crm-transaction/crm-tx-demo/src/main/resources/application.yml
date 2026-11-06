@@ -1,0 +1,15 @@
+tx:
+  stream-prefix: "tx:stream:"
+  biz-codes:
+    - lead
+    - quota
+  outbox:
+    linger: 10ms
+    batch-size: 256
+    buffer-capacity: 50000
+    buffer-capacity-bytes: 67108864
+    scan-batch: 1000
+    scan-interval: 10ms
+    retry-after: 30s
+    max-retries: 5
+    sender-threads: 8
