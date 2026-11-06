@@ -44,6 +44,7 @@ AC12 SENT 重投必须递增 retry_count
 AC13 retry_count 达到上限必须进入 DEAD
 AC14 ACK 批次超过 1000 条直接拒绝
 AC15 真实 H2 + MyBatis-Plus SQL 验证状态迁移
+AC16 真实 Spring 事务代理验证：无事务拒绝、回滚无消息、提交有消息
 ```
 
 ## 边界情况

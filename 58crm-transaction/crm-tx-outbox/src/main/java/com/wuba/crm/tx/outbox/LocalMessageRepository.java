@@ -16,22 +16,11 @@ public interface LocalMessageRepository {
     List<LocalMessage> findRelayCandidates(int limit);
 
     /**
-     * 标记已投递，并设置下一次允许重投的时间。
+     * 批量标记已投递。
+     *
+     * <p>只保留批量入口，避免误用“单条更新但不处理重试上限”的路径。</p>
      */
-    boolean markSent(String bizId, String msgId, java.time.Instant nextRetryAt);
-
-    /**
-     * 批量标记已投递。默认逐条降级，生产实现应覆盖为批量更新。
-     */
-    default int markSentBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt) {
-        int affected = 0;
-        for (LocalMessage message : messages) {
-            if (markSent(message.bizId(), message.msgId(), nextRetryAt)) {
-                affected++;
-            }
-        }
-        return affected;
-    }
+    int markSentBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt);
 
     /**
      * 批量 ACK 消费成功的消息。

@@ -89,10 +89,10 @@ class OutboxRelayTest {
         }
 
         @Override
-        public boolean markSent(String bizId, String msgId, java.time.Instant nextRetryAt) {
+        public int markSentBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt) {
             sent = true;
             lastNextRetryAt = nextRetryAt;
-            return true;
+            return messages.size();
         }
 
         @Override

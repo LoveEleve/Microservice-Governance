@@ -53,8 +53,8 @@ class LocalMessageAckServiceTest {
         }
 
         @Override
-        public boolean markSent(String bizId, String msgId, Instant nextRetryAt) {
-            return false;
+        public int markSentBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt) {
+            return 0;
         }
 
         @Override

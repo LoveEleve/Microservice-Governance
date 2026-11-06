@@ -60,21 +60,6 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
     }
 
     @Override
-    public boolean markSent(String bizId, String msgId, Instant nextRetryAt) {
-        LocalDateTime now = LocalDateTime.now();
-        LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
-        update.eq(LocalMessageEntity::getBizId, bizId)
-                .eq(LocalMessageEntity::getMsgId, msgId)
-                .in(LocalMessageEntity::getStatus,
-                        MessageStatus.INIT.name(),
-                        MessageStatus.SENT.name())
-                .set(LocalMessageEntity::getStatus, MessageStatus.SENT.name())
-                .set(LocalMessageEntity::getNextRetryAt, toLocalDateTime(nextRetryAt))
-                .set(LocalMessageEntity::getUpdatedAt, now);
-        return localMessageMapper.update(null, update) > 0;
-    }
-
-    @Override
     public int markSentBatch(List<LocalMessage> messages, Instant nextRetryAt) {
         if (messages == null || messages.isEmpty()) {
             return 0;
