@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class OutboxInFlight {
 
+    // 只存 msgId，不存 payload；真正的消息仍在有界 buffer 中。
     private final Set<String> msgIds = ConcurrentHashMap.newKeySet();
 
     public boolean add(String msgId) {

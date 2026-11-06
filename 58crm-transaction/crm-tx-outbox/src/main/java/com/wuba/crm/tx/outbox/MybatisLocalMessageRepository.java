@@ -28,6 +28,10 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
         this.localMessageMapper = localMessageMapper;
     }
 
+    /**
+     * 只查 INIT；SENT 已经写入 Stream，不需要生产方再猜消费结果。
+     * next_retry_at 为空表示首次投递，到期时间用于失败退避。
+     */
     @Override
     public List<LocalMessage> findRelayCandidates(int limit) {
         int safeLimit = Math.max(1, Math.min(limit, MAX_BATCH_SIZE));
@@ -53,6 +57,7 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
         if (messages == null || messages.isEmpty()) {
             return 0;
         }
+        // 按 biz_id 分组，保证批量 UPDATE 能命中分片键，不会全路由扫描。
         Map<String, List<String>> byBizId = new LinkedHashMap<>();
         for (LocalMessage message : messages) {
             if (message.status() != MessageStatus.INIT) {
@@ -83,6 +88,7 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
         if (messages == null || messages.isEmpty()) {
             return 0;
         }
+        // 失败重试也按 biz_id 分组，保证每条 UPDATE 都带分片键。
         Map<String, List<String>> byBizId = new LinkedHashMap<>();
         for (LocalMessage message : messages) {
             byBizId.computeIfAbsent(message.bizId(), ignored -> new ArrayList<>())

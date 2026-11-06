@@ -11,7 +11,7 @@ import java.util.UUID;
  * 基于 MyBatis-Plus 的 Outbox 发布器。
  *
  * <p>它只做一件事：把事件写成 {@code t_local_message} 的 INIT 记录。
- * 真正的 Redis 投递由后续 Relay 完成，因此发布动作不需要连接 Redis，
+ * Redis Stream 投递由后续 Scanner/Sender 完成，因此发布动作不连接 Redis，
  * 也不会因为 Redis 抖动阻塞业务事务。</p>
  */
 public class MybatisOutboxPublisher implements OutboxPublisher {
@@ -30,9 +30,11 @@ public class MybatisOutboxPublisher implements OutboxPublisher {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public String publish(BusinessEvent event) {
+        // msgId 是消息记录身份；eventKey 才是业务事件幂等键，两者不能混用。
         String msgId = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();
 
+        // 只插入本地消息表，不在这里写 Redis/Stream。
         LocalMessageEntity entity = new LocalMessageEntity();
         entity.setMsgId(msgId);
         entity.setEventKey(event.eventKey());
@@ -40,6 +42,7 @@ public class MybatisOutboxPublisher implements OutboxPublisher {
         entity.setBizId(event.bizId());
         entity.setEventType(event.eventType());
         entity.setPayload(event.payload());
+        // 初始状态必须是 INIT：消息还没进入 Stream。
         entity.setStatus(MessageStatus.INIT.name());
         entity.setRetryCount(0);
         entity.setCreatedAt(now);

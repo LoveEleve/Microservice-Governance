@@ -11,6 +11,7 @@ import java.util.Objects;
  * 拦截器可以返回新的 record，但不直接修改数据库实体。</p>
  */
 public record OutboxRecord(
+        // 消息身份字段：拦截器不允许修改这些字段。
         String msgId,
         String eventKey,
         String bizCode,
@@ -18,6 +19,7 @@ public record OutboxRecord(
         String eventType,
         String payload,
         String payloadRef,
+        // 发送时只应出现 INIT；SENT 是发送成功后的生产方终态。
         MessageStatus status,
         int retryCount) {
 

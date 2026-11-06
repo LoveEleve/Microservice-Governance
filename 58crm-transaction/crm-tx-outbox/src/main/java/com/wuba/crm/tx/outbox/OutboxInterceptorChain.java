@@ -22,6 +22,7 @@ public class OutboxInterceptorChain {
     }
 
     public OutboxRecord onSend(OutboxRecord record) {
+        // 前一个拦截器返回的 record 传给下一个；异常只记录，不断链。
         OutboxRecord current = record;
         for (OutboxInterceptor interceptor : interceptors) {
             try {
@@ -38,6 +39,7 @@ public class OutboxInterceptorChain {
     }
 
     public void onAcknowledgement(OutboxSendResult result, Throwable error) {
+        // 发送线程里执行，拦截器实现必须快；异常不能影响发送结果。
         for (OutboxInterceptor interceptor : interceptors) {
             try {
                 interceptor.onAcknowledgement(result, error);

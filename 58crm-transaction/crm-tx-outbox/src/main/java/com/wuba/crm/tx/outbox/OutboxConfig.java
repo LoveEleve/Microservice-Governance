@@ -8,14 +8,23 @@ import java.time.Duration;
  * <p>窗口、批次、buffer 容量都必须显式配置；默认值是生产起点，不是魔法常量。</p>
  */
 public record OutboxConfig(
+        // Stream key 前缀，最终 key = prefix + bizCode。
         String streamPrefix,
+        // 第一条消息到达后，继续等同业务线消息的时间窗口。
         Duration linger,
+        // 单次发送最多多少条（对应 Kafka batch.size 的消息数口径）。
         int batchSize,
+        // buffer 最多多少条。
         int bufferCapacity,
+        // buffer 最多多少字节，防止大 payload OOM。
         long bufferCapacityBytes,
+        // Scanner 每轮从 MySQL 取多少条候选。
         int scanBatch,
+        // Scanner 多久跑一轮。
         Duration scanInterval,
+        // XADD 失败后的下一次重试间隔。
         Duration retryAfter,
+        // XADD/序列化/路由失败的最大重试次数。
         int maxRetries) {
 
     public OutboxConfig {

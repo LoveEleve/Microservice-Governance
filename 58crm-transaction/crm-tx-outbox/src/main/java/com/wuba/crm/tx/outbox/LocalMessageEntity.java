@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  * {@code t_local_message} 的 MyBatis-Plus 映射实体。
  *
  * <p>消息正文和状态必须和业务数据在同一个 MySQL 本地事务中提交。
- * Redis 只保存指向这条记录的 {@code bizId + msgId} 信封，不保存正本。</p>
+ * Redis Stream 只保存传输副本，不保存消息正本。</p>
  */
 @TableName("t_local_message")
 public class LocalMessageEntity {
@@ -43,9 +43,11 @@ public class LocalMessageEntity {
     @TableField("status")
     private String status;
 
+    // 只统计生产方 XADD/序列化/路由失败次数，不统计消费失败。
     @TableField("retry_count")
     private Integer retryCount;
 
+    // INIT 失败后，Scanner 只有到这个时间才会再次尝试。
     @TableField("next_retry_at")
     private LocalDateTime nextRetryAt;
 

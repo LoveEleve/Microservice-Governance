@@ -23,6 +23,7 @@ public final class OutboxProducer implements AutoCloseable {
     private final OutboxSender sender;
     private final OutboxInterceptorChain interceptors;
     private final OutboxConfig config;
+    // 防止 start() 被调用两次，起出两套扫描/发送线程。
     private final AtomicBoolean started = new AtomicBoolean();
     private final AtomicBoolean running = new AtomicBoolean();
 
@@ -57,6 +58,7 @@ public final class OutboxProducer implements AutoCloseable {
             return thread;
         });
 
+        // Scanner 和 Sender 分开线程：扫描慢不会阻塞发送，发送慢会通过 buffer 反压扫描。
         scannerExecutor.scheduleWithFixedDelay(
                 this::scanSafely,
                 0,
@@ -79,6 +81,7 @@ public final class OutboxProducer implements AutoCloseable {
     }
 
     private void sendLoop() {
+        // sendOnce 内部会用 linger 阻塞等待；没有消息时不会忙循环。
         while (running.get()) {
             try {
                 sender.sendOnce();
@@ -86,6 +89,7 @@ public final class OutboxProducer implements AutoCloseable {
                 Thread.currentThread().interrupt();
                 return;
             } catch (RuntimeException ex) {
+                // 单轮失败不能杀死发送线程；下一轮继续处理。
                 log.warn("outbox send failed", ex);
             }
         }

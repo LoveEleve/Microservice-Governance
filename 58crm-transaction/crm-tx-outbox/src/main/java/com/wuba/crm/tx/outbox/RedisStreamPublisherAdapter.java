@@ -27,6 +27,7 @@ public class RedisStreamPublisherAdapter implements RedisStreamPublisher {
         if (records == null || records.isEmpty()) {
             return;
         }
+        // 一批 XADD 走一次 pipeline，避免每条消息一次网络往返。
         List<Object> results = redisTemplate.executePipelined(new SessionCallback<Object>() {
             @Override
             public Object execute(RedisOperations operations) {
@@ -37,6 +38,7 @@ public class RedisStreamPublisherAdapter implements RedisStreamPublisher {
                 return null;
             }
         });
+        // pipeline 返回数量不对，说明命令没有全部执行；整批按失败处理，不能标 SENT。
         if (results.size() != records.size()) {
             throw new IllegalStateException("stream pipeline result count mismatch");
         }
