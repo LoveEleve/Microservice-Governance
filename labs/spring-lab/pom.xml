@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.microsphere.labs</groupId>
+        <artifactId>microsphere-labs</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>spring-lab</artifactId>
+    <packaging>pom</packaging>
+    <name>Spring Lab</name>
+    <description>Spring Framework / MVC / Boot / Tomcat usage labs</description>
+
+    <modules>
+        <module>framework-lab</module>
+        <module>mvc-lab</module>
+        <module>webflux-lab</module>
+        <module>boot-lab</module>
+        <module>tomcat-lab</module>
+        <module>test-lab</module>
+    </modules>
+</project>
