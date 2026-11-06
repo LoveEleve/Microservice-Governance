@@ -30,12 +30,28 @@ OutboxBuffer 的 lead-typo 队列
 
 ## 2. 配置
 
+`lead`、`quota` 只是示例，不是框架内置业务线。  
+生产配置由用户/Nacos/YAML 提供：
+
+```yaml
+tx:
+  stream-prefix: tx:stream:
+  biz-codes:
+    lead:
+      consumers: 8
+      batch-size: 500
+    quota:
+      consumers: 4
+      batch-size: 200
+    contract:
+      consumers: 4
+      batch-size: 500
+```
+
+加载后构建：
+
 ```java
-BizCodeRegistry registry = new BizCodeRegistry(List.of(
-    new BizCodeConfig("lead", 8, 500),
-    new BizCodeConfig("quota", 4, 200),
-    new BizCodeConfig("contract", 4, 500)
-));
+BizCodeRegistry registry = BizCodeRegistry.from(configs);
 ```
 
 字段：
@@ -45,6 +61,19 @@ bizCode   业务线编码
 consumers 消费并发（消费端使用）
 batchSize 单批上限
 ```
+
+框架代码里没有 `if (bizCode.equals("lead"))`，也不认识任何具体业务线。
+
+业务方新增业务线只加配置：
+
+```text
+新增配置项
+→ 重启/刷新 Registry
+→ Publisher 校验通过
+→ Consumer 后续按新配置建组
+```
+
+不需要改框架源码。
 
 ## 3. 发布校验
 

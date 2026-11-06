@@ -29,6 +29,16 @@ public final class BizCodeRegistry {
         this.configs = Map.copyOf(byCode);
     }
 
+    /**
+     * 从外部配置构建；Map 的 key 是 bizCode，value 是该业务线配置。
+     */
+    public static BizCodeRegistry from(Map<String, BizCodeConfig> configs) {
+        return new BizCodeRegistry(configs.values());
+    }
+
+    /**
+     * 仅用于测试/最小示例；生产配置应从 Nacos/YAML 加载。
+     */
     public static BizCodeRegistry of(String... bizCodes) {
         java.util.List<BizCodeConfig> configs = new java.util.ArrayList<>();
         for (String bizCode : bizCodes) {
