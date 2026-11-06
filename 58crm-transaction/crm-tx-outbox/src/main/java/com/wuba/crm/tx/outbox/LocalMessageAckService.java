@@ -10,6 +10,8 @@ import java.util.List;
  */
 public class LocalMessageAckService implements MessageAckService {
 
+    private static final int MAX_ACK_BATCH_SIZE = 1000;
+
     private final LocalMessageRepository repository;
 
     public LocalMessageAckService(LocalMessageRepository repository) {
@@ -18,6 +20,12 @@ public class LocalMessageAckService implements MessageAckService {
 
     @Override
     public int ackBatch(List<MessageAck> acks) {
+        if (acks == null || acks.isEmpty()) {
+            return 0;
+        }
+        if (acks.size() > MAX_ACK_BATCH_SIZE) {
+            throw new IllegalArgumentException("ack batch exceeds " + MAX_ACK_BATCH_SIZE);
+        }
         return repository.ackBatch(acks);
     }
 }

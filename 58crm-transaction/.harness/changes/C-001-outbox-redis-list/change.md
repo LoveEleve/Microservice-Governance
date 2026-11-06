@@ -39,6 +39,11 @@ AC7 Redis 丢消息 → MySQL 可重放
 AC8 同一事件只进一个业务线 List，不 fan-out
 AC9 10ms 窗口内按业务线合并，单批最多 256，一次 pipeline 发送
 AC10 消费方按 100~500 条批量拉取、批量 ACK
+AC11 ACK 到达时消息还是 INIT，也能推进 CONSUMED
+AC12 SENT 重投必须递增 retry_count
+AC13 retry_count 达到上限必须进入 DEAD
+AC14 ACK 批次超过 1000 条直接拒绝
+AC15 真实 H2 + MyBatis-Plus SQL 验证状态迁移
 ```
 
 ## 边界情况

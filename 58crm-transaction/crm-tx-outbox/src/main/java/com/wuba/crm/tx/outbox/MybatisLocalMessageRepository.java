@@ -21,11 +21,21 @@ import java.util.Map;
 public class MybatisLocalMessageRepository implements LocalMessageRepository {
 
     private static final int MAX_BATCH_SIZE = 1000;
+    private static final int DEFAULT_MAX_RETRIES = 5;
 
     private final LocalMessageMapper localMessageMapper;
+    private final int maxRetries;
 
     public MybatisLocalMessageRepository(LocalMessageMapper localMessageMapper) {
+        this(localMessageMapper, DEFAULT_MAX_RETRIES);
+    }
+
+    public MybatisLocalMessageRepository(LocalMessageMapper localMessageMapper, int maxRetries) {
+        if (maxRetries <= 0) {
+            throw new IllegalArgumentException("maxRetries must be positive");
+        }
         this.localMessageMapper = localMessageMapper;
+        this.maxRetries = maxRetries;
     }
 
     @Override
@@ -69,22 +79,41 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
         if (messages == null || messages.isEmpty()) {
             return 0;
         }
-        Map<String, List<String>> byBizId = new LinkedHashMap<>();
+        LocalDateTime now = LocalDateTime.now();
+        int affected = 0;
+
+        // INIT: 首次投递，不增加重试次数。
+        Map<String, List<String>> initialByBizId = new LinkedHashMap<>();
+        // SENT: 超时重投，增加 retry_count；达到上限转 DEAD。
+        Map<String, List<String>> retryByBizId = new LinkedHashMap<>();
         for (LocalMessage message : messages) {
-            byBizId.computeIfAbsent(message.bizId(), ignored -> new ArrayList<>())
+            Map<String, List<String>> target = message.status() == MessageStatus.INIT
+                    ? initialByBizId
+                    : retryByBizId;
+            target.computeIfAbsent(message.bizId(), ignored -> new ArrayList<>())
                     .add(message.msgId());
         }
 
-        LocalDateTime now = LocalDateTime.now();
-        int affected = 0;
-        for (Map.Entry<String, List<String>> entry : byBizId.entrySet()) {
+        for (Map.Entry<String, List<String>> entry : initialByBizId.entrySet()) {
             LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
             update.eq(LocalMessageEntity::getBizId, entry.getKey())
                     .in(LocalMessageEntity::getMsgId, entry.getValue())
-                    .in(LocalMessageEntity::getStatus,
-                            MessageStatus.INIT.name(),
-                            MessageStatus.SENT.name())
+                    .eq(LocalMessageEntity::getStatus, MessageStatus.INIT.name())
                     .set(LocalMessageEntity::getStatus, MessageStatus.SENT.name())
+                    .set(LocalMessageEntity::getRetryCount, 0)
+                    .set(LocalMessageEntity::getNextRetryAt, toLocalDateTime(nextRetryAt))
+                    .set(LocalMessageEntity::getUpdatedAt, now);
+            affected += localMessageMapper.update(null, update);
+        }
+
+        for (Map.Entry<String, List<String>> entry : retryByBizId.entrySet()) {
+            LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
+            update.eq(LocalMessageEntity::getBizId, entry.getKey())
+                    .in(LocalMessageEntity::getMsgId, entry.getValue())
+                    .eq(LocalMessageEntity::getStatus, MessageStatus.SENT.name())
+                    .setSql("status = CASE WHEN retry_count + 1 >= " + maxRetries
+                            + " THEN 'DEAD' ELSE 'SENT' END")
+                    .setSql("retry_count = retry_count + 1")
                     .set(LocalMessageEntity::getNextRetryAt, toLocalDateTime(nextRetryAt))
                     .set(LocalMessageEntity::getUpdatedAt, now);
             affected += localMessageMapper.update(null, update);
@@ -110,7 +139,9 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
             LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
             update.eq(LocalMessageEntity::getBizId, entry.getKey())
                     .in(LocalMessageEntity::getMsgId, entry.getValue())
-                    .eq(LocalMessageEntity::getStatus, MessageStatus.SENT.name())
+                    .in(LocalMessageEntity::getStatus,
+                            MessageStatus.INIT.name(),
+                            MessageStatus.SENT.name())
                     .set(LocalMessageEntity::getStatus, MessageStatus.CONSUMED.name())
                     .set(LocalMessageEntity::getUpdatedAt, now);
             affected += localMessageMapper.update(null, update);
