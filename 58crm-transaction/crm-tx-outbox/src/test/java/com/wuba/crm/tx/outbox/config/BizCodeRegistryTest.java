@@ -15,8 +15,8 @@ class BizCodeRegistryTest {
     @Test
     void require_acceptsRegisteredBizCode() {
         BizCodeRegistry registry = new BizCodeRegistry(List.of(
-                new BizCodeConfig("lead", 8, 500),
-                new BizCodeConfig("quota", 4, 200)));
+                new BizCodeConfig("lead"),
+                new BizCodeConfig("quota")));
 
         assertEquals("tx:stream:lead", registry.streamKey("tx:stream:", "lead"));
         assertEquals(2, registry.bizCodes().size());

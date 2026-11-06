@@ -37,15 +37,9 @@ OutboxBuffer 的 lead-typo 队列
 tx:
   stream-prefix: tx:stream:
   biz-codes:
-    lead:
-      consumers: 8
-      batch-size: 500
-    quota:
-      consumers: 4
-      batch-size: 200
-    contract:
-      consumers: 4
-      batch-size: 500
+    - lead
+    - quota
+    - contract
 ```
 
 加载后构建：
@@ -58,8 +52,29 @@ BizCodeRegistry registry = BizCodeRegistry.from(configs);
 
 ```text
 bizCode   业务线编码
-consumers 消费并发（消费端使用）
-batchSize 单批上限
+```
+
+生产端发送参数在 `OutboxConfig`：
+
+```text
+linger
+batchSize
+bufferCapacity
+bufferCapacityBytes
+scanBatch
+scanInterval
+retryAfter
+maxRetries
+```
+
+消费端参数以后放在独立的 `ConsumerConfig`：
+
+```text
+group
+consumers
+batchSize
+blockTimeout
+claimIdle
 ```
 
 框架代码里没有 `if (bizCode.equals("lead"))`，也不认识任何具体业务线。
@@ -126,24 +141,27 @@ tx:
 
 ```text
 加载 BizCodeRegistry
-→ Publisher 使用它校验
-→ Consumer 使用它创建 group/线程池
+→ Publisher 使用它校验 bizCode
+
+Consumer 后续读取自己的 ConsumerConfig
+→ 创建 group/线程池
 ```
 
 ## 6. 当前边界
 
 ```text
 已完成：
-  BizCodeConfig
+  BizCodeConfig（只含 bizCode）
   BizCodeRegistry
   UnknownBizCodeException
   Publisher 发布前校验
   Registry 单元测试
+  Producer 参数在 OutboxConfig
 
 未做：
   Nacos 加载
-  Consumer 启动时按 registry 创建 group
-  按 bizCode 独立线程池
+  ConsumerConfig
+  Consumer 启动时按配置创建 group/线程池
 ```
 
 ## 7. 规则
