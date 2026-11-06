@@ -130,25 +130,45 @@ XREADGROUP 后未 ACK
 
 ## 6. Redis 版本约束
 
-项目参数是 Redis 5.x：
+历史 58CRM 参数写的是 Redis 5.x，因为那是 2025 年的项目环境。  
+当前新建项目的基线应为 Redis 7.x；本机验证版本：
 
 ```text
-Stream 基础命令可用
-XAUTOCLAIM 是 Redis 6.2+
+redis-server v=7.0.15
 ```
 
-Redis 5 兜底：
+在这个版本上：
 
 ```text
+XADD
+XGROUP
+XREADGROUP
+XACK
 XPENDING
 XCLAIM
-```
-
-不能用：
-
-```text
 XAUTOCLAIM
 ```
+
+都可用。
+
+目标版本：
+
+```text
+Redis 7.x+
+XADD pipeline
+XREADGROUP COUNT 500
+XACK batch
+XAUTOCLAIM min-idle
+```
+
+如果部署环境仍是 Redis 5.x：
+
+```text
+XAUTOCLAIM 不可用
+→ XPENDING + XCLAIM
+```
+
+不能把 Redis 5 当作新项目默认基线。
 
 ## 7. 可靠性兜底
 
@@ -215,7 +235,8 @@ Stream 长度/内存告警
 XADD 失败率告警
 Redis 主从切换演练
 kill consumer 演练
-Redis 5 XCLAIM 演练
+Redis 7 XAUTOCLAIM 演练
+Redis 5 XCLAIM 兼容演练（仅旧环境）
 ```
 
 团队没用过不是不能做，前提是：

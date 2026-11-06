@@ -33,7 +33,7 @@ Redis 是传送带：业务线 List，可丢、可重放
 MySQL 8.0
 ShardingSphere-JDBC：16 库 × 4 表 = 64 分片
 1 主 2 从，读写分离
-Redis 5 Cluster：3 主 3 从，32 队列分片
+Redis 7.x Cluster（本机验证 7.0.15）：3 主 3 从，Stream 分片
 Nacos：注册 + 配置
 Sentinel：8W 流控 + 熔断
 协调器：无状态 5 实例
