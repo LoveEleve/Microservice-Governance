@@ -36,6 +36,21 @@ class OutboxRelayTest {
     }
 
     @Test
+    void relayOnce_groupsMessagesByBizCodeIntoOneBatch() {
+        FakeLocalMessageRepository repository = new FakeLocalMessageRepository();
+        FakeRedisListQueue queue = new FakeRedisListQueue();
+        repository.candidates.add(message("m-1", "lead-1", "lead"));
+        repository.candidates.add(message("m-2", "lead-1", "lead"));
+        OutboxRelay relay = new OutboxRelay(repository, queue, java.time.Duration.ofSeconds(30));
+
+        int relayed = relay.relayOnce(10);
+
+        assertEquals(2, relayed);
+        assertEquals(1, queue.batchCalls);
+        assertEquals(2, queue.envelopes.size());
+    }
+
+    @Test
     void relayOnce_doesNotMarkSentWhenRedisFails() {
         FakeLocalMessageRepository repository = new FakeLocalMessageRepository();
         FakeRedisListQueue queue = new FakeRedisListQueue();
@@ -89,6 +104,7 @@ class OutboxRelayTest {
     private static final class FakeRedisListQueue implements RedisListQueue {
 
         private final List<QueueEnvelope> envelopes = new ArrayList<>();
+        private int batchCalls;
         private boolean fail;
 
         @Override
@@ -97,6 +113,15 @@ class OutboxRelayTest {
                 throw new IllegalStateException("redis unavailable");
             }
             envelopes.add(envelope);
+        }
+
+        @Override
+        public void enqueueBatch(String bizCode, List<QueueEnvelope> envelopes) {
+            batchCalls++;
+            if (fail) {
+                throw new IllegalStateException("redis unavailable");
+            }
+            this.envelopes.addAll(envelopes);
         }
 
         @Override

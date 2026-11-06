@@ -65,6 +65,34 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
     }
 
     @Override
+    public int markSentBatch(List<LocalMessage> messages, Instant nextRetryAt) {
+        if (messages == null || messages.isEmpty()) {
+            return 0;
+        }
+        Map<String, List<String>> byBizId = new LinkedHashMap<>();
+        for (LocalMessage message : messages) {
+            byBizId.computeIfAbsent(message.bizId(), ignored -> new ArrayList<>())
+                    .add(message.msgId());
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int affected = 0;
+        for (Map.Entry<String, List<String>> entry : byBizId.entrySet()) {
+            LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
+            update.eq(LocalMessageEntity::getBizId, entry.getKey())
+                    .in(LocalMessageEntity::getMsgId, entry.getValue())
+                    .in(LocalMessageEntity::getStatus,
+                            MessageStatus.INIT.name(),
+                            MessageStatus.SENT.name())
+                    .set(LocalMessageEntity::getStatus, MessageStatus.SENT.name())
+                    .set(LocalMessageEntity::getNextRetryAt, toLocalDateTime(nextRetryAt))
+                    .set(LocalMessageEntity::getUpdatedAt, now);
+            affected += localMessageMapper.update(null, update);
+        }
+        return affected;
+    }
+
+    @Override
     public int ackBatch(List<MessageAck> acks) {
         if (acks == null || acks.isEmpty()) {
             return 0;

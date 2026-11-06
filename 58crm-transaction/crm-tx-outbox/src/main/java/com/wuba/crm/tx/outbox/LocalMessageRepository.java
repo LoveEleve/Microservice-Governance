@@ -21,6 +21,19 @@ public interface LocalMessageRepository {
     boolean markSent(String bizId, String msgId, java.time.Instant nextRetryAt);
 
     /**
+     * 批量标记已投递。默认逐条降级，生产实现应覆盖为批量更新。
+     */
+    default int markSentBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt) {
+        int affected = 0;
+        for (LocalMessage message : messages) {
+            if (markSent(message.bizId(), message.msgId(), nextRetryAt)) {
+                affected++;
+            }
+        }
+        return affected;
+    }
+
+    /**
      * 批量 ACK 消费成功的消息。
      *
      * @return 实际从 SENT 推进到 CONSUMED 的行数

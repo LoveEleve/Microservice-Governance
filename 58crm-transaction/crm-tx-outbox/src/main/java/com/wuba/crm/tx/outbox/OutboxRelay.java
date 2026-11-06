@@ -5,7 +5,10 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 把 MySQL Outbox 中的待投递消息推进到 Redis List。
@@ -37,17 +40,29 @@ public class OutboxRelay {
      */
     public int relayOnce(int limit) {
         List<LocalMessage> candidates = repository.findRelayCandidates(limit);
+        if (candidates.isEmpty()) {
+            return 0;
+        }
+
+        Map<String, List<LocalMessage>> byBizCode = new LinkedHashMap<>();
+        for (LocalMessage message : candidates) {
+            byBizCode.computeIfAbsent(message.bizCode(), ignored -> new ArrayList<>())
+                    .add(message);
+        }
+
         int relayed = 0;
         Instant nextRetryAt = Instant.now().plus(retryAfter);
-
-        for (LocalMessage message : candidates) {
+        for (Map.Entry<String, List<LocalMessage>> entry : byBizCode.entrySet()) {
+            List<QueueEnvelope> envelopes = entry.getValue().stream()
+                    .map(QueueEnvelope::from)
+                    .toList();
             try {
-                queue.enqueue(message.bizCode(), QueueEnvelope.from(message));
-                repository.markSent(message.bizId(), message.msgId(), nextRetryAt);
-                relayed++;
+                queue.enqueueBatch(entry.getKey(), envelopes);
+                repository.markSentBatch(entry.getValue(), nextRetryAt);
+                relayed += envelopes.size();
             } catch (RuntimeException ex) {
-                log.warn("outbox relay failed, msgId={}, bizId={}",
-                        message.msgId(), message.bizId(), ex);
+                log.warn("outbox relay batch failed, bizCode={}, size={}",
+                        entry.getKey(), envelopes.size(), ex);
             }
         }
         return relayed;

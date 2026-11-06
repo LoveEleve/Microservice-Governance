@@ -2,9 +2,14 @@ package com.wuba.crm.tx.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.data.redis.core.ListOperations;
+import org.springframework.data.redis.core.RedisOperations;
+import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -42,12 +47,73 @@ public class RedisListQueueAdapter implements RedisListQueue {
     }
 
     @Override
+    public void enqueueBatch(String bizCode, List<QueueEnvelope> envelopes) {
+        if (envelopes == null || envelopes.isEmpty()) {
+            return;
+        }
+        List<String> payloads = new ArrayList<>(envelopes.size());
+        for (QueueEnvelope envelope : envelopes) {
+            try {
+                payloads.add(objectMapper.writeValueAsString(envelope));
+            } catch (JsonProcessingException ex) {
+                throw new IllegalStateException("serialize queue envelope failed", ex);
+            }
+        }
+        redisTemplate.executePipelined(new SessionCallback<Object>() {
+            @Override
+            public Object execute(RedisOperations operations) {
+                ListOperations<String, String> list = operations.opsForList();
+                for (String payload : payloads) {
+                    list.leftPush(queueKey(bizCode), payload);
+                }
+                return null;
+            }
+        });
+    }
+
+    @Override
     public QueueEnvelope dequeue(String bizCode, Duration timeout) {
         Duration effectiveTimeout = timeout == null ? pollTimeout : timeout;
         String value = redisTemplate.opsForList().rightPop(
                 queueKey(bizCode),
                 effectiveTimeout.toMillis(),
                 TimeUnit.MILLISECONDS);
+        return decode(value);
+    }
+
+    @Override
+    public List<QueueEnvelope> dequeueBatch(String bizCode, int maxCount, Duration timeout) {
+        if (maxCount <= 0) {
+            return List.of();
+        }
+        String key = queueKey(bizCode);
+        List<String> values = redisTemplate.opsForList().rightPop(key, maxCount);
+        if (values == null || values.isEmpty()) {
+            Duration effectiveTimeout = timeout == null ? pollTimeout : timeout;
+            String first = redisTemplate.opsForList().rightPop(
+                    key,
+                    effectiveTimeout.toMillis(),
+                    TimeUnit.MILLISECONDS);
+            if (first == null) {
+                return List.of();
+            }
+            values = new ArrayList<>();
+            values.add(first);
+            if (maxCount > 1) {
+                List<String> rest = redisTemplate.opsForList().rightPop(key, maxCount - 1);
+                if (rest != null) {
+                    values.addAll(rest);
+                }
+            }
+        }
+        List<QueueEnvelope> envelopes = new ArrayList<>(values.size());
+        for (String value : values) {
+            envelopes.add(decode(value));
+        }
+        return envelopes;
+    }
+
+    private QueueEnvelope decode(String value) {
         if (value == null) {
             return null;
         }
