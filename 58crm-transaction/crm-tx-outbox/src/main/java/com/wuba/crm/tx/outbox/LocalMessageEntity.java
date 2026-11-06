@@ -43,12 +43,6 @@ public class LocalMessageEntity {
     @TableField("status")
     private String status;
 
-    @TableField("lease_until")
-    private LocalDateTime leaseUntil;
-
-    @TableField("consumer_id")
-    private String consumerId;
-
     @TableField("retry_count")
     private Integer retryCount;
 
@@ -123,22 +117,6 @@ public class LocalMessageEntity {
 
     public void setStatus(String status) {
         this.status = status;
-    }
-
-    public LocalDateTime getLeaseUntil() {
-        return leaseUntil;
-    }
-
-    public void setLeaseUntil(LocalDateTime leaseUntil) {
-        this.leaseUntil = leaseUntil;
-    }
-
-    public String getConsumerId() {
-        return consumerId;
-    }
-
-    public void setConsumerId(String consumerId) {
-        this.consumerId = consumerId;
     }
 
     public Integer getRetryCount() {

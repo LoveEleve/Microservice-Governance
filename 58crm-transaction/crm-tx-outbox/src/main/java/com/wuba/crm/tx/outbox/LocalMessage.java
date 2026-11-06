@@ -2,7 +2,6 @@ package com.wuba.crm.tx.outbox;
 
 import com.wuba.crm.tx.common.MessageStatus;
 
-import java.time.Instant;
 import java.util.Objects;
 
 /**
@@ -20,8 +19,6 @@ public record LocalMessage(
         String payload,
         String payloadRef,
         MessageStatus status,
-        Instant leaseUntil,
-        String consumerId,
         int retryCount) {
 
     public LocalMessage {
@@ -35,12 +32,5 @@ public record LocalMessage(
                 && (payloadRef == null || payloadRef.isBlank())) {
             throw new IllegalArgumentException("payload or payloadRef is required");
         }
-    }
-
-    /**
-     * 是否已经成功消费。
-     */
-    public boolean isConsumed() {
-        return status == MessageStatus.CONSUMED;
     }
 }

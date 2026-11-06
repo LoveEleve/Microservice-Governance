@@ -32,8 +32,8 @@ Nacos/Sentinel 真实集群
 AC1 业务事务成功 → t_local_message(INIT)
 AC2 业务事务失败 → 没有消息
 AC3 Relay 扫描 → LPUSH 业务线 List → SENT
-AC4 消费成功 → PROCESSING → CONSUMED
-AC5 消费者崩溃 → lease 过期后重投
+AC4 消费成功 → 消费方 t_consume_record(PROCESSING) → CONSUMED
+AC5 消费者崩溃 → 消费方 lease 过期重试；生产方 SENT 超时重投
 AC6 重复投递 → t_idempotent 拦截
 AC7 Redis 丢消息 → MySQL 可重放
 AC8 同一事件只进一个业务线 List，不 fan-out
@@ -69,6 +69,11 @@ Redis List 只做可重放缓冲
 一条事件一个业务线 List
 一个逻辑消费者
 不使用消费者组
+
+生产方 t_local_message：INIT/SENT/DEAD
+消费方 t_consume_record：PROCESSING/CONSUMED/DEAD
+消费租约和 consumer_id 只在消费方库
+消费方不远程写生产方库
 ```
 
 ## 契约
@@ -83,13 +88,20 @@ public interface MessageHandler {
 }
 ```
 
-状态：
+生产方状态：
 
 ```text
-INIT → SENT → PROCESSING → CONSUMED
-                  ↓
-                INIT
-超限 → DEAD
+INIT → SENT → DEAD
+           |
+           +-> SENT（超时重投）
+```
+
+消费方状态：
+
+```text
+PROCESSING → CONSUMED / DEAD
+      |
+      +-> PROCESSING（lease 过期重试）
 ```
 
 ## 测试策略
