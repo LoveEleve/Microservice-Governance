@@ -18,6 +18,7 @@
 | 看表和分片 | `03-数据/01-数据模型.md` |
 | 看 AC 和测试 | `04-验证/01-测试与验收.md` |
 | 看 C-001.2 Review | `04-验证/02-C001.2-Review.md` |
+| 看生产端 Review | `04-验证/03-ProducerReview.md` |
 | 读代码 | `05-代码讲解/00-代码地图.md` |
 | 看 C-001.1 代码讲解 | `05-代码讲解/C-001.1-OutboxPublisher.md` |
 | 看 C-001.2 代码讲解 | `05-代码讲解/C-001.2-StreamSender.md` |
@@ -41,7 +42,8 @@ docs/
 │   └── 01-数据模型.md
 ├── 04-验证/
 │   ├── 01-测试与验收.md
-│   └── 02-C001.2-Review.md
+│   ├── 02-C001.2-Review.md
+│   └── 03-ProducerReview.md
 ├── 05-代码讲解/
 │   ├── 00-代码地图.md
 │   ├── C-001.1-OutboxPublisher.md
