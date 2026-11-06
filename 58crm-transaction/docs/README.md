@@ -12,6 +12,7 @@
 | 看文档需求映射与差距 | `02-设计/02-需求映射与差距.md` |
 | 看 Redis Stream 决策 | `02-设计/03-Redis-Stream-决策.md` |
 | 看包结构 | `02-设计/05-包结构.md` |
+| 学 Redis Stream 原理 | `06-Redis-Stream/01-原理与使用.md` |
 | 看表和分片 | `03-数据/01-数据模型.md` |
 | 看 AC 和测试 | `04-验证/01-测试与验收.md` |
 | 看 C-001.2 Review | `04-验证/02-C001.2-Review.md` |
@@ -38,10 +39,12 @@ docs/
 ├── 04-验证/
 │   ├── 01-测试与验收.md
 │   └── 02-C001.2-Review.md
-└── 05-代码讲解/
-    ├── 00-代码地图.md
-    ├── C-001.1-OutboxPublisher.md
-    └── C-001.2-StreamSender.md
+├── 05-代码讲解/
+│   ├── 00-代码地图.md
+│   ├── C-001.1-OutboxPublisher.md
+│   └── C-001.2-StreamSender.md
+└── 06-Redis-Stream/
+    └── 01-原理与使用.md
 ```
 
 ## 写作约定
