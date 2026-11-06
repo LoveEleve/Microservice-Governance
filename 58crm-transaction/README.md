@@ -16,6 +16,7 @@ CRM 跨服务一致性框架：TCC + MySQL 本地消息表 + Redis Stream + 对�
 7. docs/04-验证/01-测试与验收.md          AC 怎么验证
 8. docs/05-代码讲解/00-代码地图.md        源码从哪里开始看
 9. docs/05-代码讲解/C-001.1-OutboxPublisher.md
+10. docs/06-Redis-Stream/01-原理与使用.md
 ```
 
 ## 一句话模型
