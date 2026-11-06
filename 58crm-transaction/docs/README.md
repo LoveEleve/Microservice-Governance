@@ -8,11 +8,13 @@
 |---|---|
 | 第一次了解项目 | `00-阅读指南.md` |
 | 业务方接入 | `01-使用/01-接入手册.md` |
+| 生产端接入 | `01-使用/02-生产端接入手册.md` |
 | 理解 TCC / Outbox / Redis / MySQL | `02-设计/01-核心模型.md` |
 | 看文档需求映射与差距 | `02-设计/02-需求映射与差距.md` |
 | 看 Redis Stream 决策 | `02-设计/03-Redis-Stream-决策.md` |
 | 看包结构 | `02-设计/05-包结构.md` |
 | 看 bizCode 白名单 | `02-设计/07-BizCodeRegistry.md` |
+| 看生产端设计取舍 | `02-设计/08-生产端设计决策与已知边界.md` |
 | 学 Redis Stream 原理 | `06-Redis-Stream/01-原理与使用.md` |
 | Redis Stream 命令大全 | `06-Redis-Stream/02-命令大全.md` |
 | 看表和分片 | `03-数据/01-数据模型.md` |
@@ -20,6 +22,8 @@
 | 看 C-001.2 Review | `04-验证/02-C001.2-Review.md` |
 | 看生产端 Review | `04-验证/03-ProducerReview.md` |
 | 读代码 | `05-代码讲解/00-代码地图.md` |
+| 生产端类与方法全解 | `05-代码讲解/01-生产端类与方法全解.md` |
+| 生产端运行时 | `05-代码讲解/02-生产端运行时与线程模型.md` |
 | 看 C-001.1 代码讲解 | `05-代码讲解/C-001.1-OutboxPublisher.md` |
 | 看 C-001.2 代码讲解 | `05-代码讲解/C-001.2-StreamSender.md` |
 | 看变更范围 | `.harness/changes/C-001-outbox-redis-list/change.md` |
@@ -31,13 +35,15 @@ docs/
 ├── README.md
 ├── 00-阅读指南.md
 ├── 01-使用/
-│   └── 01-接入手册.md
+│   ├── 01-接入手册.md
+│   └── 02-生产端接入手册.md
 ├── 02-设计/
 │   ├── 01-核心模型.md
 │   ├── 02-需求映射与差距.md
 │   ├── 03-Redis-Stream-决策.md
 │   ├── 05-包结构.md
-│   └── 07-BizCodeRegistry.md
+│   ├── 07-BizCodeRegistry.md
+│   └── 08-生产端设计决策与已知边界.md
 ├── 03-数据/
 │   └── 01-数据模型.md
 ├── 04-验证/
@@ -46,6 +52,8 @@ docs/
 │   └── 03-ProducerReview.md
 ├── 05-代码讲解/
 │   ├── 00-代码地图.md
+│   ├── 01-生产端类与方法全解.md
+│   ├── 02-生产端运行时与线程模型.md
 │   ├── C-001.1-OutboxPublisher.md
 │   └── C-001.2-StreamSender.md
 └── 06-Redis-Stream/
