@@ -33,6 +33,13 @@ public final class BizCodeRegistry {
      * 从外部配置构建；Map 的 key 是 bizCode，value 是该业务线配置。
      */
     public static BizCodeRegistry from(Map<String, BizCodeConfig> configs) {
+        for (Map.Entry<String, BizCodeConfig> entry : configs.entrySet()) {
+            if (!entry.getKey().equals(entry.getValue().bizCode())) {
+                throw new IllegalArgumentException(
+                        "bizCode key mismatch: " + entry.getKey()
+                                + " != " + entry.getValue().bizCode());
+            }
+        }
         return new BizCodeRegistry(configs.values());
     }
 

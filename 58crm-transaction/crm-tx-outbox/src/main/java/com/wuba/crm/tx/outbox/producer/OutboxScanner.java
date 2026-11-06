@@ -1,5 +1,7 @@
 package com.wuba.crm.tx.outbox.producer;
 
+import com.wuba.crm.tx.outbox.config.BizCodeRegistry;
+import com.wuba.crm.tx.outbox.config.UnknownBizCodeException;
 import com.wuba.crm.tx.outbox.domain.LocalMessage;
 import com.wuba.crm.tx.outbox.domain.OutboxRecord;
 import com.wuba.crm.tx.outbox.persistence.LocalMessageRepository;
@@ -19,16 +21,19 @@ public class OutboxScanner {
     // 与 Sender 共享：消息一旦入队/发送中，下一轮扫描不能重复放入。
     private final OutboxInFlight inFlight;
     private final int scanBatch;
+    private final BizCodeRegistry registry;
 
     public OutboxScanner(
             LocalMessageRepository repository,
             OutboxBuffer buffer,
             OutboxInFlight inFlight,
-            int scanBatch) {
+            int scanBatch,
+            BizCodeRegistry registry) {
         this.repository = repository;
         this.buffer = buffer;
         this.inFlight = inFlight;
         this.scanBatch = scanBatch;
+        this.registry = registry;
     }
 
     /**
@@ -46,9 +51,15 @@ public class OutboxScanner {
                 continue;
             }
             try {
+                // 历史脏数据/非法 bizCode 不能创建孤儿 Stream，直接标记 DEAD。
+                registry.require(candidate.bizCode());
                 // buffer 满时这里会阻塞，Scanner 被反压，不会无限堆内存。
                 buffer.put(OutboxRecord.from(candidate));
                 accepted++;
+            } catch (UnknownBizCodeException ex) {
+                reject(candidate);
+            } catch (MessageTooLargeException ex) {
+                reject(candidate);
             } catch (InterruptedException ex) {
                 // 线程被关闭时释放当前消息，让下一次进程启动后还能重新扫描。
                 inFlight.remove(candidate.msgId());
@@ -56,5 +67,12 @@ public class OutboxScanner {
             }
         }
         return accepted;
+    }
+
+    private void reject(LocalMessage candidate) {
+        // maxRetries=1 表示不再自动重试，直接 DEAD，交给人工处理。
+        inFlight.remove(candidate.msgId());
+        repository.markFailedBatch(
+                java.util.List.of(candidate), java.time.Instant.now(), 1);
     }
 }

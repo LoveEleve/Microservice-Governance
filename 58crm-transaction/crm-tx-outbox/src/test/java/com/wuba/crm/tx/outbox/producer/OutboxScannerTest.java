@@ -31,7 +31,7 @@ class OutboxScannerTest {
         FakeRepository repository = new FakeRepository(List.of(message));
         OutboxBuffer buffer = new OutboxBuffer(10, 4096);
         OutboxInFlight inFlight = new OutboxInFlight();
-        OutboxScanner scanner = new OutboxScanner(repository, buffer, inFlight, 100);
+        OutboxScanner scanner = new OutboxScanner(repository, buffer, inFlight, 100, com.wuba.crm.tx.outbox.config.BizCodeRegistry.of("lead"));
 
         assertEquals(1, scanner.scanOnce());
         assertEquals(1, buffer.size());
@@ -40,9 +40,26 @@ class OutboxScannerTest {
         assertEquals(1, inFlight.size());
     }
 
+    @Test
+    void scanOnce_rejectsUnknownBizCodeWithoutBuffering() throws Exception {
+        LocalMessage message = new LocalMessage(
+                "m-1", "event-m-1", "lead-typo", "lead-1", "LEAD_ASSIGNED",
+                "{}", null, MessageStatus.INIT, 0);
+        FakeRepository repository = new FakeRepository(List.of(message));
+        OutboxBuffer buffer = new OutboxBuffer(10, 4096);
+        OutboxScanner scanner = new OutboxScanner(
+                repository, buffer, new OutboxInFlight(), 100,
+                com.wuba.crm.tx.outbox.config.BizCodeRegistry.of("lead"));
+
+        assertEquals(0, scanner.scanOnce());
+        assertEquals(0, buffer.size());
+        assertEquals(1, repository.failed);
+    }
+
     private static final class FakeRepository implements LocalMessageRepository {
 
         private final List<LocalMessage> messages;
+        private int failed;
 
         private FakeRepository(List<LocalMessage> messages) {
             this.messages = messages;
@@ -60,7 +77,8 @@ class OutboxScannerTest {
 
         @Override
         public int markFailedBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt, int maxRetries) {
-            return 0;
+            failed += messages.size();
+            return messages.size();
         }
     }
 }

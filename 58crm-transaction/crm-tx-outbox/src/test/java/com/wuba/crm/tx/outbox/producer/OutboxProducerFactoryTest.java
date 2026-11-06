@@ -29,7 +29,7 @@ class OutboxProducerFactoryTest {
                 10, Duration.ofMillis(10), Duration.ofSeconds(30), 3, 8);
 
         OutboxProducer producer = OutboxProducerFactory.create(
-                new OutboxScanner(new EmptyRepository(), buffer, inFlight, 10),
+                new OutboxScanner(new EmptyRepository(), buffer, inFlight, 10, BizCodeRegistry.of("lead", "quota", "contract")),
                 buffer,
                 (stream, records) -> {
                 },

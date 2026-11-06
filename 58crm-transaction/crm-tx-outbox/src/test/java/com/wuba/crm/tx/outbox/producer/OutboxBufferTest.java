@@ -42,6 +42,17 @@ class OutboxBufferTest {
     }
 
     @Test
+    void put_rejectsMessageLargerThanBuffer() {
+        OutboxBuffer buffer = new OutboxBuffer(10, 64);
+        OutboxRecord tooLarge = new OutboxRecord(
+                "m-1", "event-m-1", "lead", "lead-1", "LEAD_ASSIGNED",
+                "x".repeat(256), null, com.wuba.crm.tx.common.MessageStatus.INIT, 0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                MessageTooLargeException.class, () -> buffer.put(tooLarge));
+    }
+
+    @Test
     void pollAssigned_onlyTakesOwnedBusinessLine() throws Exception {
         OutboxBuffer buffer = new OutboxBuffer(10, 4096);
         buffer.put(record("lead-1", "lead"));

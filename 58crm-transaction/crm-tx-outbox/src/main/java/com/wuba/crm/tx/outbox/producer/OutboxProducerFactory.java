@@ -22,6 +22,26 @@ public final class OutboxProducerFactory {
     private OutboxProducerFactory() {
     }
 
+    /**
+     * 推荐入口：Scanner 也由工厂按 config.scanBatch 创建，避免配置分叉。
+     */
+    public static OutboxProducer create(
+            OutboxBuffer buffer,
+            RedisStreamPublisher streamPublisher,
+            OutboxInterceptorChain interceptors,
+            OutboxPartitioner partitioner,
+            OutboxSerializer serializer,
+            LocalMessageRepository repository,
+            OutboxInFlight inFlight,
+            OutboxConfig config,
+            BizCodeRegistry registry) {
+        OutboxScanner scanner = new OutboxScanner(
+                repository, buffer, inFlight, config.scanBatch(), registry);
+        return create(
+                scanner, buffer, streamPublisher, interceptors, partitioner,
+                serializer, repository, inFlight, config, registry);
+    }
+
     public static OutboxProducer create(
             OutboxScanner scanner,
             OutboxBuffer buffer,

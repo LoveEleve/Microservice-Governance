@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -48,6 +49,10 @@ public class OutboxBuffer {
      */
     public void put(OutboxRecord record) throws InterruptedException {
         long bytes = estimateBytes(record);
+        // 单条就超过总容量时，等待永远不会结束；必须拒绝并让上层转 DEAD。
+        if (bytes > maxBytes) {
+            throw new MessageTooLargeException(record.msgId(), bytes, maxBytes);
+        }
         lock.lockInterruptibly();
         try {
             // 先等容量。这里不能用 offer：队列满时必须让 Scanner 慢下来，
@@ -93,12 +98,9 @@ public class OutboxBuffer {
     }
 
     /**
-     * 只从指定业务线取一条消息，用于 Sender 在 linger 窗口内继续聚合同一业务线。
-     */
-    /**
      * 从指定业务线集合中取一条；供一个 Sender shard 只处理自己负责的队列。
      */
-    public OutboxRecord poll(java.util.Set<String> bizCodes, Duration timeout) throws InterruptedException {
+    public OutboxRecord poll(Set<String> bizCodes, Duration timeout) throws InterruptedException {
         long deadline = deadlineNanos(timeout);
         lock.lockInterruptibly();
         try {

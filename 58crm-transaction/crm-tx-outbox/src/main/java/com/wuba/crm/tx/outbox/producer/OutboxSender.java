@@ -84,8 +84,8 @@ public class OutboxSender {
             return 0;
         }
 
-        // 2. 第一条决定这一批的 bizCode；在 linger 窗口内继续聚合同一业务线。
-        //    这就是 Kafka linger.ms 的简化实现：不是有第一条就立刻发。
+        // 2. 在自己的所有 bizCode 队列里继续聚合，直到 linger 到期或 batch 满。
+        //    不能只等第一条的 bizCode，否则 lead 空闲会拖住 quota。
         List<OutboxRecord> batch = new ArrayList<>(config.batchSize());
         batch.add(first);
         long deadline = System.nanoTime() + config.linger().toNanos();
@@ -95,7 +95,7 @@ public class OutboxSender {
                 break;
             }
             OutboxRecord next = buffer.poll(
-                    first.bizCode(), java.time.Duration.ofNanos(remaining));
+                    assignedBizCodes, java.time.Duration.ofNanos(remaining));
             if (next == null) {
                 break;
             }
@@ -127,40 +127,8 @@ public class OutboxSender {
             int sent = 0;
             Instant nextRetryAt = Instant.now().plus(config.retryAfter());
             for (Map.Entry<String, List<OutboxRecord>> entry : byStream.entrySet()) {
-                String stream = entry.getKey();
-                List<OutboxRecord> records = entry.getValue();
-                // 5. 身份字段必须用原始 record；拦截后的 record 只用于序列化。
-                List<OutboxRecord> originals = originalsOf(records, originalByMsgId);
-                List<Map<String, String>> fields = new ArrayList<>(records.size());
-                for (OutboxRecord record : records) {
-                    fields.add(serializer.serialize(record));
-                }
-
-                // 6. XADD pipeline。失败时整批标记失败，等下一轮退避重试。
-                try {
-                    publisher.publish(stream, fields);
-                } catch (RuntimeException ex) {
-                    publishFailed(originals, nextRetryAt, ex);
-                    continue;
-                }
-
-                // 7. XADD 成功后才允许把 INIT 推进到 SENT。
-                //    如果这里失败，消息仍是 INIT，下一轮会重复 XADD，由消费幂等兜底。
-                try {
-                    repository.markSentBatch(toLocalMessages(originals), nextRetryAt);
-                    for (OutboxRecord record : records) {
-                        interceptors.onAcknowledgement(
-                                new OutboxSendResult(stream, record.msgId(), null), null);
-                    }
-                    sent += records.size();
-                } catch (RuntimeException ex) {
-                    log.warn("mark sent failed after XADD, stream={}, size={}",
-                            stream, records.size(), ex);
-                    for (OutboxRecord record : records) {
-                        interceptors.onAcknowledgement(
-                                new OutboxSendResult(stream, record.msgId(), null), ex);
-                    }
-                }
+                sent += publishOrSplit(
+                        entry.getKey(), entry.getValue(), originalByMsgId, nextRetryAt);
             }
             return sent;
         } catch (RuntimeException ex) {
@@ -172,6 +140,55 @@ public class OutboxSender {
             for (OutboxRecord record : batch) {
                 inFlight.remove(record.msgId());
             }
+        }
+    }
+
+    /**
+     * 发布一条 Stream 的一批消息。
+     *
+     * <p>如果整批失败，递归二分，最终能定位到单条 poison 消息；好消息不会被坏消息拖死。</p>
+     */
+    private int publishOrSplit(
+            String stream,
+            List<OutboxRecord> records,
+            Map<String, OutboxRecord> originalByMsgId,
+            Instant nextRetryAt) {
+        List<OutboxRecord> originals = originalsOf(records, originalByMsgId);
+        try {
+            List<Map<String, String>> fields = new ArrayList<>(records.size());
+            for (OutboxRecord record : records) {
+                fields.add(serializer.serialize(record));
+            }
+            publisher.publish(stream, fields);
+        } catch (RuntimeException ex) {
+            if (records.size() == 1) {
+                publishFailed(originals, nextRetryAt, ex);
+                return 0;
+            }
+            int middle = records.size() / 2;
+            int sent = publishOrSplit(
+                    stream, records.subList(0, middle), originalByMsgId, nextRetryAt);
+            sent += publishOrSplit(
+                    stream, records.subList(middle, records.size()), originalByMsgId, nextRetryAt);
+            return sent;
+        }
+
+        try {
+            repository.markSentBatch(toLocalMessages(originals), nextRetryAt);
+            for (OutboxRecord record : records) {
+                interceptors.onAcknowledgement(
+                        new OutboxSendResult(stream, record.msgId(), null), null);
+            }
+            return records.size();
+        } catch (RuntimeException ex) {
+            // XADD 已成功但状态回写失败：保持 INIT，下一轮重投，消费幂等兜底。
+            log.warn("mark sent failed after XADD, stream={}, size={}",
+                    stream, records.size(), ex);
+            for (OutboxRecord record : records) {
+                interceptors.onAcknowledgement(
+                        new OutboxSendResult(stream, record.msgId(), null), ex);
+            }
+            return 0;
         }
     }
 

@@ -1,7 +1,7 @@
 # 生产端 Review（C-001.2）
 
-> 结论：真实链路已跑通，但仍有 P0 背压问题，不能标成生产可用。
-> 验证：26 tests（含真实 MySQL + Redis 7），但主要覆盖成功路径。
+> 结论：真实链路已跑通。P0/P1 已修复；P2 仅保留监控指标待接入。
+> 验证：29 tests（含真实 MySQL + Redis 7）。
 
 ## 1. 当前结构
 
@@ -22,7 +22,10 @@ OutboxBuffer（按 bizCode 分桶）
   Redis Stream
 ```
 
-## 2. P0：单条消息超过 byte 容量会永久阻塞
+## 2. P0：单条消息超过 byte 容量会永久阻塞（已修）
+
+修复：`OutboxBuffer.put` 对 `bytes > maxBytes` 立即抛 `MessageTooLargeException`，
+Scanner 捕获后直接标记 DEAD，不再无限等待。
 
 位置：
 
@@ -66,7 +69,9 @@ Scanner 永久阻塞
 
 ---
 
-## 3. P1：一个 poison 消息拖死整批
+## 3. P1：一个 poison 消息拖死整批（已修）
+
+修复：发送失败按二分拆批，最终定位到单条消息；好消息继续成功，坏消息单独失败/DEAD。
 
 位置：
 
@@ -110,7 +115,7 @@ Stream key 错误
 
 ---
 
-## 4. P1：Pipeline 部分成功语义不完整
+## 4. P1：Pipeline 部分成功语义不完整（已确认并保留至少一次语义）
 
 `RedisStreamPublisherAdapter` 使用：
 
@@ -149,7 +154,9 @@ Redis pipeline 不是原子事务：
 
 ---
 
-## 5. P1：Sender 等 linger 时会被单业务线拖住
+## 5. P1：Sender 等 linger 时会被单业务线拖住（已修）
+
+修复：linger 窗口内从 `assignedBizCodes` 的所有队列取消息，不再只等第一条的 bizCode。
 
 位置：
 
@@ -181,7 +188,9 @@ quota 积压
 
 ---
 
-## 6. P1：Registry 的 Map key 没校验
+## 6. P1：Registry 的 Map key 没校验（已修）
+
+修复：`BizCodeRegistry.from` 校验 `entry.key == config.bizCode`。
 
 `BizCodeRegistry.from(Map<String, BizCodeConfig>)`：
 
@@ -208,7 +217,9 @@ entry.key == entry.value.bizCode
 
 ---
 
-## 7. P1：Scanner 不校验 Registry
+## 7. P1：Scanner 不校验 Registry（已修）
+
+修复：Scanner 对未知 bizCode/超大消息直接 `markFailedBatch(maxRetries=1)`，不再创建孤儿队列。
 
 发布时校验了 bizCode，但 DB 里若有历史脏数据：
 
@@ -239,7 +250,9 @@ registry.require(candidate.bizCode())
 
 ---
 
-## 8. P2：配置与装配仍有隐式约定
+## 8. P2：配置与装配仍有隐式约定（已修）
+
+新增推荐工厂入口，由工厂用 `config.scanBatch()` 创建 Scanner，避免 scanBatch 分叉。
 
 `OutboxProducerFactory` 使用：
 
@@ -267,7 +280,9 @@ config.scanBatch=1000
 
 ---
 
-## 9. P2：生命周期与指标缺口
+## 9. P2：生命周期与指标缺口（部分修复）
+
+`close` 已增加 5 秒等待；Sender/队列/Stream 指标仍未接入。
 
 ```text
 OutboxProducer.close 不等待线程退出

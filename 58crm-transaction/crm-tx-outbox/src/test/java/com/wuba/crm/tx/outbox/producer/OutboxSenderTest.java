@@ -64,6 +64,25 @@ class OutboxSenderTest {
     }
 
     @Test
+    void sendOnce_isolatesOnePoisonMessageBySplittingBatch() throws Exception {
+        OutboxBuffer buffer = new OutboxBuffer(10, 4096);
+        buffer.put(record("m-1", "lead"));
+        buffer.put(record("m-2", "lead"));
+        FakePublisher publisher = new FakePublisher();
+        publisher.failMsgId = "m-2";
+        FakeRepository repository = new FakeRepository();
+        OutboxInFlight inFlight = new OutboxInFlight();
+        OutboxSender sender = sender(buffer, publisher, repository, inFlight);
+
+        int sent = sender.sendOnce();
+
+        assertEquals(1, sent);
+        assertEquals(1, repository.marked);
+        assertEquals(1, repository.failed);
+        assertEquals(0, inFlight.size());
+    }
+
+    @Test
     void sendOnce_marksFailedWhenSerializerThrows() throws Exception {
         OutboxBuffer buffer = new OutboxBuffer(10, 4096);
         buffer.put(record("m-1", "lead"));
@@ -182,6 +201,7 @@ class OutboxSenderTest {
 
         private int calls;
         private boolean fail;
+        private String failMsgId;
         private String lastStream;
         private List<Map<String, String>> lastRecords = List.of();
         private final java.util.Set<String> streams = new java.util.HashSet<>();
@@ -192,7 +212,8 @@ class OutboxSenderTest {
             lastStream = stream;
             lastRecords = records;
             streams.add(stream);
-            if (fail) {
+            if (fail || records.stream().anyMatch(
+                    fields -> failMsgId != null && failMsgId.equals(fields.get("msgId")))) {
                 throw new IllegalStateException("redis stream unavailable");
             }
         }

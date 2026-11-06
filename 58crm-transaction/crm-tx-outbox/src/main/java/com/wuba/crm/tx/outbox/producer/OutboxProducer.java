@@ -129,6 +129,11 @@ public final class OutboxProducer implements AutoCloseable {
         }
         if (senderExecutor != null) {
             senderExecutor.shutdownNow();
+            try {
+                senderExecutor.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
         }
         interceptors.close();
     }

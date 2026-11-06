@@ -31,6 +31,13 @@ class BizCodeRegistryTest {
     }
 
     @Test
+    void from_rejectsMapKeyMismatch() {
+        assertThrows(IllegalArgumentException.class,
+                () -> BizCodeRegistry.from(java.util.Map.of(
+                        "lead", new BizCodeConfig("quota"))));
+    }
+
+    @Test
     void duplicateBizCode_isRejected() {
         assertThrows(IllegalArgumentException.class,
                 () -> new BizCodeRegistry(List.of(

@@ -117,7 +117,7 @@ class RealStreamOutboxTest {
 
         OutboxBuffer buffer = new OutboxBuffer(100, 1024 * 1024);
         OutboxInFlight inFlight = new OutboxInFlight();
-        OutboxScanner scanner = new OutboxScanner(repository, buffer, inFlight, 100);
+        OutboxScanner scanner = new OutboxScanner(repository, buffer, inFlight, 100, BizCodeRegistry.of("lead"));
         assertEquals(1, scanner.scanOnce());
 
         OutboxConfig config = new OutboxConfig(
