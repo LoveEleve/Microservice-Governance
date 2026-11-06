@@ -15,6 +15,7 @@
     <modules>
         <module>crm-tx-common</module>
         <module>crm-tx-outbox</module>
+        <module>crm-tx-demo</module>
     </modules>
 
     <properties>

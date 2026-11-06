@@ -15,8 +15,9 @@ CRM 跨服务一致性框架：TCC + MySQL 本地消息表 + Redis Stream + 对�
 6. docs/03-数据/01-数据模型.md            表、键、状态
 7. docs/04-验证/01-测试与验收.md          AC 怎么验证
 8. docs/05-代码讲解/00-代码地图.md        源码从哪里开始看
-9. docs/05-代码讲解/C-001.1-OutboxPublisher.md
-10. docs/06-Redis-Stream/01-原理与使用.md
+9. docs/05-代码讲解/05-业务示例模块讲解.md
+10. docs/05-代码讲解/C-001.1-OutboxPublisher.md
+11. docs/06-Redis-Stream/01-原理与使用.md
 ```
 
 ## 一句话模型
@@ -61,7 +62,7 @@ tx-common        通用模型/状态/错误码
 tx-coordinator   TCC 协调器
 tx-participant   参与方 SDK/barrier
 tx-outbox        Outbox/Scanner/Buffer/Sender/Stream/消费
-tx-demo          线索分配示例
+crm-tx-demo      业务方接入示例（线索分配）
 ```
 
 ## 验证

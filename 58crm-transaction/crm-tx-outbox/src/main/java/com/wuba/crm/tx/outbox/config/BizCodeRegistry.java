@@ -16,16 +16,20 @@ public final class BizCodeRegistry {
     private final Map<String, BizCodeConfig> configs;
 
     public BizCodeRegistry(Collection<BizCodeConfig> configs) {
+        // 1. 没有配置就不允许启动：否则所有发布都会被当成未知 bizCode。
         if (configs == null || configs.isEmpty()) {
             throw new IllegalArgumentException("bizCode configs must not be empty");
         }
+        // 2. 用 LinkedHashMap 保留配置顺序，方便测试和排障。
         Map<String, BizCodeConfig> byCode = new LinkedHashMap<>();
         for (BizCodeConfig config : configs) {
+            // 3. 同一个 bizCode 出现两次是配置错误，不是覆盖。
             BizCodeConfig previous = byCode.putIfAbsent(config.bizCode(), config);
             if (previous != null) {
                 throw new IllegalArgumentException("duplicate bizCode: " + config.bizCode());
             }
         }
+        // 4. 复制成不可变 Map：启动后外部修改配置集合不会影响注册表。
         this.configs = Map.copyOf(byCode);
     }
 
