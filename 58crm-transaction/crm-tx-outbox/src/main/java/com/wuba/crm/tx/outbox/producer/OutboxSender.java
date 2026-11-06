@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 独立发送线程的核心逻辑。
@@ -44,6 +45,8 @@ public class OutboxSender {
     private final OutboxConfig config;
     // 与 Scanner 共享，发送结束必须释放，否则消息永远不再被扫描。
     private final OutboxInFlight inFlight;
+    // 这个 Sender shard 固定负责的 bizCode；不会和其它 shard 共享队列。
+    private final Set<String> assignedBizCodes;
 
     public OutboxSender(
             OutboxBuffer buffer,
@@ -53,7 +56,8 @@ public class OutboxSender {
             OutboxSerializer serializer,
             LocalMessageRepository repository,
             OutboxConfig config,
-            OutboxInFlight inFlight) {
+            OutboxInFlight inFlight,
+            Set<String> assignedBizCodes) {
         this.buffer = buffer;
         this.publisher = publisher;
         this.interceptors = interceptors;
@@ -62,6 +66,10 @@ public class OutboxSender {
         this.repository = repository;
         this.config = config;
         this.inFlight = inFlight;
+        if (assignedBizCodes == null || assignedBizCodes.isEmpty()) {
+            throw new IllegalArgumentException("assignedBizCodes must not be empty");
+        }
+        this.assignedBizCodes = Set.copyOf(assignedBizCodes);
     }
 
     /**
@@ -70,8 +78,8 @@ public class OutboxSender {
      * @return 成功写入 Stream 的消息数
      */
     public int sendOnce() throws InterruptedException {
-        // 1. 阻塞等待第一条消息。没有消息时由 poll 超时返回 null。
-        OutboxRecord first = buffer.poll(config.linger());
+        // 1. 只从自己负责的 bizCode 队列取第一条；没有消息时阻塞 linger 后返回 null。
+        OutboxRecord first = buffer.poll(assignedBizCodes, config.linger());
         if (first == null) {
             return 0;
         }

@@ -22,7 +22,7 @@ OutboxScanner
 |---|---|
 | `RecordAccumulator` | `OutboxBuffer`，按 bizCode 分桶，有界 |
 | `ProducerBatch` | `OutboxBatch` |
-| `Sender` | `OutboxSender` |
+| `Sender` | `OutboxSender` + Sender shard |
 | `linger.ms` | 10ms `linger` |
 | `batch.size` | 256 条 |
 | `buffer.memory` | buffer 总容量 |

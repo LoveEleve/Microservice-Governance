@@ -128,7 +128,8 @@ class OutboxSenderTest {
                 100,
                 Duration.ofMillis(10),
                 Duration.ofSeconds(30),
-                5);
+                5,
+                8);
         return new OutboxSender(
                 buffer,
                 publisher,
@@ -137,7 +138,8 @@ class OutboxSenderTest {
                 serializer,
                 repository,
                 config,
-                inFlight);
+                inFlight,
+                java.util.Set.of("lead", "quota"));
     }
 
     private static OutboxRecord record(String msgId, String bizCode) {

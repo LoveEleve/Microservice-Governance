@@ -5,8 +5,10 @@ import com.wuba.crm.tx.outbox.pipeline.interceptor.OutboxInterceptorChain;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -22,7 +24,7 @@ public final class OutboxProducer implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(OutboxProducer.class);
 
     private final OutboxScanner scanner;
-    private final OutboxSender sender;
+    private final List<OutboxSender> senders;
     private final OutboxInterceptorChain interceptors;
     private final OutboxConfig config;
     // 防止 start() 被调用两次，起出两套扫描/发送线程。
@@ -37,8 +39,19 @@ public final class OutboxProducer implements AutoCloseable {
             OutboxSender sender,
             OutboxInterceptorChain interceptors,
             OutboxConfig config) {
+        this(scanner, List.of(sender), interceptors, config);
+    }
+
+    public OutboxProducer(
+            OutboxScanner scanner,
+            List<OutboxSender> senders,
+            OutboxInterceptorChain interceptors,
+            OutboxConfig config) {
+        if (senders == null || senders.isEmpty()) {
+            throw new IllegalArgumentException("senders must not be empty");
+        }
         this.scanner = scanner;
-        this.sender = sender;
+        this.senders = List.copyOf(senders);
         this.interceptors = interceptors;
         this.config = config;
     }
@@ -54,8 +67,10 @@ public final class OutboxProducer implements AutoCloseable {
             thread.setDaemon(true);
             return thread;
         });
-        senderExecutor = Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "tx-outbox-sender");
+        AtomicInteger senderIndex = new AtomicInteger();
+        senderExecutor = Executors.newFixedThreadPool(senders.size(), runnable -> {
+            Thread thread = new Thread(
+                    runnable, "tx-outbox-sender-" + senderIndex.getAndIncrement());
             thread.setDaemon(true);
             return thread;
         });
@@ -66,7 +81,9 @@ public final class OutboxProducer implements AutoCloseable {
                 0,
                 config.scanInterval().toMillis(),
                 TimeUnit.MILLISECONDS);
-        senderExecutor.submit(this::sendLoop);
+        for (OutboxSender sender : senders) {
+            senderExecutor.submit(() -> sendLoop(sender));
+        }
     }
 
     private void scanSafely() {
@@ -82,8 +99,8 @@ public final class OutboxProducer implements AutoCloseable {
         }
     }
 
-    private void sendLoop() {
-        // sendOnce 内部会用 linger 阻塞等待；没有消息时不会忙循环。
+    private void sendLoop(OutboxSender sender) {
+        // 每个 Sender 只 drain 自己 assignedBizCodes 的队列。
         while (running.get()) {
             try {
                 sender.sendOnce();

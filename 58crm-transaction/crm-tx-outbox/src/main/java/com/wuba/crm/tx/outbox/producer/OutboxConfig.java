@@ -25,7 +25,9 @@ public record OutboxConfig(
         // XADD 失败后的下一次重试间隔。
         Duration retryAfter,
         // XADD/序列化/路由失败的最大重试次数。
-        int maxRetries) {
+        int maxRetries,
+        // Sender shard 数；实际值会被 bizCode 数量截断。
+        int senderThreads) {
 
     public OutboxConfig {
         if (streamPrefix == null || streamPrefix.isBlank()) {
@@ -46,6 +48,9 @@ public record OutboxConfig(
         if (maxRetries <= 0) {
             throw new IllegalArgumentException("maxRetries must be positive");
         }
+        if (senderThreads <= 0) {
+            throw new IllegalArgumentException("senderThreads must be positive");
+        }
         if (scanBatch <= 0) {
             throw new IllegalArgumentException("scanBatch must be positive");
         }
@@ -64,7 +69,8 @@ public record OutboxConfig(
                 1_000,
                 Duration.ofMillis(10),
                 Duration.ofSeconds(30),
-                5);
+                5,
+                8);
     }
 
     private static void requirePositive(Duration value, String name) {

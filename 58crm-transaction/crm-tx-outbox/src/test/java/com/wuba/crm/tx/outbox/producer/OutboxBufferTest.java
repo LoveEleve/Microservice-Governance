@@ -42,6 +42,20 @@ class OutboxBufferTest {
     }
 
     @Test
+    void pollAssigned_onlyTakesOwnedBusinessLine() throws Exception {
+        OutboxBuffer buffer = new OutboxBuffer(10, 4096);
+        buffer.put(record("lead-1", "lead"));
+        buffer.put(record("quota-1", "quota"));
+
+        OutboxRecord first = buffer.poll(java.util.Set.of("lead"), java.time.Duration.ofMillis(1));
+        assertEquals("lead", first.bizCode());
+        assertEquals(1, buffer.size());
+
+        OutboxRecord second = buffer.poll(java.util.Set.of("lead"), java.time.Duration.ofMillis(1));
+        assertEquals(null, second);
+    }
+
+    @Test
     void buffer_isBoundedAndSupportsBatchDrain() throws Exception {
         OutboxBuffer buffer = new OutboxBuffer(2, 1024);
         buffer.put(record("m-1"));

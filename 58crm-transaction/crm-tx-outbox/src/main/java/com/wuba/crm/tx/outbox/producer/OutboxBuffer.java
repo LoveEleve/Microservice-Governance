@@ -8,6 +8,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Iterator;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -94,6 +95,45 @@ public class OutboxBuffer {
     /**
      * 只从指定业务线取一条消息，用于 Sender 在 linger 窗口内继续聚合同一业务线。
      */
+    /**
+     * 从指定业务线集合中取一条；供一个 Sender shard 只处理自己负责的队列。
+     */
+    public OutboxRecord poll(java.util.Set<String> bizCodes, Duration timeout) throws InterruptedException {
+        long deadline = deadlineNanos(timeout);
+        lock.lockInterruptibly();
+        try {
+            while (true) {
+                Iterator<String> iterator = ready.iterator();
+                while (iterator.hasNext()) {
+                    String bizCode = iterator.next();
+                    if (!bizCodes.contains(bizCode)) {
+                        continue;
+                    }
+                    ArrayDeque<OutboxRecord> queue = queues.get(bizCode);
+                    if (queue == null || queue.isEmpty()) {
+                        iterator.remove();
+                        continue;
+                    }
+                    OutboxRecord record = queue.removeFirst();
+                    if (queue.isEmpty()) {
+                        iterator.remove();
+                    }
+                    messageCount--;
+                    byteCount -= estimateBytes(record);
+                    notFull.signalAll();
+                    return record;
+                }
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) {
+                    return null;
+                }
+                notEmpty.awaitNanos(remaining);
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
     public OutboxRecord poll(String bizCode, Duration timeout) throws InterruptedException {
         long deadline = deadlineNanos(timeout);
         lock.lockInterruptibly();
