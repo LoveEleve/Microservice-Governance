@@ -37,7 +37,7 @@ AC5 消费者崩溃 → 消费方 lease 过期重试；生产方 SENT 超时重�
 AC6 重复投递 → t_idempotent 拦截
 AC7 Redis 丢消息 → MySQL 可重放
 AC8 同一事件只进一个业务线 List，不 fan-out
-AC9 同业务线消息合并成一次 pipeline 批量发送
+AC9 10ms 窗口内按业务线合并，单批最多 256，一次 pipeline 发送
 AC10 消费方按 100~500 条批量拉取、批量 ACK
 ```
 
