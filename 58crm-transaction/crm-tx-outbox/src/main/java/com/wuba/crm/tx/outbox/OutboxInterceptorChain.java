@@ -25,7 +25,10 @@ public class OutboxInterceptorChain {
         OutboxRecord current = record;
         for (OutboxInterceptor interceptor : interceptors) {
             try {
-                current = interceptor.onSend(current);
+                OutboxRecord next = interceptor.onSend(current);
+                if (next != null) {
+                    current = next;
+                }
             } catch (RuntimeException ex) {
                 log.warn("outbox interceptor onSend failed, interceptor={}",
                         interceptor.getClass().getName(), ex);

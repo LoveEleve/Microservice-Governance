@@ -27,7 +27,7 @@ public class RedisStreamPublisherAdapter implements RedisStreamPublisher {
         if (records == null || records.isEmpty()) {
             return;
         }
-        redisTemplate.executePipelined(new SessionCallback<Object>() {
+        List<Object> results = redisTemplate.executePipelined(new SessionCallback<Object>() {
             @Override
             public Object execute(RedisOperations operations) {
                 for (Map<String, String> fields : records) {
@@ -37,5 +37,13 @@ public class RedisStreamPublisherAdapter implements RedisStreamPublisher {
                 return null;
             }
         });
+        if (results.size() != records.size()) {
+            throw new IllegalStateException("stream pipeline result count mismatch");
+        }
+        for (Object result : results) {
+            if (result == null) {
+                throw new IllegalStateException("stream pipeline command failed");
+            }
+        }
     }
 }

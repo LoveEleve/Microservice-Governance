@@ -12,9 +12,11 @@ public record OutboxConfig(
         Duration linger,
         int batchSize,
         int bufferCapacity,
+        long bufferCapacityBytes,
         int scanBatch,
         Duration scanInterval,
-        Duration retryAfter) {
+        Duration retryAfter,
+        int maxRetries) {
 
     public OutboxConfig {
         if (streamPrefix == null || streamPrefix.isBlank()) {
@@ -28,6 +30,12 @@ public record OutboxConfig(
         }
         if (bufferCapacity <= 0) {
             throw new IllegalArgumentException("bufferCapacity must be positive");
+        }
+        if (bufferCapacityBytes <= 0) {
+            throw new IllegalArgumentException("bufferCapacityBytes must be positive");
+        }
+        if (maxRetries <= 0) {
+            throw new IllegalArgumentException("maxRetries must be positive");
         }
         if (scanBatch <= 0) {
             throw new IllegalArgumentException("scanBatch must be positive");
@@ -43,9 +51,11 @@ public record OutboxConfig(
                 Duration.ofMillis(10),
                 256,
                 50_000,
+                64L * 1024 * 1024,
                 1_000,
                 Duration.ofMillis(10),
-                Duration.ofSeconds(30));
+                Duration.ofSeconds(30),
+                5);
     }
 
     private static void requirePositive(Duration value, String name) {

@@ -36,7 +36,9 @@ OutboxScanner
 生产方：
 
 ```text
-INIT → SENT → DEAD
+INIT → SENT（XADD 成功，终态）
+  |
+  +→ INIT（失败重试）→ DEAD
 ```
 
 生产方不保存 `CONSUMED`，消费确认由 Stream `XACK` 和消费方 `t_consume_record` 负责。
@@ -76,7 +78,8 @@ sender 从 buffer 取第一批
 失败：
 
 ```text
-XADD 失败 → 不标 SENT，重试/回 buffer
+XADD/序列化/路由失败 → INIT + retry_count + next_retry
+超过上限 → DEAD
 进程崩溃 → MySQL INIT 可重扫
 重复 → 消费方 XACK + msgId 幂等
 ```
@@ -163,7 +166,7 @@ Sender：
 
 状态：
   INIT -> SENT
-  SENT 重投 -> DEAD
+  INIT 失败重试 -> DEAD
   崩溃后重扫
 
 事务：

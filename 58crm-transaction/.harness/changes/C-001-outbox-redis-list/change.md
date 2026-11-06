@@ -34,14 +34,14 @@ AC1 业务事务成功 → t_local_message(INIT)
 AC2 业务事务失败 → 没有消息
 AC3 Relay 扫描 → LPUSH 业务线 List → SENT
 AC4 消费成功 → 消费方 t_consume_record(PROCESSING) → CONSUMED
-AC5 消费者崩溃 → 消费方 lease 过期重试；生产方 SENT 超时重投
+AC5 消费者崩溃 → PEL + XCLAIM/XAUTOCLAIM 重试
 AC6 重复投递 → t_idempotent 拦截
 AC7 Redis 丢消息 → MySQL 可重放
 AC8 同一事件只进一个业务线 List，不 fan-out
 AC9 10ms 窗口内按业务线合并，单批最多 256，一次 pipeline 发送
 AC10 消费方按 100~500 条 XREADGROUP 批量拉取
 AC11 XACK 与消费记录可补偿
-AC12 SENT 重投必须递增 retry_count
+AC12 XADD/序列化/路由失败必须递增 retry_count
 AC13 retry_count 达到上限必须进入 DEAD
 AC14 pending 超时通过 XCLAIM/XAUTOCLAIM 转移
 AC15 真实 H2 + MyBatis-Plus SQL 验证状态迁移
@@ -101,9 +101,9 @@ public interface MessageHandler {
 生产方状态：
 
 ```text
-INIT → SENT → DEAD
-           |
-           +-> SENT（超时重投）
+INIT → SENT（终态）
+  |
+  +-> INIT（失败重试）→ DEAD
 ```
 
 消费方状态：

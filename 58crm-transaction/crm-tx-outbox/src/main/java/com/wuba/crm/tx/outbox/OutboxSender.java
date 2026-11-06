@@ -61,51 +61,90 @@ public class OutboxSender {
 
         List<OutboxRecord> batch = new ArrayList<>(config.batchSize());
         batch.add(first);
-        buffer.drainTo(batch, config.batchSize() - 1);
-
-        List<OutboxRecord> intercepted = new ArrayList<>(batch.size());
-        for (OutboxRecord record : batch) {
-            OutboxRecord current = interceptors.onSend(record);
-            intercepted.add(current == null ? record : current);
+        long deadline = System.nanoTime() + config.linger().toNanos();
+        while (batch.size() < config.batchSize()) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) {
+                break;
+            }
+            OutboxRecord next = buffer.poll(
+                    first.bizCode(), java.time.Duration.ofNanos(remaining));
+            if (next == null) {
+                break;
+            }
+            batch.add(next);
         }
 
-        Map<String, List<OutboxRecord>> byStream = new LinkedHashMap<>();
-        for (OutboxRecord record : intercepted) {
-            String stream = config.streamPrefix() + partitioner.route(record);
-            byStream.computeIfAbsent(stream, ignored -> new ArrayList<>()).add(record);
-        }
-
-        int sent = 0;
-        Instant nextRetryAt = Instant.now().plus(config.retryAfter());
-        for (Map.Entry<String, List<OutboxRecord>> entry : byStream.entrySet()) {
-            String stream = entry.getKey();
-            List<OutboxRecord> records = entry.getValue();
-            List<Map<String, String>> fields = new ArrayList<>(records.size());
-            for (OutboxRecord record : records) {
-                fields.add(serializer.serialize(record));
+        try {
+            List<OutboxRecord> intercepted = new ArrayList<>(batch.size());
+            for (OutboxRecord record : batch) {
+                OutboxRecord current = interceptors.onSend(record);
+                intercepted.add(current == null ? record : current);
             }
 
-            try {
-                publisher.publish(stream, fields);
-                repository.markSentBatch(toLocalMessages(records), nextRetryAt);
+            Map<String, List<OutboxRecord>> byStream = new LinkedHashMap<>();
+            for (OutboxRecord record : intercepted) {
+                String stream = config.streamPrefix() + partitioner.route(record);
+                byStream.computeIfAbsent(stream, ignored -> new ArrayList<>()).add(record);
+            }
+
+            int sent = 0;
+            Instant nextRetryAt = Instant.now().plus(config.retryAfter());
+            for (Map.Entry<String, List<OutboxRecord>> entry : byStream.entrySet()) {
+                String stream = entry.getKey();
+                List<OutboxRecord> records = entry.getValue();
+                List<Map<String, String>> fields = new ArrayList<>(records.size());
                 for (OutboxRecord record : records) {
-                    interceptors.onAcknowledgement(
-                            new OutboxSendResult(stream, record.msgId(), null), null);
+                    fields.add(serializer.serialize(record));
                 }
-                sent += records.size();
-            } catch (RuntimeException ex) {
-                log.warn("stream publish failed, stream={}, size={}", stream, records.size(), ex);
-                for (OutboxRecord record : records) {
-                    interceptors.onAcknowledgement(
-                            new OutboxSendResult(stream, record.msgId(), null), ex);
+
+                try {
+                    publisher.publish(stream, fields);
+                } catch (RuntimeException ex) {
+                    publishFailed(records, nextRetryAt, ex);
+                    continue;
                 }
-            } finally {
-                for (OutboxRecord record : records) {
-                    inFlight.remove(record.msgId());
+
+                try {
+                    repository.markSentBatch(toLocalMessages(records), nextRetryAt);
+                    for (OutboxRecord record : records) {
+                        interceptors.onAcknowledgement(
+                                new OutboxSendResult(stream, record.msgId(), null), null);
+                    }
+                    sent += records.size();
+                } catch (RuntimeException ex) {
+                    log.warn("mark sent failed after XADD, stream={}, size={}",
+                            stream, records.size(), ex);
+                    for (OutboxRecord record : records) {
+                        interceptors.onAcknowledgement(
+                                new OutboxSendResult(stream, record.msgId(), null), ex);
+                    }
                 }
             }
+            return sent;
+        } catch (RuntimeException ex) {
+            publishFailed(batch, Instant.now().plus(config.retryAfter()), ex);
+            return 0;
+        } finally {
+            for (OutboxRecord record : batch) {
+                inFlight.remove(record.msgId());
+            }
         }
-        return sent;
+    }
+
+    private void publishFailed(List<OutboxRecord> records, Instant nextRetryAt, RuntimeException error) {
+        log.warn("stream publish failed, size={}", records.size(), error);
+        for (OutboxRecord record : records) {
+            interceptors.onAcknowledgement(
+                    new OutboxSendResult(config.streamPrefix() + record.bizCode(), record.msgId(), null),
+                    error);
+        }
+        try {
+            repository.markFailedBatch(
+                    toLocalMessages(records), nextRetryAt, config.maxRetries());
+        } catch (RuntimeException markError) {
+            log.warn("mark failed batch failed, size={}", records.size(), markError);
+        }
     }
 
     private List<LocalMessage> toLocalMessages(List<OutboxRecord> records) {

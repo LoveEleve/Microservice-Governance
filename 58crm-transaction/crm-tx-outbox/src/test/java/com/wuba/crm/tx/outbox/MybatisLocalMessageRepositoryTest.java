@@ -78,16 +78,16 @@ class MybatisLocalMessageRepositoryTest {
 
     @Test
     void retry_afterMaxAttempts_becomesDead() {
-        insert("m-1", MessageStatus.SENT, 0);
+        insert("m-1", MessageStatus.INIT, 0);
 
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
             LocalMessageMapper mapper = session.getMapper(LocalMessageMapper.class);
-            MybatisLocalMessageRepository repository = new MybatisLocalMessageRepository(mapper, 1);
+            MybatisLocalMessageRepository repository = new MybatisLocalMessageRepository(mapper);
             LocalMessage message = new LocalMessage(
                     "m-1", "event-m-1", "lead", "lead-1", "LEAD_ASSIGNED",
-                    "{}", null, MessageStatus.SENT, 0);
+                    "{}", null, MessageStatus.INIT, 0);
 
-            repository.markSentBatch(List.of(message), Instant.now().plusSeconds(30));
+            repository.markFailedBatch(List.of(message), Instant.now().plusSeconds(30), 1);
 
             LocalMessageEntity saved = mapper.selectById("m-1");
             assertEquals(MessageStatus.DEAD.name(), saved.getStatus());
@@ -96,20 +96,20 @@ class MybatisLocalMessageRepositoryTest {
     }
 
     @Test
-    void retry_belowMaxAttempts_staysSentAndIncrementsCount() {
-        insert("m-1", MessageStatus.SENT, 0);
+    void retry_belowMaxAttempts_staysInitAndIncrementsCount() {
+        insert("m-1", MessageStatus.INIT, 0);
 
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
             LocalMessageMapper mapper = session.getMapper(LocalMessageMapper.class);
-            MybatisLocalMessageRepository repository = new MybatisLocalMessageRepository(mapper, 3);
+            MybatisLocalMessageRepository repository = new MybatisLocalMessageRepository(mapper);
             LocalMessage message = new LocalMessage(
                     "m-1", "event-m-1", "lead", "lead-1", "LEAD_ASSIGNED",
-                    "{}", null, MessageStatus.SENT, 0);
+                    "{}", null, MessageStatus.INIT, 0);
 
-            repository.markSentBatch(List.of(message), Instant.now().plusSeconds(30));
+            repository.markFailedBatch(List.of(message), Instant.now().plusSeconds(30), 3);
 
             LocalMessageEntity saved = mapper.selectById("m-1");
-            assertEquals(MessageStatus.SENT.name(), saved.getStatus());
+            assertEquals(MessageStatus.INIT.name(), saved.getStatus());
             assertEquals(1, saved.getRetryCount());
         }
     }

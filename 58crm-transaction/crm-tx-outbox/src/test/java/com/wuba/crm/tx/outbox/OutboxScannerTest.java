@@ -18,7 +18,7 @@ class OutboxScannerTest {
                 "m-1", "event-m-1", "lead", "lead-1", "LEAD_ASSIGNED",
                 "{}", null, MessageStatus.INIT, 0);
         FakeRepository repository = new FakeRepository(List.of(message));
-        OutboxBuffer buffer = new OutboxBuffer(10);
+        OutboxBuffer buffer = new OutboxBuffer(10, 4096);
         OutboxInFlight inFlight = new OutboxInFlight();
         OutboxScanner scanner = new OutboxScanner(repository, buffer, inFlight, 100);
 
@@ -44,6 +44,11 @@ class OutboxScannerTest {
 
         @Override
         public int markSentBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt) {
+            return 0;
+        }
+
+        @Override
+        public int markFailedBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt, int maxRetries) {
             return 0;
         }
     }

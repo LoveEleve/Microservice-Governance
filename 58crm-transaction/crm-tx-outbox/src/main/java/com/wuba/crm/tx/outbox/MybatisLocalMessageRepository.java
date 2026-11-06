@@ -21,21 +21,11 @@ import java.util.Map;
 public class MybatisLocalMessageRepository implements LocalMessageRepository {
 
     private static final int MAX_BATCH_SIZE = 1000;
-    private static final int DEFAULT_MAX_RETRIES = 5;
 
     private final LocalMessageMapper localMessageMapper;
-    private final int maxRetries;
 
     public MybatisLocalMessageRepository(LocalMessageMapper localMessageMapper) {
-        this(localMessageMapper, DEFAULT_MAX_RETRIES);
-    }
-
-    public MybatisLocalMessageRepository(LocalMessageMapper localMessageMapper, int maxRetries) {
-        if (maxRetries <= 0) {
-            throw new IllegalArgumentException("maxRetries must be positive");
-        }
         this.localMessageMapper = localMessageMapper;
-        this.maxRetries = maxRetries;
     }
 
     @Override
@@ -44,11 +34,10 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
         LocalDateTime now = LocalDateTime.now();
 
         LambdaQueryWrapper<LocalMessageEntity> query = Wrappers.lambdaQuery();
-        query.and(wrapper -> wrapper
-                        .eq(LocalMessageEntity::getStatus, MessageStatus.INIT.name())
-                        .or(sent -> sent
-                                .eq(LocalMessageEntity::getStatus, MessageStatus.SENT.name())
-                                .le(LocalMessageEntity::getNextRetryAt, now)))
+        query.eq(LocalMessageEntity::getStatus, MessageStatus.INIT.name())
+                .and(wrapper -> wrapper
+                        .isNull(LocalMessageEntity::getNextRetryAt)
+                        .or(retry -> retry.le(LocalMessageEntity::getNextRetryAt, now)))
                 .orderByAsc(LocalMessageEntity::getCreatedAt)
                 .last("LIMIT " + safeLimit);
 
@@ -64,22 +53,18 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
         if (messages == null || messages.isEmpty()) {
             return 0;
         }
-        LocalDateTime now = LocalDateTime.now();
-        int affected = 0;
-
-        // INIT: 首次投递，不增加重试次数。
-        Map<String, List<String>> initialByBizId = new LinkedHashMap<>();
-        // SENT: 超时重投，增加 retry_count；达到上限转 DEAD。
-        Map<String, List<String>> retryByBizId = new LinkedHashMap<>();
+        Map<String, List<String>> byBizId = new LinkedHashMap<>();
         for (LocalMessage message : messages) {
-            Map<String, List<String>> target = message.status() == MessageStatus.INIT
-                    ? initialByBizId
-                    : retryByBizId;
-            target.computeIfAbsent(message.bizId(), ignored -> new ArrayList<>())
+            if (message.status() != MessageStatus.INIT) {
+                continue;
+            }
+            byBizId.computeIfAbsent(message.bizId(), ignored -> new ArrayList<>())
                     .add(message.msgId());
         }
 
-        for (Map.Entry<String, List<String>> entry : initialByBizId.entrySet()) {
+        LocalDateTime now = LocalDateTime.now();
+        int affected = 0;
+        for (Map.Entry<String, List<String>> entry : byBizId.entrySet()) {
             LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
             update.eq(LocalMessageEntity::getBizId, entry.getKey())
                     .in(LocalMessageEntity::getMsgId, entry.getValue())
@@ -90,14 +75,29 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
                     .set(LocalMessageEntity::getUpdatedAt, now);
             affected += localMessageMapper.update(null, update);
         }
+        return affected;
+    }
 
-        for (Map.Entry<String, List<String>> entry : retryByBizId.entrySet()) {
+    @Override
+    public int markFailedBatch(List<LocalMessage> messages, Instant nextRetryAt, int maxRetries) {
+        if (messages == null || messages.isEmpty()) {
+            return 0;
+        }
+        Map<String, List<String>> byBizId = new LinkedHashMap<>();
+        for (LocalMessage message : messages) {
+            byBizId.computeIfAbsent(message.bizId(), ignored -> new ArrayList<>())
+                    .add(message.msgId());
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int affected = 0;
+        for (Map.Entry<String, List<String>> entry : byBizId.entrySet()) {
             LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
             update.eq(LocalMessageEntity::getBizId, entry.getKey())
                     .in(LocalMessageEntity::getMsgId, entry.getValue())
-                    .eq(LocalMessageEntity::getStatus, MessageStatus.SENT.name())
+                    .eq(LocalMessageEntity::getStatus, MessageStatus.INIT.name())
                     .setSql("status = CASE WHEN retry_count + 1 >= " + maxRetries
-                            + " THEN 'DEAD' ELSE 'SENT' END")
+                            + " THEN 'DEAD' ELSE 'INIT' END")
                     .setSql("retry_count = retry_count + 1")
                     .set(LocalMessageEntity::getNextRetryAt, toLocalDateTime(nextRetryAt))
                     .set(LocalMessageEntity::getUpdatedAt, now);

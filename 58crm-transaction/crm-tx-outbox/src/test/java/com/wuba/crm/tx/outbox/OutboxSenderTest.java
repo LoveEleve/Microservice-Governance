@@ -17,7 +17,7 @@ class OutboxSenderTest {
 
     @Test
     void sendOnce_publishesBatchAndMarksSent() throws Exception {
-        OutboxBuffer buffer = new OutboxBuffer(10);
+        OutboxBuffer buffer = new OutboxBuffer(10, 4096);
         buffer.put(record("m-1", "lead"));
         FakePublisher publisher = new FakePublisher();
         FakeRepository repository = new FakeRepository();
@@ -35,7 +35,7 @@ class OutboxSenderTest {
 
     @Test
     void sendOnce_doesNotMarkSentWhenStreamFails() throws Exception {
-        OutboxBuffer buffer = new OutboxBuffer(10);
+        OutboxBuffer buffer = new OutboxBuffer(10, 4096);
         buffer.put(record("m-1", "lead"));
         FakePublisher publisher = new FakePublisher();
         publisher.fail = true;
@@ -48,18 +48,45 @@ class OutboxSenderTest {
 
         assertEquals(0, sent);
         assertEquals(0, repository.marked);
+        assertEquals(1, repository.failed);
+        assertEquals(0, inFlight.size());
+    }
+
+    @Test
+    void sendOnce_marksFailedWhenSerializerThrows() throws Exception {
+        OutboxBuffer buffer = new OutboxBuffer(10, 4096);
+        buffer.put(record("m-1", "lead"));
+        FakePublisher publisher = new FakePublisher();
+        FakeRepository repository = new FakeRepository();
+        OutboxInFlight inFlight = new OutboxInFlight();
+        inFlight.add("m-1");
+        OutboxSender sender = sender(
+                buffer,
+                publisher,
+                repository,
+                inFlight,
+                record -> {
+                    throw new IllegalStateException("serialize failed");
+                });
+
+        int sent = sender.sendOnce();
+
+        assertEquals(0, sent);
+        assertEquals(0, repository.marked);
+        assertEquals(1, repository.failed);
         assertEquals(0, inFlight.size());
     }
 
     @Test
     void sendOnce_groupsByBusinessLine() throws Exception {
-        OutboxBuffer buffer = new OutboxBuffer(10);
+        OutboxBuffer buffer = new OutboxBuffer(10, 4096);
         buffer.put(record("m-1", "lead"));
         buffer.put(record("m-2", "quota"));
         FakePublisher publisher = new FakePublisher();
         FakeRepository repository = new FakeRepository();
         OutboxSender sender = sender(buffer, publisher, repository, new OutboxInFlight());
 
+        sender.sendOnce();
         sender.sendOnce();
 
         assertEquals(2, publisher.calls);
@@ -72,20 +99,31 @@ class OutboxSenderTest {
             FakePublisher publisher,
             FakeRepository repository,
             OutboxInFlight inFlight) {
+        return sender(buffer, publisher, repository, inFlight, new DefaultOutboxSerializer());
+    }
+
+    private static OutboxSender sender(
+            OutboxBuffer buffer,
+            FakePublisher publisher,
+            FakeRepository repository,
+            OutboxInFlight inFlight,
+            OutboxSerializer serializer) {
         OutboxConfig config = new OutboxConfig(
                 "tx:stream:",
                 Duration.ofMillis(1),
                 10,
                 100,
+                4096,
                 100,
                 Duration.ofMillis(10),
-                Duration.ofSeconds(30));
+                Duration.ofSeconds(30),
+                5);
         return new OutboxSender(
                 buffer,
                 publisher,
                 new OutboxInterceptorChain(List.of()),
                 new BizCodePartitioner(),
-                new DefaultOutboxSerializer(),
+                serializer,
                 repository,
                 config,
                 inFlight);
@@ -107,6 +145,7 @@ class OutboxSenderTest {
     private static final class FakeRepository implements LocalMessageRepository {
 
         private int marked;
+        private int failed;
 
         @Override
         public List<LocalMessage> findRelayCandidates(int limit) {
@@ -116,6 +155,12 @@ class OutboxSenderTest {
         @Override
         public int markSentBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt) {
             marked += messages.size();
+            return messages.size();
+        }
+
+        @Override
+        public int markFailedBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt, int maxRetries) {
+            failed += messages.size();
             return messages.size();
         }
     }

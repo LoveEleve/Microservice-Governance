@@ -12,15 +12,22 @@ import java.util.List;
 public interface LocalMessageRepository {
 
     /**
-     * 查询需要投递的消息：INIT，或已 SENT 且到达重投时间。
+     * 查询需要投递的消息：只查 INIT，且到达允许重试时间。
+     *
+     * <p>SENT 是生产方终态；Stream 已接收的消息不能再按超时重发。</p>
      */
     List<LocalMessage> findRelayCandidates(int limit);
 
     /**
-     * 批量标记已投递。
-     *
-     * <p>只保留批量入口，避免误用“单条更新但不处理重试上限”的路径。</p>
+     * 批量标记 XADD 成功。
      */
     int markSentBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt);
+
+    /**
+     * 批量标记 XADD/序列化/路由失败，递增重试并设置下一次时间。
+     *
+     * @return 实际更新的行数
+     */
+    int markFailedBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt, int maxRetries);
 
 }
