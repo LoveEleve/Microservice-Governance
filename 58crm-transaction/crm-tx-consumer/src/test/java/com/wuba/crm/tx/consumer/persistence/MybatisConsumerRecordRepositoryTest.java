@@ -154,6 +154,24 @@ class MybatisConsumerRecordRepositoryTest {
     }
 
     @Test
+    void findAndExpireProcessingRecord_isVisibleToRecovery() throws Exception {
+        withRepository(repository -> {
+            repository.insertReadyBatch(List.of(message("m-1")), NOW);
+            repository.claimReadyBatch(new ClaimRequest(
+                    "lead", "c-1", "owner-1", 10, NOW, NOW.plusSeconds(60)));
+
+            assertEquals("m-1", repository.findByStreamEntryId("1-0").msgId());
+            assertEquals(1, repository.markExpiredProcessingReady(
+                    "m-1", NOW.plusSeconds(61)));
+
+            ConsumerRecordEntity saved = entity("m-1");
+            assertEquals("READY", saved.getStatus());
+            assertEquals(null, saved.getOwnerToken());
+            assertEquals(null, saved.getLeaseUntil());
+        });
+    }
+
+    @Test
     void renewLeaseBatch_updatesOnlyOwnedRecords() throws Exception {
         withRepository(repository -> {
             repository.insertReadyBatch(List.of(message("m-1"), message("m-2")), NOW);

@@ -89,6 +89,17 @@ public class MybatisConsumerRecordRepository implements ConsumerRecordRepository
     }
 
     @Override
+    public ConsumerRecord findByStreamEntryId(String streamEntryId) {
+        ConsumerRecordEntity entity = mapper.findByStreamEntryId(streamEntryId);
+        return entity == null ? null : toDomain(entity);
+    }
+
+    @Override
+    public int markExpiredProcessingReady(String msgId, Instant now) {
+        return mapper.markExpiredProcessingReady(msgId, toLocalDateTime(now));
+    }
+
+    @Override
     public int markConsumed(String msgId, String ownerToken, long ownerEpoch, Instant now) {
         return mapper.markConsumed(msgId, ownerToken, ownerEpoch, toLocalDateTime(now));
     }

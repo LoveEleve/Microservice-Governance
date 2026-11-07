@@ -27,6 +27,10 @@ public interface ConsumerRecordRepository {
             Instant leaseUntil,
             Instant now);
 
+    ConsumerRecord findByStreamEntryId(String streamEntryId);
+
+    int markExpiredProcessingReady(String msgId, Instant now);
+
     int markConsumed(String msgId, String ownerToken, long ownerEpoch, Instant now);
 
     int markRetry(

@@ -42,29 +42,12 @@ public class RedisStreamSource implements StreamSource {
         List<ConsumedMessage> messages = new ArrayList<>(records.size());
         for (MapRecord<String, Object, Object> record : records) {
             try {
-                messages.add(toMessage(record));
+                messages.add(StreamMessageDecoder.decode(record));
             } catch (IllegalArgumentException ex) {
                 log.warn("skip invalid stream message, stream={}, entryId={}, reason={}",
                         stream, record.getId(), ex.getMessage());
             }
         }
         return messages;
-    }
-
-    private ConsumedMessage toMessage(MapRecord<String, Object, Object> record) {
-        Map<Object, Object> fields = record.getValue();
-        return new ConsumedMessage(
-                text(fields, "msgId"),
-                text(fields, "bizCode"),
-                text(fields, "bizId"),
-                text(fields, "eventType"),
-                record.getId().getValue(),
-                text(fields, "payload"),
-                text(fields, "payloadRef"));
-    }
-
-    private String text(Map<Object, Object> fields, String name) {
-        Object value = fields.get(name);
-        return value == null ? null : value.toString();
     }
 }

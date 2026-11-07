@@ -12,6 +12,7 @@ import com.wuba.crm.tx.consumer.persistence.IdempotentRepository;
 import com.wuba.crm.tx.consumer.pull.BoundedStreamQueue;
 import com.wuba.crm.tx.consumer.pull.RedisStreamSource;
 import com.wuba.crm.tx.consumer.pull.StreamPuller;
+import com.wuba.crm.tx.consumer.recovery.PendingRecovery;
 import com.wuba.crm.tx.consumer.worker.ConsumerWorker;
 import com.wuba.crm.tx.consumer.worker.ConsumerWorkerConfig;
 import com.wuba.crm.tx.consumer.worker.HandlerRegistry;
@@ -40,6 +41,7 @@ public final class ConsumerBootstrap implements AutoCloseable {
     private AckBatcher ackBatcher;
     private ConsumerWorker worker;
     private ConsumePersister persister;
+    private PendingRecovery pendingRecovery;
     private StreamPuller puller;
 
     public ConsumerBootstrap(
@@ -91,8 +93,9 @@ public final class ConsumerBootstrap implements AutoCloseable {
                     config.leaseRenewAfter(),
                     task -> log.warn("consumer lease lost, bizCode={}, msgId={}, epoch={}",
                             task.bizCode(), task.msgId(), task.ownerEpoch()));
+            RedisStreamAcknowledger acknowledger = new RedisStreamAcknowledger(redisTemplate);
             ackBatcher = new AckBatcher(
-                    new RedisStreamAcknowledger(redisTemplate),
+                    acknowledger,
                     config.ackBatchSize(),
                     config.ackQueueCapacity(),
                     config.ackFlushInterval());
@@ -103,11 +106,15 @@ public final class ConsumerBootstrap implements AutoCloseable {
             worker = new ConsumerWorker(
                     workerConfig, repository, idempotent, handlers, transactions,
                     leaseManager, ackBatcher);
+            pendingRecovery = new PendingRecovery(
+                    redisTemplate, config.stream(), config.group(), config.consumerId() + "-recovery",
+                    repository, acknowledger, config.recoveryBatchSize(), config.recoveryScanInterval());
 
             leaseManager.start();
             ackBatcher.start();
             worker.start();
             persister.start();
+            pendingRecovery.start();
             puller.start();
         } catch (RuntimeException ex) {
             close();
@@ -118,6 +125,7 @@ public final class ConsumerBootstrap implements AutoCloseable {
     @Override
     public void close() {
         closeQuietly(puller);
+        closeQuietly(pendingRecovery);
         closeQuietly(persister);
         closeQuietly(worker);
         closeQuietly(ackBatcher);

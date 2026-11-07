@@ -63,6 +63,29 @@ public interface ConsumerRecordMapper extends BaseMapper<ConsumerRecordEntity> {
             """)
     List<ConsumerRecordEntity> findByOwnerToken(@Param("ownerToken") String ownerToken);
 
+    @Select("""
+            SELECT *
+            FROM t_consume_record
+            WHERE stream_entry_id = #{streamEntryId}
+            LIMIT 1
+            """)
+    ConsumerRecordEntity findByStreamEntryId(@Param("streamEntryId") String streamEntryId);
+
+    @Update("""
+            UPDATE t_consume_record
+            SET status = 'READY',
+                consumer_id = NULL,
+                owner_token = NULL,
+                lease_until = NULL,
+                updated_at = #{now}
+            WHERE msg_id = #{msgId}
+              AND status = 'PROCESSING'
+              AND lease_until <= #{now}
+            """)
+    int markExpiredProcessingReady(
+            @Param("msgId") String msgId,
+            @Param("now") LocalDateTime now);
+
     @Update("""
             UPDATE t_consume_record
             SET lease_until = #{leaseUntil},

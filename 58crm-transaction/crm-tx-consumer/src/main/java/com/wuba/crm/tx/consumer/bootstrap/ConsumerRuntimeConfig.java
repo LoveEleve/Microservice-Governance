@@ -20,6 +20,8 @@ public record ConsumerRuntimeConfig(
         int ackBatchSize,
         int ackQueueCapacity,
         Duration ackFlushInterval,
+        int recoveryBatchSize,
+        Duration recoveryScanInterval,
         int pullCount,
         Duration pullBlock) {
 
@@ -41,6 +43,8 @@ public record ConsumerRuntimeConfig(
         requirePositive(ackBatchSize, "ackBatchSize");
         requirePositive(ackQueueCapacity, "ackQueueCapacity");
         requirePositive(ackFlushInterval, "ackFlushInterval");
+        requirePositive(recoveryBatchSize, "recoveryBatchSize");
+        requirePositive(recoveryScanInterval, "recoveryScanInterval");
         requirePositive(pullCount, "pullCount");
         requirePositive(pullBlock, "pullBlock");
     }
@@ -64,6 +68,8 @@ public record ConsumerRuntimeConfig(
                 200,
                 100_000,
                 Duration.ofMillis(100),
+                100,
+                Duration.ofSeconds(30),
                 500,
                 Duration.ofSeconds(1));
     }
