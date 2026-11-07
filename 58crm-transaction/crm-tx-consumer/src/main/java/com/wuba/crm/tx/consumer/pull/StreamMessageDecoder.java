@@ -14,6 +14,7 @@ public final class StreamMessageDecoder {
         Map<Object, Object> fields = record.getValue();
         return new ConsumedMessage(
                 text(fields, "msgId"),
+                text(fields, "eventKey"),
                 text(fields, "bizCode"),
                 text(fields, "bizId"),
                 text(fields, "eventType"),

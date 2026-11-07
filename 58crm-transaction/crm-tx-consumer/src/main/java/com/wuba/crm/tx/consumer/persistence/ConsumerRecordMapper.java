@@ -28,13 +28,13 @@ public interface ConsumerRecordMapper extends BaseMapper<ConsumerRecordEntity> {
     @Insert("""
             <script>
             INSERT IGNORE INTO t_consume_record
-                (msg_id, biz_code, biz_id, event_type, stream_entry_id,
+                (msg_id, event_key, biz_code, biz_id, event_type, stream_entry_id,
                  consumer_id, status, owner_token, owner_epoch, claim_count,
                  lease_until, retry_count, next_retry_at, payload, payload_ref,
                  created_at, updated_at)
             VALUES
             <foreach collection="records" item="r" separator=",">
-                (#{r.msgId}, #{r.bizCode}, #{r.bizId}, #{r.eventType}, #{r.streamEntryId},
+                (#{r.msgId}, #{r.eventKey}, #{r.bizCode}, #{r.bizId}, #{r.eventType}, #{r.streamEntryId},
                  #{r.consumerId}, #{r.status}, #{r.ownerToken}, #{r.ownerEpoch}, #{r.claimCount},
                  #{r.leaseUntil}, #{r.retryCount}, #{r.nextRetryAt}, #{r.payload}, #{r.payloadRef},
                  #{r.createdAt}, #{r.updatedAt})

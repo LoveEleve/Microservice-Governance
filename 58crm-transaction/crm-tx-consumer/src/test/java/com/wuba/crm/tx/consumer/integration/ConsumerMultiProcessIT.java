@@ -184,6 +184,7 @@ class ConsumerMultiProcessIT {
                     int streamIndex = i % streams;
                     Map<byte[], byte[]> fields = Map.of(
                             bytes("msgId"), bytes("load-" + streamIndex + "-" + i),
+                            bytes("eventKey"), bytes("event-" + streamIndex + "-" + i),
                             bytes("bizCode"), bytes("load-" + streamIndex),
                             bytes("bizId"), bytes("biz-" + streamIndex + "-" + (i % 1000)),
                             bytes("eventType"), bytes("LOAD_EVENT"),
@@ -224,6 +225,7 @@ class ConsumerMultiProcessIT {
         jdbc.execute("""
                 CREATE TABLE t_consume_record (
                     msg_id VARCHAR(64) PRIMARY KEY,
+                    event_key VARCHAR(128),
                     biz_code VARCHAR(32) NOT NULL,
                     biz_id VARCHAR(64) NOT NULL,
                     event_type VARCHAR(64) NOT NULL,

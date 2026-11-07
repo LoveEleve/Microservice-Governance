@@ -82,6 +82,26 @@ class ConsumerWorkerTest {
     }
 
     @Test
+    void idempotency_usesEventKeyInsteadOfMsgId() {
+        ConsumerRecordRepository repository = mock(ConsumerRecordRepository.class);
+        IdempotentRepository idempotent = mock(IdempotentRepository.class);
+        when(repository.claimReadyBatch(any(ClaimRequest.class)))
+                .thenReturn(List.of(recordWithEventKey("m-1", "event-1")));
+        when(repository.markConsumed(anyString(), anyString(), anyLong(), any(Instant.class)))
+                .thenReturn(1);
+        HandlerRegistry handlers = new HandlerRegistry();
+        handlers.register("lead", "LEAD_ASSIGNED", message -> {
+        });
+        ConsumerWorker worker = new ConsumerWorker(
+                config(), repository, idempotent, handlers, transactions(),
+                new RecordingLeaseRegistrar(), ackBatcher(), Clock.fixed(NOW, ZoneOffset.UTC));
+
+        worker.pollOnce();
+
+        verify(idempotent).tryAcquire("m-1", "event-1", NOW);
+    }
+
+    @Test
     void duplicateIdempotentKey_skipsHandlerButCompletesAck() {
         ConsumerRecordRepository repository = mock(ConsumerRecordRepository.class);
         IdempotentRepository idempotent = mock(IdempotentRepository.class);
@@ -169,8 +189,12 @@ class ConsumerWorkerTest {
     }
 
     private ConsumerRecord record(String msgId) {
+        return recordWithEventKey(msgId, msgId);
+    }
+
+    private ConsumerRecord recordWithEventKey(String msgId, String eventKey) {
         return new ConsumerRecord(
-                msgId, "lead", "lead-1", "LEAD_ASSIGNED", "1-0",
+                msgId, eventKey, "lead", "lead-1", "LEAD_ASSIGNED", "1-0",
                 "consumer-1", ConsumeStatus.PROCESSING, "owner-1", 1, 1,
                 NOW.plusSeconds(60), 0, null, "{}", null, NOW, NOW);
     }

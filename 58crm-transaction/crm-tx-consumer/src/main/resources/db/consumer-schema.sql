@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS t_consume_record (
     msg_id VARCHAR(64) PRIMARY KEY,
+    event_key VARCHAR(128),
     biz_code VARCHAR(32) NOT NULL,
     biz_id VARCHAR(64) NOT NULL,
     event_type VARCHAR(64) NOT NULL,

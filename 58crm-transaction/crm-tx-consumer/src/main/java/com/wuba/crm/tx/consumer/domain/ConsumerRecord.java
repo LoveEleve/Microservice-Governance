@@ -5,6 +5,7 @@ import java.util.Objects;
 
 public record ConsumerRecord(
         String msgId,
+        String eventKey,
         String bizCode,
         String bizId,
         String eventType,
@@ -45,11 +46,35 @@ public record ConsumerRecord(
         }
     }
 
+    public ConsumerRecord(
+            String msgId,
+            String bizCode,
+            String bizId,
+            String eventType,
+            String streamEntryId,
+            String consumerId,
+            ConsumeStatus status,
+            String ownerToken,
+            long ownerEpoch,
+            int claimCount,
+            Instant leaseUntil,
+            int retryCount,
+            Instant nextRetryAt,
+            String payload,
+            String payloadRef,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(msgId, msgId, bizCode, bizId, eventType, streamEntryId, consumerId,
+                status, ownerToken, ownerEpoch, claimCount, leaseUntil, retryCount,
+                nextRetryAt, payload, payloadRef, createdAt, updatedAt);
+    }
+
     public static ConsumerRecord ready(ConsumedMessage message, Instant now) {
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(now, "now");
         return new ConsumerRecord(
                 message.msgId(),
+                message.eventKey(),
                 message.bizCode(),
                 message.bizId(),
                 message.eventType(),
@@ -66,6 +91,10 @@ public record ConsumerRecord(
                 message.payloadRef(),
                 now,
                 now);
+    }
+
+    public String idempotencyKey() {
+        return isBlank(eventKey) ? msgId : eventKey;
     }
 
     private static void requireText(String value, String name) {

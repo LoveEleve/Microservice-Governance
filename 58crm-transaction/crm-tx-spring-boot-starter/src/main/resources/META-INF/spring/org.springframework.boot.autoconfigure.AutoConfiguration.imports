@@ -1,1 +1,2 @@
 com.wuba.crm.tx.starter.CrmTxAutoConfiguration
+com.wuba.crm.tx.starter.CrmTxConsumerAutoConfiguration

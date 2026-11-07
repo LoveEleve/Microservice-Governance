@@ -169,7 +169,7 @@ public final class ConsumerWorker implements AutoCloseable {
         try {
             transactions.executeWithoutResult(status -> {
                 boolean firstDelivery = idempotent.tryAcquire(
-                        record.msgId(), record.msgId(), clock.instant());
+                        record.msgId(), record.idempotencyKey(), clock.instant());
                 if (firstDelivery) {
                     MessageHandler handler = handlers.require(record.bizCode(), record.eventType());
                     try {
@@ -218,6 +218,7 @@ public final class ConsumerWorker implements AutoCloseable {
     private ConsumedMessage toMessage(ConsumerRecord record) {
         return new ConsumedMessage(
                 record.msgId(),
+                record.eventKey(),
                 record.bizCode(),
                 record.bizId(),
                 record.eventType(),

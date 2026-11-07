@@ -13,6 +13,9 @@ public class ConsumerRecordEntity {
     @TableId(value = "msg_id", type = IdType.INPUT)
     private String msgId;
 
+    @TableField("event_key")
+    private String eventKey;
+
     @TableField("biz_code")
     private String bizCode;
 
@@ -67,6 +70,14 @@ public class ConsumerRecordEntity {
 
     public void setMsgId(String msgId) {
         this.msgId = msgId;
+    }
+
+    public String getEventKey() {
+        return eventKey;
+    }
+
+    public void setEventKey(String eventKey) {
+        this.eventKey = eventKey;
     }
 
     public String getBizCode() {

@@ -159,6 +159,7 @@ public class MybatisConsumerRecordRepository implements ConsumerRecordRepository
     private ConsumerRecordEntity toEntity(ConsumerRecord record) {
         ConsumerRecordEntity entity = new ConsumerRecordEntity();
         entity.setMsgId(record.msgId());
+        entity.setEventKey(record.eventKey());
         entity.setBizCode(record.bizCode());
         entity.setBizId(record.bizId());
         entity.setEventType(record.eventType());
@@ -181,6 +182,7 @@ public class MybatisConsumerRecordRepository implements ConsumerRecordRepository
     private ConsumerRecord toDomain(ConsumerRecordEntity entity) {
         return new ConsumerRecord(
                 entity.getMsgId(),
+                entity.getEventKey(),
                 entity.getBizCode(),
                 entity.getBizId(),
                 entity.getEventType(),
