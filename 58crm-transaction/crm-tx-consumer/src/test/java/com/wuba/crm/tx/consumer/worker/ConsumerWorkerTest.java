@@ -60,6 +60,27 @@ class ConsumerWorkerTest {
     }
 
     @Test
+    void claimedBatch_registersAllLeasesBeforeProcessing() {
+        ConsumerRecordRepository repository = mock(ConsumerRecordRepository.class);
+        when(repository.claimReadyBatch(any(ClaimRequest.class)))
+                .thenReturn(List.of(record("m-1"), record("m-2")));
+        when(repository.markConsumed(anyString(), anyString(), anyLong(), any(Instant.class)))
+                .thenReturn(1);
+        HandlerRegistry handlers = new HandlerRegistry();
+        handlers.register("lead", "LEAD_ASSIGNED", message -> {
+        });
+        RecordingLeaseRegistrar leases = new RecordingLeaseRegistrar();
+        ConsumerWorker worker = new ConsumerWorker(
+                config(), repository, handlers, transactions(), leases,
+                ackBatcher(), Clock.fixed(NOW, ZoneOffset.UTC));
+
+        worker.pollOnce();
+
+        org.junit.jupiter.api.Assertions.assertEquals(2, leases.registered);
+        org.junit.jupiter.api.Assertions.assertEquals(2, leases.completed);
+    }
+
+    @Test
     void handlerFailure_marksRetryAndDoesNotAck() {
         ConsumerRecordRepository repository = mock(ConsumerRecordRepository.class);
         when(repository.claimReadyBatch(any(ClaimRequest.class)))
@@ -111,8 +132,12 @@ class ConsumerWorkerTest {
     }
 
     private ConsumerRecord record() {
+        return record("m-1");
+    }
+
+    private ConsumerRecord record(String msgId) {
         return new ConsumerRecord(
-                "m-1", "lead", "lead-1", "LEAD_ASSIGNED", "1-0",
+                msgId, "lead", "lead-1", "LEAD_ASSIGNED", "1-0",
                 "consumer-1", ConsumeStatus.PROCESSING, "owner-1", 1, 1,
                 NOW.plusSeconds(60), 0, null, "{}", null, NOW, NOW);
     }

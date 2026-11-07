@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 public final class NettyLeaseWheel implements LeaseWheel {
@@ -19,7 +20,9 @@ public final class NettyLeaseWheel implements LeaseWheel {
     private static final long DEFAULT_MAX_PENDING = 1_000_000L;
 
     private final HashedWheelTimer timer;
-    private final ConcurrentMap<String, Timeout> timeouts = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Scheduled> timeouts = new ConcurrentHashMap<>();
+    private final AtomicLong generation = new AtomicLong();
+    private final Object lock = new Object();
 
     public NettyLeaseWheel() {
         this(Duration.ofMillis(DEFAULT_TICK_MILLIS), DEFAULT_WHEEL_SIZE);
@@ -51,14 +54,25 @@ public final class NettyLeaseWheel implements LeaseWheel {
         Objects.requireNonNull(task, "task");
         Objects.requireNonNull(delay, "delay");
         Objects.requireNonNull(onDue, "onDue");
-        TimerTask timerTask = timeout -> {
-            timeouts.remove(task.key());
-            onDue.accept(task);
-        };
-        Timeout timeout = timer.newTimeout(timerTask, delay.toMillis(), TimeUnit.MILLISECONDS);
-        Timeout previous = timeouts.put(task.key(), timeout);
-        if (previous != null) {
-            previous.cancel();
+        synchronized (lock) {
+            long currentGeneration = generation.incrementAndGet();
+            TimerTask timerTask = timeout -> {
+                synchronized (lock) {
+                    Scheduled scheduled = timeouts.get(task.key());
+                    if (scheduled == null || scheduled.generation() != currentGeneration) {
+                        return;
+                    }
+                    timeouts.remove(task.key(), scheduled);
+                }
+                onDue.accept(task);
+            };
+            Timeout timeout = timer.newTimeout(
+                    timerTask, delay.toMillis(), TimeUnit.MILLISECONDS);
+            Scheduled scheduled = new Scheduled(timeout, currentGeneration);
+            Scheduled previous = timeouts.put(task.key(), scheduled);
+            if (previous != null) {
+                previous.timeout().cancel();
+            }
         }
     }
 
@@ -67,18 +81,25 @@ public final class NettyLeaseWheel implements LeaseWheel {
         if (task == null) {
             return;
         }
-        Timeout timeout = timeouts.remove(task.key());
-        if (timeout != null) {
-            timeout.cancel();
+        synchronized (lock) {
+            Scheduled scheduled = timeouts.remove(task.key());
+            if (scheduled != null) {
+                scheduled.timeout().cancel();
+            }
         }
     }
 
     @Override
     public void close() {
-        for (Timeout timeout : timeouts.values()) {
-            timeout.cancel();
+        synchronized (lock) {
+            for (Scheduled scheduled : timeouts.values()) {
+                scheduled.timeout().cancel();
+            }
+            timeouts.clear();
+            timer.stop();
         }
-        timeouts.clear();
-        timer.stop();
+    }
+
+    private record Scheduled(Timeout timeout, long generation) {
     }
 }

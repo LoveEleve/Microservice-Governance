@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS t_consume_record (
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     KEY idx_status_lease (status, lease_until),
-    KEY idx_status_retry (status, next_retry_at, created_at)
+    KEY idx_biz_claim (biz_code, status, next_retry_at, created_at),
+    KEY idx_owner_token (owner_token, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS t_idempotent (

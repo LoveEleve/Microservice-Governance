@@ -7,7 +7,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,6 +38,27 @@ class RepositoryLeaseRenewerTest {
         assertTrue(renewer.renew(task));
         verify(repository).renewLease(
                 "m-1", "owner-1", 1, NOW.plusSeconds(60), NOW);
+    }
+
+    @Test
+    void renewBatch_groupsByOwnerAndReturnsKeys() {
+        ConsumerRecordRepository repository = mock(ConsumerRecordRepository.class);
+        when(repository.renewLeaseBatch(
+                any(), anyString(), anyLong(), any(Instant.class), any(Instant.class)))
+                .thenReturn(2);
+        RepositoryLeaseRenewer renewer = new RepositoryLeaseRenewer(
+                repository, Duration.ofSeconds(60), Clock.fixed(NOW, ZoneOffset.UTC));
+        LeaseTask first = new LeaseTask(
+                "m-1", "lead", "consumer-1", "owner-1", 1, NOW.plusSeconds(300));
+        LeaseTask second = new LeaseTask(
+                "m-2", "lead", "consumer-1", "owner-1", 1, NOW.plusSeconds(300));
+
+        Set<String> renewed = renewer.renewBatch(List.of(first, second));
+
+        assertEquals(Set.of(first.key(), second.key()), renewed);
+        verify(repository).renewLeaseBatch(
+                List.of("m-1", "m-2"), "owner-1", 1,
+                NOW.plusSeconds(60), NOW);
     }
 
     @Test

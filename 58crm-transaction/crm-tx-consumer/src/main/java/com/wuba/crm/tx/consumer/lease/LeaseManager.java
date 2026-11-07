@@ -6,7 +6,10 @@ import org.slf4j.LoggerFactory;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -16,6 +19,7 @@ public final class LeaseManager implements AutoCloseable, LeaseRegistrar {
 
     private static final Logger log = LoggerFactory.getLogger(LeaseManager.class);
     private static final int RENEWAL_QUEUE_CAPACITY = 100_000;
+    private static final int RENEWAL_BATCH_SIZE = 200;
     private static final long CLOSE_JOIN_MILLIS = 5_000L;
 
     private final LeaseWheel wheel;
@@ -70,7 +74,12 @@ public final class LeaseManager implements AutoCloseable, LeaseRegistrar {
     @Override
     public void register(LeaseTask task) {
         registry.register(task);
-        wheel.schedule(task, renewAfter, this::onDue);
+        try {
+            wheel.schedule(task, renewAfter, this::onDue);
+        } catch (RuntimeException ex) {
+            registry.unregister(task);
+            throw ex;
+        }
     }
 
     @Override
@@ -109,29 +118,42 @@ public final class LeaseManager implements AutoCloseable, LeaseRegistrar {
 
     private void renewLoop() {
         while (running.get()) {
-            LeaseTask task;
+            List<LeaseTask> batch = new ArrayList<>(RENEWAL_BATCH_SIZE);
             try {
-                task = renewalQueue.take();
+                batch.add(renewalQueue.take());
+                renewalQueue.drainTo(batch, RENEWAL_BATCH_SIZE - 1);
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
                 return;
             }
-            if (!registry.contains(task)) {
-                continue;
+            List<LeaseTask> renewable = new ArrayList<>(batch.size());
+            for (LeaseTask task : batch) {
+                if (!registry.contains(task)) {
+                    continue;
+                }
+                if (task.isExpired(clock.instant())) {
+                    leaseLost(task);
+                } else {
+                    renewable.add(task);
+                }
             }
-            if (task.isExpired(clock.instant())) {
-                leaseLost(task);
+            if (renewable.isEmpty()) {
                 continue;
             }
             try {
-                if (renewer.renew(task)) {
-                    wheel.schedule(task, renewAfter, this::onDue);
-                } else {
-                    leaseLost(task);
+                Set<String> renewed = renewer.renewBatch(renewable);
+                for (LeaseTask task : renewable) {
+                    if (renewed.contains(task.key())) {
+                        wheel.schedule(task, renewAfter, this::onDue);
+                    } else {
+                        leaseLost(task);
+                    }
                 }
             } catch (RuntimeException ex) {
-                log.warn("lease renewal failed, task={}", task.key(), ex);
-                leaseLost(task);
+                log.warn("lease renewal batch failed, size={}", renewable.size(), ex);
+                for (LeaseTask task : renewable) {
+                    leaseLost(task);
+                }
             }
         }
     }
@@ -139,6 +161,10 @@ public final class LeaseManager implements AutoCloseable, LeaseRegistrar {
     private void leaseLost(LeaseTask task) {
         registry.unregister(task);
         wheel.cancel(task);
-        onLeaseLost.accept(task);
+        try {
+            onLeaseLost.accept(task);
+        } catch (RuntimeException ex) {
+            log.warn("lease lost callback failed, task={}", task.key(), ex);
+        }
     }
 }

@@ -71,6 +71,24 @@ public class MybatisConsumerRecordRepository implements ConsumerRecordRepository
     }
 
     @Override
+    public int renewLeaseBatch(
+            List<String> msgIds,
+            String ownerToken,
+            long ownerEpoch,
+            Instant leaseUntil,
+            Instant now) {
+        if (msgIds == null || msgIds.isEmpty()) {
+            return 0;
+        }
+        return mapper.renewLeaseBatch(
+                msgIds,
+                ownerToken,
+                ownerEpoch,
+                toLocalDateTime(leaseUntil),
+                toLocalDateTime(now));
+    }
+
+    @Override
     public int markConsumed(String msgId, String ownerToken, long ownerEpoch, Instant now) {
         return mapper.markConsumed(msgId, ownerToken, ownerEpoch, toLocalDateTime(now));
     }

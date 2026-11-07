@@ -14,6 +14,7 @@ import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -84,8 +85,9 @@ public final class ConsumerWorker implements AutoCloseable {
                 now,
                 now.plus(config.leaseDuration()));
         List<ConsumerRecord> records = repository.claimReadyBatch(request);
-        for (ConsumerRecord record : records) {
-            process(record);
+        List<LeaseTask> leases = registerLeases(records);
+        for (int i = 0; i < records.size(); i++) {
+            process(records.get(i), leases.get(i));
         }
         return records.size();
     }
@@ -108,15 +110,30 @@ public final class ConsumerWorker implements AutoCloseable {
         }
     }
 
-    private void process(ConsumerRecord record) {
-        LeaseTask lease = new LeaseTask(
-                record.msgId(),
-                record.bizCode(),
-                config.consumerId(),
-                record.ownerToken(),
-                record.ownerEpoch(),
-                clock.instant().plus(config.maxProcessing()));
-        leases.register(lease);
+    private List<LeaseTask> registerLeases(List<ConsumerRecord> records) {
+        List<LeaseTask> registered = new ArrayList<>(records.size());
+        try {
+            for (ConsumerRecord record : records) {
+                LeaseTask lease = new LeaseTask(
+                        record.msgId(),
+                        record.bizCode(),
+                        config.consumerId(),
+                        record.ownerToken(),
+                        record.ownerEpoch(),
+                        clock.instant().plus(config.maxProcessing()));
+                leases.register(lease);
+                registered.add(lease);
+            }
+            return registered;
+        } catch (RuntimeException ex) {
+            for (LeaseTask lease : registered) {
+                leases.complete(lease);
+            }
+            throw ex;
+        }
+    }
+
+    private void process(ConsumerRecord record, LeaseTask lease) {
         try {
             transactions.executeWithoutResult(status -> {
                 MessageHandler handler = handlers.require(record.bizCode(), record.eventType());
@@ -134,7 +151,12 @@ public final class ConsumerWorker implements AutoCloseable {
                     throw new LeaseLostException(record.msgId());
                 }
             });
-            ackBatcher.add(new AckCommand(config.stream(), config.group(), record.streamEntryId()));
+            boolean queued = ackBatcher.add(
+                    new AckCommand(config.stream(), config.group(), record.streamEntryId()));
+            if (!queued) {
+                log.warn("ack queue full, msgId={}, entryId={}",
+                        record.msgId(), record.streamEntryId());
+            }
         } catch (LeaseLostException ex) {
             log.warn("consume lease lost, msgId={}, ownerEpoch={}",
                     record.msgId(), record.ownerEpoch());

@@ -154,6 +154,22 @@ class MybatisConsumerRecordRepositoryTest {
     }
 
     @Test
+    void renewLeaseBatch_updatesOnlyOwnedRecords() throws Exception {
+        withRepository(repository -> {
+            repository.insertReadyBatch(List.of(message("m-1"), message("m-2")), NOW);
+            repository.claimReadyBatch(new ClaimRequest(
+                    "lead", "c-1", "owner-1", 10, NOW, NOW.plusSeconds(60)));
+
+            assertEquals(2, repository.renewLeaseBatch(
+                    List.of("m-1", "m-2"), "owner-1", 1,
+                    NOW.plusSeconds(120), NOW.plusSeconds(10)));
+            assertEquals(0, repository.renewLeaseBatch(
+                    List.of("m-1", "m-2"), "owner-2", 1,
+                    NOW.plusSeconds(120), NOW.plusSeconds(10)));
+        });
+    }
+
+    @Test
     void markConsumed_withWrongOwner_doesNotUpdate() throws Exception {
         withRepository(repository -> {
             repository.insertReadyBatch(List.of(message("m-1")), NOW);

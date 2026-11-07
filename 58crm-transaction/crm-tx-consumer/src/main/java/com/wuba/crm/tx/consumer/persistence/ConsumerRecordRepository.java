@@ -20,6 +20,13 @@ public interface ConsumerRecordRepository {
             Instant leaseUntil,
             Instant now);
 
+    int renewLeaseBatch(
+            List<String> msgIds,
+            String ownerToken,
+            long ownerEpoch,
+            Instant leaseUntil,
+            Instant now);
+
     int markConsumed(String msgId, String ownerToken, long ownerEpoch, Instant now);
 
     int markRetry(
