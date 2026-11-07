@@ -56,6 +56,21 @@ public class MybatisConsumerRecordRepository implements ConsumerRecordRepository
     }
 
     @Override
+    public int renewLease(
+            String msgId,
+            String ownerToken,
+            long ownerEpoch,
+            Instant leaseUntil,
+            Instant now) {
+        return mapper.renewLease(
+                msgId,
+                ownerToken,
+                ownerEpoch,
+                toLocalDateTime(leaseUntil),
+                toLocalDateTime(now));
+    }
+
+    @Override
     public int markConsumed(String msgId, String ownerToken, long ownerEpoch, Instant now) {
         return mapper.markConsumed(msgId, ownerToken, ownerEpoch, toLocalDateTime(now));
     }

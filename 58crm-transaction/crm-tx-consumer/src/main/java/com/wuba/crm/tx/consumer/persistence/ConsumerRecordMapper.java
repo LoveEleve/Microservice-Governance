@@ -65,6 +65,23 @@ public interface ConsumerRecordMapper extends BaseMapper<ConsumerRecordEntity> {
 
     @Update("""
             UPDATE t_consume_record
+            SET lease_until = #{leaseUntil},
+                updated_at = #{now}
+            WHERE msg_id = #{msgId}
+              AND status = 'PROCESSING'
+              AND owner_token = #{ownerToken}
+              AND owner_epoch = #{ownerEpoch}
+              AND lease_until > #{now}
+            """)
+    int renewLease(
+            @Param("msgId") String msgId,
+            @Param("ownerToken") String ownerToken,
+            @Param("ownerEpoch") long ownerEpoch,
+            @Param("leaseUntil") LocalDateTime leaseUntil,
+            @Param("now") LocalDateTime now);
+
+    @Update("""
+            UPDATE t_consume_record
             SET status = 'CONSUMED',
                 lease_until = NULL,
                 updated_at = #{now}

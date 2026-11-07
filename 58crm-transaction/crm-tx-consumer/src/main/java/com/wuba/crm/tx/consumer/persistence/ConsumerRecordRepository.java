@@ -13,6 +13,13 @@ public interface ConsumerRecordRepository {
 
     List<ConsumerRecord> claimReadyBatch(ClaimRequest request);
 
+    int renewLease(
+            String msgId,
+            String ownerToken,
+            long ownerEpoch,
+            Instant leaseUntil,
+            Instant now);
+
     int markConsumed(String msgId, String ownerToken, long ownerEpoch, Instant now);
 
     int markRetry(

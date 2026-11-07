@@ -134,6 +134,26 @@ class MybatisConsumerRecordRepositoryTest {
     }
 
     @Test
+    void renewLease_requiresCurrentOwnerAndUnexpiredLease() throws Exception {
+        withRepository(repository -> {
+            repository.insertReadyBatch(List.of(message("m-1")), NOW);
+            repository.claimReadyBatch(new ClaimRequest(
+                    "lead", "c-1", "owner-1", 10, NOW, NOW.plusSeconds(60)));
+
+            assertEquals(1, repository.renewLease(
+                    "m-1", "owner-1", 1, NOW.plusSeconds(120), NOW.plusSeconds(10)));
+            assertEquals(0, repository.renewLease(
+                    "m-1", "owner-2", 1, NOW.plusSeconds(120), NOW.plusSeconds(10)));
+            assertEquals(0, repository.renewLease(
+                    "m-1", "owner-1", 1, NOW.plusSeconds(120), NOW.plusSeconds(121)));
+
+            ConsumerRecordEntity saved = entity("m-1");
+            assertEquals(NOW.plusSeconds(120).atOffset(java.time.ZoneOffset.UTC).toLocalDateTime(),
+                    saved.getLeaseUntil());
+        });
+    }
+
+    @Test
     void markConsumed_withWrongOwner_doesNotUpdate() throws Exception {
         withRepository(repository -> {
             repository.insertReadyBatch(List.of(message("m-1")), NOW);
