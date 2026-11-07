@@ -106,7 +106,7 @@ TC 配置业务方 serviceName/endpoint
 
 Participant SDK
   └── 业务库：t_branch_barrier + t_local_message
-  └── 主动连接 Coordinator（控制通道）
+  └── 暴露 Confirm/Cancel callback endpoint
 ```
 
 原则：
@@ -257,72 +257,22 @@ Coordinator 查 Nacos
 
 这会让服务器依赖客户端，并迫使 TC 配置使用方的服务名，扩展性差。
 
-正确方案：
+### 8.1 第一版：callback endpoint
+
+采用 DTM 风格：
 
 ```text
-Participant SDK 启动
-  -> 主动连接 Coordinator
-  -> 建立 bidi control stream
-  -> 注册 participantGroup / actions / instanceId
-
-Coordinator
-  -> 只维护 active streams
-  -> Confirm/Cancel 通过已有 stream 下发
-  -> 不查 Nacos 找 RM
+RM 在 branch/register 时提供：
+  callbackEndpoint
+  actionName
+  resourceKey
 ```
 
-branch 只保存：
+TC 任意实例：
 
 ```text
-participantGroup
-actionName
-resourceKey
-applicationData
-```
-
-不保存：
-
-```text
-RM 的 IP/端口
-RM 的 Nacos serviceName
-```
-
-participantGroup 由 SDK 注册时上报，不是 TC 配置。
-
-如果某实例断线：
-
-```text
-同 participantGroup 的其它实例可接管
-branch 状态仍是 PROCESSING/CONFIRMING
-Coordinator 重试
-barrier 保证幂等
-```
-
-## 8.1 5 个 TC 下的控制流路由（重要）
-
-错误方案 A：
-
-```text
-每个 RM 连接所有 TC
-tc-0 ... tc-4
-```
-
-问题：
-
-```text
-连接数按 RM 实例数 × TC 数膨胀
-TC 扩容要所有 RM 重连
-控制流注册表分散在 5 个 TC
-Confirm/Cancel 仍要选择由哪个 TC 下发
-```
-
-这不是无状态，而是把路由问题转嫁给客户端。
-
-推荐方案 B（DTM 风格 callback）：
-
-```text
-RM 在 register 时上报 callback endpoint
-TC 任意实例都可以按 endpoint 调 Confirm/Cancel
+按 branch.callbackEndpoint
+调用 Confirm/Cancel
 ```
 
 branch 保存：
@@ -331,19 +281,49 @@ branch 保存：
 callbackEndpoint
 actionName
 resourceKey
+applicationData
 ```
 
-TC 不发现 RM，也不配置业务方 serviceName。
-endpoint 是客户端在一次注册里主动提供的回调地址。
+不保存：
+
+```text
+RM 的 Nacos serviceName
+TC 侧的客户端服务配置
+```
+
+TC 不发现 RM，也不配置业务方 serviceName。  
+endpoint 是客户端在注册时主动提供的回调地址。
 
 代价：
 
 ```text
-RM 需要暴露回调服务（gRPC/HTTP）
+RM 需要暴露 Confirm/Cancel 服务（gRPC/HTTP）
 需要处理端口/安全/内网可达
 ```
 
-方案 C（Seata 风格单控制流）：
+### 8.2 为什么不用 bidi stream
+
+如果 RM 只连接一个 TC：
+
+```text
+Confirm 请求落到另一个 TC
+那个 TC 没有这条 stream
+-> 发不出去
+```
+
+如果 RM 连接所有 TC：
+
+```text
+连接数按 RM 实例数 × TC 数膨胀
+TC 扩容要所有 RM 重连
+注册表分散在 5 个 TC
+```
+
+所以第一版不做 bidi control stream，也不做 stream owner 转发。
+
+### 8.3 备选：Seata 风格单控制流
+
+如果后续 RM 不方便暴露 callback 端口，再做：
 
 ```text
 RM 只连接一个 TC
@@ -351,7 +331,7 @@ TC 集群内部维护 stream owner
 其它 TC 把命令转给 owner
 ```
 
-优点：RM 不需要暴露回调端口。
+优点：RM 不需要暴露端口。  
 缺点：TC 内部需要 stream 路由/转发，复杂度更高。
 
 第一版选择：
@@ -402,7 +382,7 @@ TRY / CONFIRM / CANCEL
 1. 只写了 Coordinator 组件，没有独立 server 模块
 2. 没有 API/传输协议
 3. 没有 Coordinator 集群/租约/选主
-4. 没有 RM 主动控制流/注册协议
+4. 没有 RM callback endpoint 注册协议
 5. 没有明确 Nacos 只发现 TC、不发现 RM
 6. 没有 scheduler 扫描条件
 7. 没有 server 级幂等键
@@ -418,9 +398,9 @@ C-003.1
   crm-tx-tcc-api
   TccStatus / TccAction / BusinessActionContext
   Coordinator unary DTO
-  Participant control-stream DTO
+  Participant callback DTO
   proto 契约（Begin/Register/Report/Commit/Rollback）
-  控制流（Register/Heartbeat/Confirm/Cancel/Result）
+  callback 契约（Confirm/Cancel）
 
 C-003.2
   crm-tx-tcc-coordinator 服务器
