@@ -279,10 +279,33 @@ branch 保存：
 
 ```text
 callbackEndpoint
+callbackToken（可选，鉴权）
 actionName
 resourceKey
 applicationData
 ```
+
+callbackEndpoint 必须落 `t_tcc_branch`，不能只存在某个 TC 的内存：
+
+```text
+tc-0 registerBranch
+  -> INSERT t_tcc_branch(callback_endpoint=...)
+
+tc-3 commit
+  -> SELECT branch FROM t_tcc_branch
+  -> 读 callback_endpoint
+  -> 调 RM
+```
+
+所以：
+
+```text
+注册在 tc-0
+commit 到 tc-3
+仍然能回调 RM
+```
+
+不需要 sticky，不需要连接亲和性。
 
 不保存：
 
@@ -293,6 +316,23 @@ TC 侧的客户端服务配置
 
 TC 不发现 RM，也不配置业务方 serviceName。
 endpoint 是客户端在注册时主动提供的回调地址。
+
+endpoint 要求：
+
+```text
+稳定服务地址（K8s Service / 内网 LB）
+不要用 Pod IP
+按 participantGroup 配置 allowlist
+callback 带 token/mTLS
+```
+
+branch register 幂等：
+
+```text
+UNIQUE(xid, resource_key)
+重复 register 返回已有 branch
+不允许未授权修改 callback_endpoint
+```
 
 代价：
 
