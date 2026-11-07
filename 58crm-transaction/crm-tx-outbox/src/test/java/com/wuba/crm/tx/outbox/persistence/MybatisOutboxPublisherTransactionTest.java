@@ -61,6 +61,7 @@ class MybatisOutboxPublisherTransactionTest {
                     status VARCHAR(16) NOT NULL,
                     retry_count INT NOT NULL DEFAULT 0,
                     next_retry_at TIMESTAMP,
+                    stream_entry_id VARCHAR(64),
                     created_at TIMESTAMP NOT NULL,
                     updated_at TIMESTAMP NOT NULL
                 )

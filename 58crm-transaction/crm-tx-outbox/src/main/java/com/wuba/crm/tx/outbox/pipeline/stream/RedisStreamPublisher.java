@@ -15,5 +15,5 @@ public interface RedisStreamPublisher {
      *
      * <p>任一条写入失败时应抛出异常，由发送线程决定是否标记 SENT。</p>
      */
-    void publish(String stream, List<Map<String, String>> records);
+    List<String> publish(String stream, List<Map<String, String>> records);
 }

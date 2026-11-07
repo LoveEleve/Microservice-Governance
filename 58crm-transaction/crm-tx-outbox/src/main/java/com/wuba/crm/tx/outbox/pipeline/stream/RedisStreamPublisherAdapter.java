@@ -3,8 +3,10 @@ package com.wuba.crm.tx.outbox.pipeline.stream;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,9 +25,9 @@ public class RedisStreamPublisherAdapter implements RedisStreamPublisher {
     }
 
     @Override
-    public void publish(String stream, List<Map<String, String>> records) {
+    public List<String> publish(String stream, List<Map<String, String>> records) {
         if (records == null || records.isEmpty()) {
-            return;
+            return List.of();
         }
         // 一批 XADD 走一次 pipeline，避免每条消息一次网络往返。
         List<Object> results = redisTemplate.executePipelined(new SessionCallback<Object>() {
@@ -42,10 +44,13 @@ public class RedisStreamPublisherAdapter implements RedisStreamPublisher {
         if (results.size() != records.size()) {
             throw new IllegalStateException("stream pipeline result count mismatch");
         }
+        List<String> entryIds = new ArrayList<>(results.size());
         for (Object result : results) {
-            if (result == null) {
+            if (!(result instanceof RecordId recordId)) {
                 throw new IllegalStateException("stream pipeline command failed");
             }
+            entryIds.add(recordId.toString());
         }
+        return entryIds;
     }
 }

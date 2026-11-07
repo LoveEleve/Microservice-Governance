@@ -51,6 +51,10 @@ public class LocalMessageEntity {
     @TableField("next_retry_at")
     private LocalDateTime nextRetryAt;
 
+    /** Redis Stream XADD 返回的 entry ID；对账用来判断 Stream 中是否还存在。 */
+    @TableField("stream_entry_id")
+    private String streamEntryId;
+
     @TableField("created_at")
     private LocalDateTime createdAt;
 
@@ -127,6 +131,14 @@ public class LocalMessageEntity {
 
     public void setRetryCount(Integer retryCount) {
         this.retryCount = retryCount;
+    }
+
+    public String getStreamEntryId() {
+        return streamEntryId;
+    }
+
+    public void setStreamEntryId(String streamEntryId) {
+        this.streamEntryId = streamEntryId;
     }
 
     public LocalDateTime getNextRetryAt() {

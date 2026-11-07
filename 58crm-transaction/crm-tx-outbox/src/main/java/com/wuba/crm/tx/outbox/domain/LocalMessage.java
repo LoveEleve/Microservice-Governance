@@ -21,7 +21,8 @@ public record LocalMessage(
         String payload,
         String payloadRef,
         MessageStatus status,
-        int retryCount) {
+        int retryCount,
+        String streamEntryId) {
 
     public LocalMessage {
         Objects.requireNonNull(msgId, "msgId");
@@ -34,5 +35,16 @@ public record LocalMessage(
                 && (payloadRef == null || payloadRef.isBlank())) {
             throw new IllegalArgumentException("payload or payloadRef is required");
         }
+    }
+
+    /**
+     * 兼容旧测试/调用方的构造器，Stream entry ID 为空。
+     */
+    public LocalMessage(
+            String msgId, String eventKey, String bizCode, String bizId,
+            String eventType, String payload, String payloadRef,
+            MessageStatus status, int retryCount) {
+        this(msgId, eventKey, bizCode, bizId, eventType, payload, payloadRef,
+                status, retryCount, null);
     }
 }

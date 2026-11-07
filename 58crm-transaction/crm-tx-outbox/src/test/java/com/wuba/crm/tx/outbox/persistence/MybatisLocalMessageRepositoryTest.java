@@ -55,6 +55,7 @@ class MybatisLocalMessageRepositoryTest {
                     status VARCHAR(16) NOT NULL,
                     retry_count INT NOT NULL DEFAULT 0,
                     next_retry_at TIMESTAMP,
+                    stream_entry_id VARCHAR(64),
                     created_at TIMESTAMP NOT NULL,
                     updated_at TIMESTAMP NOT NULL
                 )
@@ -84,6 +85,24 @@ class MybatisLocalMessageRepositoryTest {
             LocalMessageEntity saved = mapper.selectById("m-1");
             assertEquals(MessageStatus.SENT.name(), saved.getStatus());
             assertEquals(0, saved.getRetryCount());
+        }
+    }
+
+    @Test
+    void markDoneBatch_onlyMovesSentToDone() {
+        insert("m-1", MessageStatus.SENT, 0);
+
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            LocalMessageMapper mapper = session.getMapper(LocalMessageMapper.class);
+            MybatisLocalMessageRepository repository = new MybatisLocalMessageRepository(mapper);
+            LocalMessage message = new LocalMessage(
+                    "m-1", "event-m-1", "lead", "lead-1", "LEAD_ASSIGNED",
+                    "{}", null, MessageStatus.SENT, 0, "1-0");
+
+            repository.markDoneBatch(List.of(message));
+
+            LocalMessageEntity saved = mapper.selectById("m-1");
+            assertEquals(MessageStatus.DONE.name(), saved.getStatus());
         }
     }
 

@@ -137,6 +137,9 @@ class RealStreamOutboxTest {
         assertEquals(1, sender.sendOnce());
         assertEquals("SENT", status());
         assertEquals(1L, redis.opsForStream().size(STREAM));
+        String entryId = jdbc.queryForObject(
+                "SELECT stream_entry_id FROM t_local_message LIMIT 1", String.class);
+        assertEquals(1, entryId == null ? 0 : 1);
     }
 
     private String status() {
@@ -166,6 +169,7 @@ class RealStreamOutboxTest {
                     status VARCHAR(16) NOT NULL,
                     retry_count INT NOT NULL DEFAULT 0,
                     next_retry_at DATETIME,
+                    stream_entry_id VARCHAR(64),
                     created_at DATETIME NOT NULL,
                     updated_at DATETIME NOT NULL,
                     KEY idx_status_retry (status, next_retry_at)

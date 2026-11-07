@@ -56,6 +56,14 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
 
     @Override
     public int markSentBatch(List<LocalMessage> messages, Instant nextRetryAt) {
+        return markSentBatch(messages, nextRetryAt, java.util.Map.of());
+    }
+
+    @Override
+    public int markSentBatch(
+            List<LocalMessage> messages,
+            Instant nextRetryAt,
+            java.util.Map<String, String> entryIds) {
         if (messages == null || messages.isEmpty()) {
             return 0;
         }
@@ -80,9 +88,66 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
                     .set(LocalMessageEntity::getRetryCount, 0)
                     .set(LocalMessageEntity::getNextRetryAt, toLocalDateTime(nextRetryAt))
                     .set(LocalMessageEntity::getUpdatedAt, now);
+            // 同一批消息的 entryId 不同，用 CASE 在一个 UPDATE 中写回，避免逐条 UPDATE。
+            StringBuilder caseSql = new StringBuilder("stream_entry_id = CASE msg_id ");
+            java.util.List<Object> caseArgs = new java.util.ArrayList<>();
+            for (LocalMessage message : messages) {
+                String entryId = entryIds.get(message.msgId());
+                if (entryId != null) {
+                    // MyBatis-Plus setSql 使用 {0}/{1} 占位，不是 JDBC 的 ?。
+                    int index = caseArgs.size();
+                    caseSql.append("WHEN {").append(index).append("} THEN {")
+                            .append(index + 1).append("} ");
+                    caseArgs.add(message.msgId());
+                    caseArgs.add(entryId);
+                }
+            }
+            caseSql.append("ELSE stream_entry_id END");
+            if (!caseArgs.isEmpty()) {
+                update.setSql(caseSql.toString(), caseArgs.toArray());
+            }
             affected += localMessageMapper.update(null, update);
         }
         return affected;
+    }
+
+    @Override
+    public int markDoneBatch(List<LocalMessage> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return 0;
+        }
+        Map<String, List<String>> byBizId = new LinkedHashMap<>();
+        for (LocalMessage message : messages) {
+            byBizId.computeIfAbsent(message.bizId(), ignored -> new ArrayList<>())
+                    .add(message.msgId());
+        }
+        LocalDateTime now = LocalDateTime.now();
+        int affected = 0;
+        for (Map.Entry<String, List<String>> entry : byBizId.entrySet()) {
+            LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
+            update.eq(LocalMessageEntity::getBizId, entry.getKey())
+                    .in(LocalMessageEntity::getMsgId, entry.getValue())
+                    .eq(LocalMessageEntity::getStatus, MessageStatus.SENT.name())
+                    .set(LocalMessageEntity::getStatus, MessageStatus.DONE.name())
+                    .set(LocalMessageEntity::getUpdatedAt, now);
+            affected += localMessageMapper.update(null, update);
+        }
+        return affected;
+    }
+
+    @Override
+    public List<LocalMessage> findForReconcile(Instant before, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, MAX_BATCH_SIZE));
+        LambdaQueryWrapper<LocalMessageEntity> query = Wrappers.lambdaQuery();
+        query.eq(LocalMessageEntity::getStatus, MessageStatus.SENT.name())
+                .lt(LocalMessageEntity::getCreatedAt, toLocalDateTime(before))
+                .orderByAsc(LocalMessageEntity::getCreatedAt)
+                .last("LIMIT " + safeLimit);
+        List<LocalMessage> messages = new ArrayList<>();
+        for (LocalMessageEntity entity : localMessageMapper.selectList(query)) {
+            messages.add(toDomain(entity));
+        }
+        return messages;
     }
 
     @Override
@@ -124,7 +189,8 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
                 entity.getPayload(),
                 entity.getPayloadRef(),
                 MessageStatus.valueOf(entity.getStatus()),
-                entity.getRetryCount() == null ? 0 : entity.getRetryCount());
+                entity.getRetryCount() == null ? 0 : entity.getRetryCount(),
+                entity.getStreamEntryId());
     }
 
     private LocalDateTime toLocalDateTime(Instant instant) {

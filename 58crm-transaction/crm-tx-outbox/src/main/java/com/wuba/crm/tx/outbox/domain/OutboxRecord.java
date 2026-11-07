@@ -21,7 +21,8 @@ public record OutboxRecord(
         String payloadRef,
         // 发送时只应出现 INIT；SENT 是发送成功后的生产方终态。
         MessageStatus status,
-        int retryCount) {
+        int retryCount,
+        String streamEntryId) {
 
     public OutboxRecord {
         Objects.requireNonNull(msgId, "msgId");
@@ -36,6 +37,17 @@ public record OutboxRecord(
         }
     }
 
+    /**
+     * 兼容旧测试/调用方的构造器，Stream entry ID 为空。
+     */
+    public OutboxRecord(
+            String msgId, String eventKey, String bizCode, String bizId,
+            String eventType, String payload, String payloadRef,
+            MessageStatus status, int retryCount) {
+        this(msgId, eventKey, bizCode, bizId, eventType, payload, payloadRef,
+                status, retryCount, null);
+    }
+
     public static OutboxRecord from(LocalMessage message) {
         return new OutboxRecord(
                 message.msgId(),
@@ -46,7 +58,8 @@ public record OutboxRecord(
                 message.payload(),
                 message.payloadRef(),
                 message.status(),
-                message.retryCount());
+                message.retryCount(),
+                message.streamEntryId());
     }
 
     public LocalMessage toLocalMessage() {
@@ -59,6 +72,7 @@ public record OutboxRecord(
                 payload,
                 payloadRef,
                 status,
-                retryCount);
+                retryCount,
+                streamEntryId);
     }
 }

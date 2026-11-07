@@ -224,7 +224,7 @@ class OutboxSenderTest {
         private final java.util.Set<String> streams = new java.util.HashSet<>();
 
         @Override
-        public void publish(String stream, List<Map<String, String>> records) {
+        public List<String> publish(String stream, List<Map<String, String>> records) {
             calls++;
             lastStream = stream;
             lastRecords = records;
@@ -233,6 +233,11 @@ class OutboxSenderTest {
                     fields -> failMsgId != null && failMsgId.equals(fields.get("msgId")))) {
                 throw new IllegalStateException("redis stream unavailable");
             }
+            java.util.List<String> ids = new java.util.ArrayList<>();
+            for (int i = 0; i < records.size(); i++) {
+                ids.add("entry-" + i);
+            }
+            return ids;
         }
     }
 }

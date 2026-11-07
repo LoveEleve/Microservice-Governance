@@ -154,12 +154,20 @@ public class OutboxSender {
             Map<String, OutboxRecord> originalByMsgId,
             Instant nextRetryAt) {
         List<OutboxRecord> originals = originalsOf(records, originalByMsgId);
+        Map<String, String> entryIds;
         try {
             List<Map<String, String>> fields = new ArrayList<>(records.size());
             for (OutboxRecord record : records) {
                 fields.add(serializer.serialize(record));
             }
-            publisher.publish(stream, fields);
+            List<String> ids = publisher.publish(stream, fields);
+            if (ids.size() != records.size()) {
+                throw new IllegalStateException("stream entry id count mismatch");
+            }
+            entryIds = new LinkedHashMap<>();
+            for (int i = 0; i < records.size(); i++) {
+                entryIds.put(records.get(i).msgId(), ids.get(i));
+            }
         } catch (RuntimeException ex) {
             if (records.size() == 1) {
                 publishFailed(originals, nextRetryAt, ex);
@@ -174,10 +182,10 @@ public class OutboxSender {
         }
 
         try {
-            repository.markSentBatch(toLocalMessages(originals), nextRetryAt);
+            repository.markSentBatch(toLocalMessages(originals), nextRetryAt, entryIds);
             for (OutboxRecord record : records) {
                 interceptors.onAcknowledgement(
-                        new OutboxSendResult(stream, record.msgId(), null), null);
+                        new OutboxSendResult(stream, record.msgId(), entryIds.get(record.msgId())), null);
             }
             return records.size();
         } catch (RuntimeException ex) {

@@ -31,8 +31,7 @@ class OutboxProducerFactoryTest {
         OutboxProducer producer = OutboxProducerFactory.create(
                 new OutboxScanner(new EmptyRepository(), buffer, inFlight, 10, BizCodeRegistry.of("lead", "quota", "contract")),
                 buffer,
-                (stream, records) -> {
-                },
+                (stream, records) -> java.util.List.of(),
                 new OutboxInterceptorChain(List.of()),
                 new BizCodePartitioner(),
                 new DefaultOutboxSerializer(),
