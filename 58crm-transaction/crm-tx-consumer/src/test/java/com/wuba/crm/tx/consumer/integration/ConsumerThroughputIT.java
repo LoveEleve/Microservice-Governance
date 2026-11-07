@@ -50,8 +50,8 @@ class ConsumerThroughputIT {
             + "/?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
     private static final String REDIS_HOST = System.getProperty("tx.redis.host", "127.0.0.1");
     private static final int REDIS_PORT = Integer.parseInt(System.getProperty("tx.redis.port", "6379"));
-    private static final String STREAM = "tx:it:load";
-    private static final String GROUP = "tx-it-group-load";
+    private static final String STREAM_PREFIX = "tx:it:load-";
+    private static final String GROUP_PREFIX = "tx-it-group-load-";
 
     private LettuceConnectionFactory redisFactory;
     private StringRedisTemplate redis;
@@ -79,7 +79,7 @@ class ConsumerThroughputIT {
         redisFactory.afterPropertiesSet();
         redisFactory.start();
         redis = new StringRedisTemplate(redisFactory);
-        redis.delete(STREAM);
+        deleteStreams(Integer.getInteger("tx.load.streams", 1));
     }
 
     @AfterEach
@@ -88,7 +88,7 @@ class ConsumerThroughputIT {
             bootstrap.close();
         }
         if (redis != null) {
-            redis.delete(STREAM);
+            deleteStreams(Integer.getInteger("tx.load.streams", 1));
         }
         if (redisFactory != null) {
             redisFactory.destroy();
@@ -102,7 +102,10 @@ class ConsumerThroughputIT {
     void throughput_endToEnd() throws Exception {
         int count = Integer.getInteger("tx.load.count", 10_000);
         int xaddBatch = Integer.getInteger("tx.load.xadd.batch", 500);
-        produce(count, xaddBatch);
+        int streams = Integer.getInteger("tx.load.streams", 1);
+        int instancesPerStream = Integer.getInteger("tx.load.instances", 1);
+        int workersPerInstance = Integer.getInteger("tx.load.workers", 16);
+        produce(count, streams, xaddBatch);
 
         SqlSessionFactory sqlSessionFactory = sqlSessionFactory(dataSource);
         SqlSessionTemplate sqlSessionTemplate = new SqlSessionTemplate(sqlSessionFactory);
@@ -112,25 +115,29 @@ class ConsumerThroughputIT {
                 sqlSessionTemplate.getMapper(IdempotentMapper.class));
         HandlerRegistry handlers = new HandlerRegistry();
         AtomicLong handled = new AtomicLong();
-        handlers.register("load", "LOAD_EVENT", message -> handled.incrementAndGet());
+        for (int streamIndex = 0; streamIndex < streams; streamIndex++) {
+            String bizCode = "load-" + streamIndex;
+            handlers.register(bizCode, "LOAD_EVENT", message -> handled.incrementAndGet());
+        }
         TransactionTemplate transactions = new TransactionTemplate(
                 new DataSourceTransactionManager(dataSource));
 
-        int instances = Integer.getInteger("tx.load.instances", 1);
-        int workersPerInstance = Integer.getInteger("tx.load.workers", 16);
         String baseId = "load-consumer-" + UUID.randomUUID();
-        for (int i = 0; i < instances; i++) {
-            ConsumerRuntimeConfig config = new ConsumerRuntimeConfig(
-                    "load", baseId + "-" + i,
-                    "tx:it:", "tx-it-group-",
-                    50_000, 500, Duration.ofMillis(100),
-                    500, workersPerInstance,
-                    Duration.ofSeconds(60), Duration.ofMinutes(5),
-                    Duration.ofSeconds(30), 3, Duration.ofMillis(10), Duration.ofSeconds(20),
-                    500, 100_000, Duration.ofMillis(100),
-                    100, Duration.ofSeconds(30), 500, Duration.ofSeconds(1));
-            bootstraps.add(new ConsumerBootstrap(
-                    config, repository, idempotent, handlers, transactions, redis));
+        for (int streamIndex = 0; streamIndex < streams; streamIndex++) {
+            String bizCode = "load-" + streamIndex;
+            for (int instance = 0; instance < instancesPerStream; instance++) {
+                ConsumerRuntimeConfig config = new ConsumerRuntimeConfig(
+                        bizCode, baseId + "-" + streamIndex + "-" + instance,
+                        "tx:it:", "tx-it-group-",
+                        50_000, 500, Duration.ofMillis(100),
+                        500, workersPerInstance,
+                        Duration.ofSeconds(60), Duration.ofMinutes(5),
+                        Duration.ofSeconds(30), 3, Duration.ofMillis(10), Duration.ofSeconds(20),
+                        500, 100_000, Duration.ofMillis(100),
+                        100, Duration.ofSeconds(30), 500, Duration.ofSeconds(1));
+                bootstraps.add(new ConsumerBootstrap(
+                        config, repository, idempotent, handlers, transactions, redis));
+            }
         }
 
         long start = System.nanoTime();
@@ -142,27 +149,36 @@ class ConsumerThroughputIT {
 
         double seconds = elapsedNanos / 1_000_000_000.0;
         double qps = count / seconds;
-        System.out.printf("CONSUMER_THROUGHPUT count=%d attempts=%d instances=%d workersPerInstance=%d elapsed=%.3fs qps=%.0f%n",
-                count, handled.get(), instances, workersPerInstance, seconds, qps);
+        System.out.printf("CONSUMER_THROUGHPUT count=%d attempts=%d streams=%d instancesPerStream=%d workersPerInstance=%d elapsed=%.3fs qps=%.0f%n",
+                count, handled.get(), streams, instancesPerStream, workersPerInstance,
+                seconds, qps);
         assertTrue(handled.get() >= count);
     }
 
-    private void produce(int count, int batchSize) {
+    private void produce(int count, int streams, int batchSize) {
         for (int offset = 0; offset < count; offset += batchSize) {
             final int batchStart = offset;
             final int batchEnd = Math.min(offset + batchSize, count);
             redis.executePipelined((RedisCallback<Object>) connection -> {
                 for (int i = batchStart; i < batchEnd; i++) {
+                    int streamIndex = i % streams;
                     Map<byte[], byte[]> fields = Map.of(
-                            bytes("msgId"), bytes("load-" + i),
-                            bytes("bizCode"), bytes("load"),
-                            bytes("bizId"), bytes("biz-" + (i % 1000)),
+                            bytes("msgId"), bytes("load-" + streamIndex + "-" + i),
+                            bytes("bizCode"), bytes("load-" + streamIndex),
+                            bytes("bizId"), bytes("biz-" + streamIndex + "-" + (i % 1000)),
                             bytes("eventType"), bytes("LOAD_EVENT"),
                             bytes("payload"), bytes("{}"));
-                    connection.streamCommands().xAdd(bytes(STREAM), fields);
+                    connection.streamCommands().xAdd(
+                            bytes(STREAM_PREFIX + streamIndex), fields);
                 }
                 return null;
             });
+        }
+    }
+
+    private void deleteStreams(int streams) {
+        for (int i = 0; i < streams; i++) {
+            redis.delete(STREAM_PREFIX + i);
         }
     }
 
