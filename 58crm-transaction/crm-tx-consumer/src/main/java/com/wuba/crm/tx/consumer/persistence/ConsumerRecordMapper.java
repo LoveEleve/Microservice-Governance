@@ -13,6 +13,18 @@ import java.util.List;
 @Mapper
 public interface ConsumerRecordMapper extends BaseMapper<ConsumerRecordEntity> {
 
+    @Select("""
+            <script>
+            SELECT msg_id
+            FROM t_consume_record
+            WHERE msg_id IN
+            <foreach collection="msgIds" item="msgId" open="(" separator="," close=")">
+                #{msgId}
+            </foreach>
+            </script>
+            """)
+    List<String> findExistingIds(@Param("msgIds") List<String> msgIds);
+
     @Insert("""
             <script>
             INSERT IGNORE INTO t_consume_record

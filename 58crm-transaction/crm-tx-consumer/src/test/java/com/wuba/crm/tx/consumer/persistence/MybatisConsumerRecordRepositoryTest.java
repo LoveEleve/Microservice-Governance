@@ -95,6 +95,22 @@ class MybatisConsumerRecordRepositoryTest {
     }
 
     @Test
+    void insertReadyBatch_filtersExistingRowsAndInsertsNewOnes() throws Exception {
+        withRepository(repository -> {
+            repository.insertReadyBatch(List.of(message("m-1")), NOW);
+            repository.claimReadyBatch(new ClaimRequest(
+                    "lead", "c-1", "owner-1", 10, NOW, NOW.plusSeconds(60)));
+            repository.markConsumed("m-1", "owner-1", 1, NOW.plusSeconds(1));
+
+            assertEquals(1, repository.insertReadyBatch(
+                    List.of(message("m-1"), message("m-2")), NOW.plusSeconds(2)));
+
+            assertEquals("CONSUMED", entity("m-1").getStatus());
+            assertEquals("READY", entity("m-2").getStatus());
+        });
+    }
+
+    @Test
     void claimReadyBatch_movesReadyToProcessingWithEpoch() throws Exception {
         withRepository(repository -> {
             repository.insertReadyBatch(List.of(message("m-1")), NOW);

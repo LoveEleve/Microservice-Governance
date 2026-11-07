@@ -33,6 +33,16 @@ public class MybatisConsumerRecordRepository implements ConsumerRecordRepository
             ConsumerRecord record = ConsumerRecord.ready(message, now);
             unique.putIfAbsent(record.msgId(), toEntity(record));
         }
+        if (unique.isEmpty()) {
+            return 0;
+        }
+        List<String> existing = mapper.findExistingIds(new ArrayList<>(unique.keySet()));
+        for (String msgId : existing) {
+            unique.remove(msgId);
+        }
+        if (unique.isEmpty()) {
+            return 0;
+        }
         return mapper.insertReadyBatch(new ArrayList<>(unique.values()));
     }
 
