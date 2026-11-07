@@ -341,53 +341,95 @@ RM 需要暴露 Confirm/Cancel 服务（gRPC/HTTP）
 需要处理端口/安全/内网可达
 ```
 
-### 8.2 为什么不用 bidi stream
+### 8.2 Seata 的做法：客户端连接所有 TC
 
-如果 RM 只连接一个 TC：
-
-```text
-Confirm 请求落到另一个 TC
-那个 TC 没有这条 stream
--> 发不出去
-```
-
-如果 RM 连接所有 TC：
+Seata 并不是没有这个问题，它的方案是：
 
 ```text
-连接数按 RM 实例数 × TC 数膨胀
-TC 扩容要所有 RM 重连
-注册表分散在 5 个 TC
+TM/RM 客户端连接所有 TC 实例
+每个 TC 都持有到 RM 的 channel
+任意 TC 都能下发 Confirm/Cancel
 ```
 
-所以第一版不做 bidi control stream，也不做 stream owner 转发。
-
-### 8.3 备选：Seata 风格单控制流
-
-如果后续 RM 不方便暴露 callback 端口，再做：
+源码依据：
 
 ```text
-RM 只连接一个 TC
-TC 集群内部维护 stream owner
-其它 TC 把命令转给 owner
+core/.../NettyClientChannelManager.reconnect
+  -> lookup 所有 TC 地址
+  -> for each serverAddress: acquireChannel
 ```
 
-优点：RM 不需要暴露端口。
-缺点：TC 内部需要 stream 路由/转发，复杂度更高。
-
-第一版选择：
+所以 Seata 的 A 方案是：
 
 ```text
-TM -> TC：unary
-TC -> RM：unary callback（客户端注册 endpoint）
+用连接数换实现简单
 ```
 
-不在第一版做：
+代价：
 
 ```text
-RM 连接所有 TC
-TC 内部 stream 转发
-sticky xid 到 TC
+连接数 = 客户端实例数 × TC 数
+TC 扩容需要客户端重连
 ```
+
+5 个固定 TC、客户端数量可控时可以接受；TC 数量很大或客户端很多时会膨胀。
+
+### 8.3 DTM 的做法：callback URL
+
+DTM 不维护 TC->RM 长连接，而是：
+
+```text
+RM 注册分支时提供 confirm/cancel URL
+DTM 服务端按 URL 回调
+```
+
+也就是本项目的 callback 方案：
+
+```text
+RM 在 branch register 时提供 callbackEndpoint
+TC 任意实例按 endpoint 调 Confirm/Cancel
+```
+
+优点：
+
+```text
+TC 实例之间不共享 stream registry
+RM 不需要连接所有 TC
+```
+
+代价：
+
+```text
+RM 需要暴露 callback 服务
+需要端口/安全/内网可达
+```
+
+### 8.4 本项目的选择
+
+```text
+如果 TC 固定 5 个、Java 客户端为主：
+  可以选 Seata 风格 A（连接所有 TC）
+
+如果 TC 动态扩容、客户端很多、跨语言：
+  选 DTM 风格 B（callback endpoint）
+```
+
+第一版建议：
+
+```text
+先按 A 设计（Seata 风格）
+连接数压测不可接受时，再切 B
+```
+
+不选：
+
+```text
+TC 查 Nacos 发现 RM
+TC 配置业务方 serviceName
+用 Spring Cloud LoadBalancer 解决 TC->RM
+```
+
+Spring Cloud LoadBalancer 只选一个 TC 实例，不能保证 Confirm 落到持有 channel 的 TC；除非做 sticky/consistent hash，但会引入故障迁移问题。
 
 ## 9. TCC 与消息
 
