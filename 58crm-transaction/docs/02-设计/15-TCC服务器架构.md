@@ -404,21 +404,39 @@ RM 需要暴露 callback 服务
 需要端口/安全/内网可达
 ```
 
-### 8.4 本项目的选择
+### 8.4 本项目选择：B（callback）
 
 ```text
-如果 TC 固定 5 个、Java 客户端为主：
-  可以选 Seata 风格 A（连接所有 TC）
-
-如果 TC 动态扩容、客户端很多、跨语言：
-  选 DTM 风格 B（callback endpoint）
+TM -> TC：gRPC unary
+TC -> RM：gRPC unary callback
 ```
 
-第一版建议：
+branch 保存：
 
 ```text
-先按 A 设计（Seata 风格）
-连接数压测不可接受时，再切 B
+callbackEndpoint
+callbackToken
+actionName
+resourceKey
+```
+
+选择理由：
+
+```text
+TC 会扩缩容
+不维护客户端连接表
+不做 TC 内部 stream 转发
+不做 xid sticky
+```
+
+RM callback endpoint 要求：
+
+```text
+稳定服务地址：K8s Service / 内网 LB
+不使用 Pod IP
+内网可达
+token/mTLS 鉴权
+participantGroup allowlist
 ```
 
 不选：
@@ -426,10 +444,17 @@ RM 需要暴露 callback 服务
 ```text
 TC 查 Nacos 发现 RM
 TC 配置业务方 serviceName
-用 Spring Cloud LoadBalancer 解决 TC->RM
+RM 连接所有 TC
+Spring Cloud LoadBalancer 解决 TC->RM
 ```
 
 Spring Cloud LoadBalancer 只选一个 TC 实例，不能保证 Confirm 落到持有 channel 的 TC；除非做 sticky/consistent hash，但会引入故障迁移问题。
+
+A（Seata 风格）保留为后续性能对照：
+
+```text
+只有压测证明 callback 网络/端口成本不可接受时再评估
+```
 
 ## 9. TCC 与消息
 
