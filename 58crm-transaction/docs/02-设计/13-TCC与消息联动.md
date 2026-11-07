@@ -124,7 +124,7 @@ Confirm：
 
 投递器只扫 `READY`。
 
-但这样实际上还是“Confirm 决定事件是否可发”，只是消息行提前插入。  
+但这样实际上还是“Confirm 决定事件是否可发”，只是消息行提前插入。
 当前 `t_local_message` 只有 `INIT/SENT/DONE/DEAD`，没有 `PREPARED`，所以不能直接照 Try 写。
 
 ## 5. 什么事件可以在 Try 发
