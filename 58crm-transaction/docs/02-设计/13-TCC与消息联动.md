@@ -164,26 +164,46 @@ Cancel:
 下游要等 Confirm 完成后才收到终态事件
 ```
 
-## 5. 选择建议
+## 5. 本项目决定
 
 ```text
-只需要最终成功通知
-  -> 方案 C：Confirm 写终态事件
-
-需要实时展示处理中
-  -> 方案 A：Try 发 ATTEMPT + Cancel 发 CANCELLED
-
-既要提前落消息，又不想发错
-  -> 方案 B：PREPARED/READY
+终态业务事件：Confirm 本地事务写 Outbox
+Try：只做资源预占和 barrier
+Cancel：释放资源，不发成功事件
 ```
 
-不建议：
+例如：
 
 ```text
-Try 直接发 LEAD_ASSIGNED
-Cancel 后没有撤销事件
-下游把 ATTEMPT 当 FINAL
+LEAD_ASSIGNED
+CONTRACT_EFFECTIVE
+ORDER_PAID
 ```
+
+这些全部只在 Confirm 后发。
+
+如果确实需要“处理中”展示：
+
+```text
+LEAD_ASSIGNING
+```
+
+它只能是独立 ATTEMPT 事件，并且必须有：
+
+```text
+LEAD_ASSIGN_CANCELLED
+```
+
+下游必须实现状态机，不能把 ATTEMPT 当 FINAL。
+
+本项目默认不做 ATTEMPT 事件。  
+原因：
+
+```text
+没有任何核心业务应该依赖一个可能被 Cancel 的通知
+```
+
+标准文档 `58CRM_-_系统分布式事务项目_.md` 的 Try 后写本地消息表，是设计缺陷，不照搬。
 
 ## 6. 消息服务边界
 
