@@ -83,8 +83,10 @@ public class OutboxBuffer {
      */
     public boolean tryPut(OutboxRecord record) throws InterruptedException {
         long bytes = estimateBytes(record);
+        // 超容量不是“队列满”，必须抛异常，让 Scanner 转 DEAD；
+        // 返回 false 只表示暂时没有容量。
         if (bytes > maxBytes || bytes > perBizMaxBytes) {
-            return false;
+            throw new MessageTooLargeException(record.msgId(), bytes, maxBytes);
         }
         lock.lockInterruptibly();
         try {

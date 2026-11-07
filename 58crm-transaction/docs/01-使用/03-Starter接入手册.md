@@ -57,6 +57,8 @@ crm:
       batch-size: 256
       buffer-capacity: 50000
       buffer-capacity-bytes: 67108864
+      per-biz-capacity: 10000
+      per-biz-capacity-bytes: 16777216
       scan-batch: 1000
       scan-interval: 10ms
       retry-after: 30s
