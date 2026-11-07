@@ -43,10 +43,12 @@ class MybatisOutboxPublisherTest {
                 "LEAD_ASSIGNED",
                 "{\"salesId\":1001}");
 
+        org.mockito.Mockito.when(localMessageMapper.insertIgnore(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1);
         String msgId = publisher.publish(event);
 
         ArgumentCaptor<LocalMessageEntity> captor = ArgumentCaptor.forClass(LocalMessageEntity.class);
-        verify(localMessageMapper).insert(captor.capture());
+        verify(localMessageMapper).insertIgnore(captor.capture());
         LocalMessageEntity saved = captor.getValue();
 
         assertNotNull(msgId);
@@ -60,6 +62,24 @@ class MybatisOutboxPublisherTest {
         assertEquals(0, saved.getRetryCount());
         assertNotNull(saved.getCreatedAt());
         assertNotNull(saved.getUpdatedAt());
+    }
+
+    @Test
+    void publish_sameEventKey_returnsExistingMessageId() {
+        LocalMessageEntity existing = new LocalMessageEntity();
+        existing.setMsgId("existing-msg");
+        org.mockito.Mockito.when(localMessageMapper.insertIgnore(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(0);
+        org.mockito.Mockito.when(localMessageMapper.selectByEventKey("event-1"))
+                .thenReturn(existing);
+        MybatisOutboxPublisher publisher = new MybatisOutboxPublisher(
+                localMessageMapper, BizCodeRegistry.of("lead"));
+
+        String msgId = publisher.publish(new BusinessEvent(
+                "event-1", "lead", "lead-1", "LEAD_ASSIGNED", "{}"));
+
+        assertEquals("existing-msg", msgId);
+        verify(localMessageMapper).selectByEventKey("event-1");
     }
 
     @Test

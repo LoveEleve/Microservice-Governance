@@ -64,7 +64,14 @@ public class MybatisOutboxPublisher implements OutboxPublisher {
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
 
-        localMessageMapper.insert(entity);
-        return msgId;
+        int inserted = localMessageMapper.insertIgnore(entity);
+        if (inserted == 1) {
+            return msgId;
+        }
+        LocalMessageEntity existing = localMessageMapper.selectByEventKey(event.eventKey());
+        if (existing == null) {
+            throw new IllegalStateException("outbox insert ignored but event not found: " + event.eventKey());
+        }
+        return existing.getMsgId();
     }
 }
