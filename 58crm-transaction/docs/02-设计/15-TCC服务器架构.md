@@ -82,7 +82,7 @@ Coordinator 直接写参与方业务表
                       ├── MySQL 主库（全局/分支状态）
                       ├── MySQL 从库（查询）
                       └── Scheduler/Lease
-       
+
 Participant SDK
   └── 业务库：t_branch_barrier + t_local_message
 ```
