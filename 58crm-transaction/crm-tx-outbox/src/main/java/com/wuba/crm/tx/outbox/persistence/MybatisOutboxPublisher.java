@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 /**
@@ -45,7 +46,7 @@ public class MybatisOutboxPublisher implements OutboxPublisher {
 
         // msgId 是消息记录身份；eventKey 才是业务事件幂等键，两者不能混用。
         String msgId = UUID.randomUUID().toString();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         // 只插入本地消息表，不在这里写 Redis/Stream。
         LocalMessageEntity entity = new LocalMessageEntity();
@@ -58,6 +59,8 @@ public class MybatisOutboxPublisher implements OutboxPublisher {
         // 初始状态必须是 INIT：消息还没进入 Stream。
         entity.setStatus(MessageStatus.INIT.name());
         entity.setRetryCount(0);
+        // 首次投递也使用 next_retry_at，Scanner 可以用单列范围+排序，避免 IS NULL OR。
+        entity.setNextRetryAt(now);
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
 

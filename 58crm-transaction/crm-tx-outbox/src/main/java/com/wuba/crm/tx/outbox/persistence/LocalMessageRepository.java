@@ -21,6 +21,13 @@ public interface LocalMessageRepository {
     List<LocalMessage> findRelayCandidates(int limit);
 
     /**
+     * 按 bizCode 查询待投递消息，供 Scanner 做业务线公平轮询。
+     */
+    default List<LocalMessage> findRelayCandidatesByBizCode(String bizCode, int limit) {
+        return List.of();
+    }
+
+    /**
      * 批量标记 XADD 成功。
      */
     int markSentBatch(List<LocalMessage> messages, java.time.Instant nextRetryAt);

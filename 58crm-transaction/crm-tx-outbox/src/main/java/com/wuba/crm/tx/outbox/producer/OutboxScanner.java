@@ -6,6 +6,7 @@ import com.wuba.crm.tx.outbox.domain.LocalMessage;
 import com.wuba.crm.tx.outbox.domain.OutboxRecord;
 import com.wuba.crm.tx.outbox.persistence.LocalMessageRepository;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -22,6 +23,8 @@ public class OutboxScanner {
     private final OutboxInFlight inFlight;
     private final int scanBatch;
     private final BizCodeRegistry registry;
+    // Scanner 轮询起点；每轮从下一个 bizCode 开始，避免固定头部饥饿。
+    private int cursor;
 
     public OutboxScanner(
             LocalMessageRepository repository,
@@ -34,6 +37,7 @@ public class OutboxScanner {
         this.inFlight = inFlight;
         this.scanBatch = scanBatch;
         this.registry = registry;
+        this.cursor = 0;
     }
 
     /**
@@ -42,30 +46,38 @@ public class OutboxScanner {
      * @return 本轮放入 buffer 的消息数
      */
     public int scanOnce() throws InterruptedException {
-        // 只查 INIT；SENT 是生产方终态，不能再靠超时重发。
-        List<LocalMessage> candidates = repository.findRelayCandidates(scanBatch);
+        List<String> codes = new ArrayList<>(registry.bizCodes());
+        codes.sort(String::compareTo);
+        if (codes.isEmpty()) {
+            return 0;
+        }
+
+        // 每个业务线每轮至少一个名额，避免 lead 占满全局 LIMIT。
+        int perBizLimit = Math.max(1, (scanBatch + codes.size() - 1) / codes.size());
         int accepted = 0;
-        for (LocalMessage candidate : candidates) {
-            // add 返回 false 说明消息已经在内存队列/发送中，直接跳过。
-            if (!inFlight.add(candidate.msgId())) {
-                continue;
-            }
-            try {
-                // 历史脏数据/非法 bizCode 不能创建孤儿 Stream，直接标记 DEAD。
-                registry.require(candidate.bizCode());
-                // buffer 满时这里会阻塞，Scanner 被反压，不会无限堆内存。
-                buffer.put(OutboxRecord.from(candidate));
-                accepted++;
-            } catch (UnknownBizCodeException ex) {
-                reject(candidate);
-            } catch (MessageTooLargeException ex) {
-                reject(candidate);
-            } catch (InterruptedException ex) {
-                // 线程被关闭时释放当前消息，让下一次进程启动后还能重新扫描。
-                inFlight.remove(candidate.msgId());
-                throw ex;
+        for (int i = 0; i < codes.size(); i++) {
+            String bizCode = codes.get((cursor + i) % codes.size());
+            List<LocalMessage> candidates =
+                    repository.findRelayCandidatesByBizCode(bizCode, perBizLimit);
+            for (LocalMessage candidate : candidates) {
+                if (!inFlight.add(candidate.msgId())) {
+                    continue;
+                }
+                try {
+                    registry.require(candidate.bizCode());
+                    buffer.put(OutboxRecord.from(candidate));
+                    accepted++;
+                } catch (UnknownBizCodeException ex) {
+                    reject(candidate);
+                } catch (MessageTooLargeException ex) {
+                    reject(candidate);
+                } catch (InterruptedException ex) {
+                    inFlight.remove(candidate.msgId());
+                    throw ex;
+                }
             }
         }
+        cursor = (cursor + 1) % codes.size();
         return accepted;
     }
 

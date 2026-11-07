@@ -9,7 +9,7 @@ import com.wuba.crm.tx.common.MessageStatus;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,7 +37,7 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
     @Override
     public List<LocalMessage> findRelayCandidates(int limit) {
         int safeLimit = Math.max(1, Math.min(limit, MAX_BATCH_SIZE));
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         LambdaQueryWrapper<LocalMessageEntity> query = Wrappers.lambdaQuery();
         query.eq(LocalMessageEntity::getStatus, MessageStatus.INIT.name())
@@ -47,6 +47,26 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
                 .orderByAsc(LocalMessageEntity::getCreatedAt)
                 .last("LIMIT " + safeLimit);
 
+        List<LocalMessage> messages = new ArrayList<>();
+        for (LocalMessageEntity entity : localMessageMapper.selectList(query)) {
+            messages.add(toDomain(entity));
+        }
+        return messages;
+    }
+
+    @Override
+    public List<LocalMessage> findRelayCandidatesByBizCode(String bizCode, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, MAX_BATCH_SIZE));
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LambdaQueryWrapper<LocalMessageEntity> query = Wrappers.lambdaQuery();
+        query.eq(LocalMessageEntity::getBizCode, bizCode)
+                .eq(LocalMessageEntity::getStatus, MessageStatus.INIT.name())
+                .and(wrapper -> wrapper
+                        .isNull(LocalMessageEntity::getNextRetryAt)
+                        .or(retry -> retry.le(LocalMessageEntity::getNextRetryAt, now)))
+                .orderByAsc(LocalMessageEntity::getNextRetryAt)
+                .orderByAsc(LocalMessageEntity::getCreatedAt)
+                .last("LIMIT " + safeLimit);
         List<LocalMessage> messages = new ArrayList<>();
         for (LocalMessageEntity entity : localMessageMapper.selectList(query)) {
             messages.add(toDomain(entity));
@@ -77,7 +97,7 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
                     .add(message.msgId());
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         int affected = 0;
         for (Map.Entry<String, List<String>> entry : byBizId.entrySet()) {
             LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
@@ -121,7 +141,7 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
             byBizId.computeIfAbsent(message.bizId(), ignored -> new ArrayList<>())
                     .add(message.msgId());
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         int affected = 0;
         for (Map.Entry<String, List<String>> entry : byBizId.entrySet()) {
             LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
@@ -162,7 +182,7 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
                     .add(message.msgId());
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         int affected = 0;
         for (Map.Entry<String, List<String>> entry : byBizId.entrySet()) {
             LambdaUpdateWrapper<LocalMessageEntity> update = Wrappers.lambdaUpdate();
@@ -194,6 +214,6 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
     }
 
     private LocalDateTime toLocalDateTime(Instant instant) {
-        return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+        return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 }

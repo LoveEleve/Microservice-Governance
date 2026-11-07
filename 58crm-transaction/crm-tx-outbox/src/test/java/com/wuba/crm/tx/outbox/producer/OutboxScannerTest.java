@@ -41,7 +41,25 @@ class OutboxScannerTest {
     }
 
     @Test
-    void scanOnce_rejectsUnknownBizCodeWithoutBuffering() throws Exception {
+    void scanOnce_queriesAllRegisteredBizCodesPerRound() throws Exception {
+        LocalMessage lead = new LocalMessage(
+                "lead-1", "event-lead-1", "lead", "lead-1", "LEAD_ASSIGNED",
+                "{}", null, MessageStatus.INIT, 0);
+        LocalMessage quota = new LocalMessage(
+                "quota-1", "event-quota-1", "quota", "quota-1", "QUOTA_RESERVED",
+                "{}", null, MessageStatus.INIT, 0);
+        FakeRepository repository = new FakeRepository(List.of(lead, quota));
+        OutboxBuffer buffer = new OutboxBuffer(10, 4096);
+        OutboxScanner scanner = new OutboxScanner(
+                repository, buffer, new OutboxInFlight(), 10,
+                com.wuba.crm.tx.outbox.config.BizCodeRegistry.of("lead", "quota"));
+
+        assertEquals(2, scanner.scanOnce());
+        assertEquals(2, buffer.size());
+    }
+
+    @Test
+    void scanOnce_ignoresUnregisteredBizCodeFromLegacyData() throws Exception {
         LocalMessage message = new LocalMessage(
                 "m-1", "event-m-1", "lead-typo", "lead-1", "LEAD_ASSIGNED",
                 "{}", null, MessageStatus.INIT, 0);
@@ -53,7 +71,6 @@ class OutboxScannerTest {
 
         assertEquals(0, scanner.scanOnce());
         assertEquals(0, buffer.size());
-        assertEquals(1, repository.failed);
     }
 
     private static final class FakeRepository implements LocalMessageRepository {
@@ -68,6 +85,20 @@ class OutboxScannerTest {
         @Override
         public List<LocalMessage> findRelayCandidates(int limit) {
             return messages;
+        }
+
+        @Override
+        public List<LocalMessage> findRelayCandidatesByBizCode(String bizCode, int limit) {
+            java.util.List<LocalMessage> result = new java.util.ArrayList<>();
+            for (LocalMessage message : messages) {
+                if (message.bizCode().equals(bizCode)) {
+                    result.add(message);
+                    if (result.size() >= limit) {
+                        break;
+                    }
+                }
+            }
+            return result;
         }
 
         @Override
