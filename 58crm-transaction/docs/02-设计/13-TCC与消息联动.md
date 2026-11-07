@@ -196,7 +196,7 @@ LEAD_ASSIGN_CANCELLED
 
 下游必须实现状态机，不能把 ATTEMPT 当 FINAL。
 
-本项目默认不做 ATTEMPT 事件。  
+本项目默认不做 ATTEMPT 事件。
 原因：
 
 ```text
