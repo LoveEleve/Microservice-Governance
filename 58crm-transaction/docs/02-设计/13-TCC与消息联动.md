@@ -1,85 +1,79 @@
 # TCC 与消息模块联动
 
-> 读完你能做什么：说清终态事件在 Try 还是 Confirm 写，以及为什么 TCC 项目里需要 Outbox/消息模块。
+> 读完你能做什么：说清标准文档为什么在 Try 写消息、这样做的风险，以及终态事件应该怎么落地。
 
-## 1. 先给结论
+## 1. 标准文档口径
 
-```text
-终态业务事件：Confirm 成功后写
-Try 阶段：只做资源预占和 barrier
-Cancel：释放资源，不写成功事件
-```
-
-例如：
+以 `58CRM_-_系统分布式事务项目_.md` 为准：
 
 ```text
-LEAD_ASSIGNED
-CONTRACT_EFFECTIVE
-ORDER_PAID
+业务方执行 Try 成功后，
+消息服务在同一数据库事务内插入本地消息表（状态 INIT）
 ```
 
-这些只能发生在 Confirm 的本地事务里。
-
-## 2. 原始文档冲突
-
-`58CRM-分布式事务-闭环设计.md` 的正常流程写过：
+标准文档还写：
 
 ```text
-3. 各参与方 Try：预占配额/库存/单据
-4. 业务本地事务写业务表 + 本地消息表(INIT)
-5. 所有 Try 成功
-6. 协调器广播 Confirm
+Try 执行成功的同时，
+消息在业务那笔本地事务里写进本地消息表，状态 INIT
 ```
 
-这行第 4 步容易被读成：
+并且：
 
 ```text
-Try 成功后写消息
+Confirm 和消息消费是两回事
+消息解决下游服务怎么知道这件事发生了
+Confirm 解决参与方自己的预留资源怎么落定
+两者互不阻塞
 ```
 
-但同一套文档的 `08-业务接入示例.md` 明确写：
+所以标准文档的设计是：
 
 ```text
-Confirm：
-  最终落库
-  + 同一本地事务写 Outbox LEAD_ASSIGNED
-
-不能：
-  Try 阶段发 LEAD_ASSIGNED
+Try 成功后写本地消息
+消息消费和 Confirm 并行
 ```
 
-`07-最终模型.md` 的 TCC 主流程也写：
+不是 Confirm 后写消息。
+
+`项目参数-叶_.md` 只描述投递层和 Redis List，没有改变这个阶段口径。
+
+## 2. 消息服务关心终态吗
+
+消息服务本身不判断 TCC 阶段。
+
+它只负责：
 
 ```text
-Try：
-  业务预占 + barrier(TRY_SUCCESS)
-
-Confirm：
-  业务转正 + barrier(CONFIRMED)
-  + 同事务写 t_local_message(INIT)
+消息正本
+投递
+重试
+消费
+幂等
 ```
 
-所以正确口径是：
+但事件必须区分语义：
 
 ```text
-Try 业务本地事务：业务预占 + barrier(TRY_SUCCESS)
-Confirm 本地事务：业务转正 + barrier(CONFIRMED) + Outbox(INIT)
+ATTEMPT    处理中/资源预占
+FINAL      最终成功
+CANCELLED  最终取消
 ```
 
-`58CRM-分布式事务-闭环设计.md` 第 4 步是文档冲突/歧义，不是 Try 发终态事件的依据。
+如果消息服务把所有事件都当成 FINAL，就会把“预占成功”误当成“业务成功”。
 
-## 3. 为什么 Try 发终态事件不合理
+## 3. 标准做法的问题
 
-假设 Try 写 `LEAD_ASSIGNED` 的 Outbox：
+Try 写 `LEAD_ASSIGNED`（终态事件）：
 
 ```text
 Try 成功
-Outbox INIT
-投递器扫描 INIT
+消息 INIT
+投递器发送
 下游收到 LEAD_ASSIGNED
 ```
 
-但 TCC 还没 Confirm，后续可能：
+之后可能：
 
 ```text
 另一个参与方 Try 失败
@@ -88,121 +82,129 @@ Outbox INIT
 配额释放
 ```
 
-结果：
+下游已经看到了最终成功事件，但实际上事务被取消。
+
+所以：
 
 ```text
-下游已经认为 LEAD_ASSIGNED 成功
-实际全局事务已取消
+Try 成功 ≠ 全局事务成功
 ```
 
-这是错误的最终事实。
+标准文档没有区分 ATTEMPT 和 FINAL，这是语义漏洞。
 
-## 4. 如果非要在 Try 写消息，需要额外状态
+## 4. 三种处理方案
 
-必须把消息分成：
+### 方案 A：Try 只发 ATTEMPT 事件
 
 ```text
-PREPARED   Try 写入，但不可投递
-READY      Confirm 后置为可投递
-SENT       已投递
-DONE       消费成功
+Try -> LEAD_ASSIGNING
+Confirm -> LEAD_ASSIGNED
+Cancel -> LEAD_ASSIGN_CANCELLED
 ```
 
-Try：
+下游必须实现状态机，能处理：
 
 ```text
-业务预占
-+ t_local_message(PREPARED)
+ASSIGNING -> ASSIGNED
+ASSIGNING -> CANCELLED
+乱序/重复
 ```
 
-Confirm：
+适合确实需要实时展示“处理中”的场景。
+
+### 方案 B：Try 写 PREPARED，Confirm 转 READY
 
 ```text
-业务转正
-+ t_local_message(PREPARED -> READY)
+Try:
+  业务预占
+  + t_local_message(PREPARED)
+
+Confirm:
+  业务转正
+  + t_local_message(PREPARED -> READY)
+
+Cancel:
+  t_local_message(PREPARED -> CANCELLED)
+
+Relay:
+  只扫 READY
 ```
 
-投递器只扫 `READY`。
+这样消息行提前插入，但 Confirm 才决定可投递。
 
-但这样实际上还是“Confirm 决定事件是否可发”，只是消息行提前插入。
-当前 `t_local_message` 只有 `INIT/SENT/DONE/DEAD`，没有 `PREPARED`，所以不能直接照 Try 写。
-
-## 5. 什么事件可以在 Try 发
-
-可以，但必须是非终态事件，例如：
+当前 `t_local_message` 只有：
 
 ```text
-LEAD_ASSIGNING
-QUOTA_RESERVING
+INIT / SENT / DONE / DEAD
 ```
 
-且必须满足：
+没有 `PREPARED`，采用方案 B 需要扩状态。
+
+### 方案 C：终态事件在 Confirm 写
 
 ```text
-事件类型和终态事件分开
-下游不会把它当成最终成功
-下游有对应的取消/过期语义
+Try:
+  只做资源预占 + barrier
+
+Confirm:
+  业务最终状态
+  + barrier(CONFIRMED)
+  + t_local_message(INIT)
+
+Cancel:
+  释放资源
+  不写成功事件
 ```
 
-不能把 `LEAD_ASSIGNED` 这种终态事件放 Try。
+这是最简单、最不容易产生假成功事件的方案。
 
-## 6. TCC Confirm 与 Outbox 的正确事务
+代价：
 
 ```text
-Confirm 本地事务
-  BEGIN
-    业务表最终状态
-    t_branch_barrier(CONFIRMED)
-    t_local_message(INIT)
-  COMMIT
+下游要等 Confirm 完成后才收到终态事件
 ```
 
-保证：
+## 5. 选择建议
 
 ```text
-业务提交 -> 消息一定在
-业务回滚 -> 消息不存在
-Confirm 重试 -> barrier + eventKey 幂等
+只需要最终成功通知
+  -> 方案 C：Confirm 写终态事件
+
+需要实时展示处理中
+  -> 方案 A：Try 发 ATTEMPT + Cancel 发 CANCELLED
+
+既要提前落消息，又不想发错
+  -> 方案 B：PREPARED/READY
 ```
 
-之后：
+不建议：
 
 ```text
-OutboxRelay
-  -> Redis Stream
-  -> 下游消费者
+Try 直接发 LEAD_ASSIGNED
+Cancel 后没有撤销事件
+下游把 ATTEMPT 当 FINAL
 ```
 
-## 7. TCC 和消息模块的边界
+## 6. 消息服务边界
+
+消息服务不查 TCC 表，也不判断 Try/Confirm。
+
+阶段由生产方决定：
 
 ```text
-TCC 负责：
-  资源预占、确认、取消
-  t_tcc_global / t_tcc_branch / barrier
-
-消息模块负责：
-  Confirm 后的终态事件通知
-  t_local_message / Stream / 消费幂等
-
-Redis 负责：
-  可重放传输，不存 TCC 状态
+TccAction.tryAction
+TccAction.confirmAction
+TccAction.cancelAction
 ```
 
-消息模块不可用：
+消息服务只保证：
 
 ```text
-TCC Confirm 仍可成功
-事件留在 t_local_message
-恢复后继续投递
+写进 Outbox 的消息可靠投递
+消费端幂等
+失败可恢复
 ```
 
-TCC 不可用：
+## 7. 一句话
 
-```text
-消息投递仍可独立运行
-但不会产生新的 TCC 终态事件
-```
-
-## 8. 一句话
-
-> **Try 只写预占和 barrier；Confirm 才写终态业务事实和 Outbox 终态事件。原始文档 Try 阶段写消息的表述是歧义，不能作为实现依据。**
+> **标准文档是在 Try 成功后写消息；这只适合 ATTEMPT 事件。终态事件要么放 Confirm，要么引入 PREPARED/READY，不能直接把 Try 的预占成功当最终成功。**
