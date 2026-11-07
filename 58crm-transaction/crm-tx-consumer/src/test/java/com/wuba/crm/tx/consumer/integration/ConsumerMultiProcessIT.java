@@ -105,7 +105,6 @@ class ConsumerMultiProcessIT {
         for (int i = 0; i < streams; i++) {
             redis.delete(STREAM_PREFIX + i);
         }
-        produce(count, streams, xaddBatch);
 
         String classpath = System.getProperty("surefire.test.class.path",
                 System.getProperty("java.class.path"));
@@ -113,7 +112,6 @@ class ConsumerMultiProcessIT {
         CountDownLatch ready = new CountDownLatch(streams * processesPerStream);
         List<AtomicReference<String>> outputs = new ArrayList<>();
 
-        long start = System.nanoTime();
         for (int streamIndex = 0; streamIndex < streams; streamIndex++) {
             for (int instance = 0; instance < processesPerStream; instance++) {
                 List<String> command = new ArrayList<>();
@@ -147,6 +145,9 @@ class ConsumerMultiProcessIT {
         if (!ready.await(60, TimeUnit.SECONDS)) {
             throw new AssertionError("consumer nodes not ready: " + outputs);
         }
+
+        long start = System.nanoTime();
+        produce(count, streams, xaddBatch);
         waitConsumed(count, Duration.ofMinutes(10));
         long elapsedNanos = System.nanoTime() - start;
         double seconds = elapsedNanos / 1_000_000_000.0;
