@@ -2,10 +2,10 @@
 
 ## 1. 事实基线
 
-- 生产消息层是 Redis List，不使用 Kafka/RocketMQ/Redis Stream。
-- 不使用消费者组。
-- 一条事件只进一个业务线 List，只被一个逻辑消费者取走。
-- 不做同一事件多下游 fan-out；需要多个下游时，由上游拆成多条事件。
+- 生产消息层是 Redis Stream，不使用 Kafka/RocketMQ/Redis List。
+- 每个业务线一个 Stream：`tx:stream:{bizCode}`；一个技术消费组：`tx-group-{bizCode}`。
+- 消费组只用于 ACK/PEL/offset，不做同一事件多下游 fan-out。
+- 一条事件只进一个业务线 Stream；需要多个下游时，由上游拆成多条事件。
 - MySQL 是正本；Redis 是可丢、可重放的缓冲。
 - TCC 的状态、日志、barrier 只在 MySQL。
 - payload 不能只放 Redis；必须在 MySQL 或持久对象存储指针中。
@@ -16,7 +16,7 @@
   - ShardingSphere-JDBC，16 库 × 4 表 = 64 分片
   - 分片键 `biz_id` / `msg_id`
   - MySQL 1 主 2 从，读写分离
-  - Redis Cluster，队列 32 分片
+  - Redis Cluster，Stream/业务线键按 slot 分片
   - Nacos 注册/配置
   - Sentinel 流控/熔断
 - 禁止 `production=false` 的单库代码路径。

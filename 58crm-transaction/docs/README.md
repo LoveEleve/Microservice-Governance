@@ -46,7 +46,8 @@
 | 发送管线逐行讲解 | `05-代码讲解/04-发送管线逐行讲解.md` |
 | 看 C-001.1 代码讲解 | `05-代码讲解/C-001.1-OutboxPublisher.md` |
 | 看 C-001.2 代码讲解 | `05-代码讲解/C-001.2-StreamSender.md` |
-| 看变更范围 | `.harness/changes/C-001-outbox-redis-list/change.md` |
+| 看 C-002.1 变更范围 | `.harness/changes/C-002.1-consumer-core/change.md` |
+| 看 C-001 变更范围 | `.harness/changes/C-001-outbox-redis-list/change.md` |
 
 ## 目录结构
 

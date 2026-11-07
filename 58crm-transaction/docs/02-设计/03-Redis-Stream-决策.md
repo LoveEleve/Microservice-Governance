@@ -101,7 +101,8 @@ t_consume_record
   biz_id
   stream_entry_id
   consumer_id
-  status: PROCESSING / CONSUMED / DEAD
+  status: READY / PROCESSING / CONSUMED / DEAD
+  owner_token / owner_epoch / claim_count
   lease_until
   retry_count
   payload / payload_ref
