@@ -79,38 +79,132 @@ Worker 线程从 16 加到 64 反而下降
 共享同一 Stream / group / MySQL
 ```
 
-结果：
+修复后结果：
+
+```text
+10,000 条
+18.4 秒
+542 QPS
+0 次死锁
+attempts=10000
+```
+
+多消费者没有超过单实例 16 Worker，说明增加消费线程不能绕过单 MySQL 写事务瓶颈。
+
+## 6. 死锁复盘
+
+### 6.1 现象
+
+多消费者首次压测：
 
 ```text
 10,000 条
 32.2 秒
 311 QPS
 5 次死锁
+attempts=10001
 ```
 
-多消费者没有提升，反而下降。
-说明增加消费进程不能绕过单 MySQL 写事务瓶颈。
+`attempts=10001` 说明死锁回滚后有消息被重新执行。
 
-## 6. 10W QPS 需要什么
+### 6.2 InnoDB 现场
+
+死锁发生在：
 
 ```text
-64 分片 MySQL
-每实例多 Worker
-多消费实例共享 consumer group
-按分片/业务线拆 claim
-降低每消息事务成本
+ConsumePersister: INSERT IGNORE t_consume_record
+ConsumerWorker:  UPDATE t_consume_record SET status='CONSUMED'
 ```
 
-按单 MySQL 约 700 QPS 估算：
+Persister 的批量插入包含已经存在的 `msg_id`，例如：
 
 ```text
-64 分片 × 700 = 44,800 QPS
-需要约 2~3 组等价集群才能接近 100,000 QPS
+load-27 已经是 PROCESSING
+INSERT IGNORE 仍然要对已存在行做唯一键检查
+-> Persister 持有 S 锁
+
+Worker 对同一行 markConsumed
+-> 等待 X 锁
 ```
 
-这是容量估算，不是实测结果。
+形成：
 
-## 7. 运行命令
+```text
+Persister S 锁
+       ↓
+Worker X 锁等待
+       ↓
+死锁
+```
+
+根因不是 Redis，也不是 Stream，而是：
+
+```text
+Persister 对已存在消息重复 INSERT
+```
+
+### 6.3 修复
+
+```text
+insertReadyBatch
+  -> SELECT msg_id 已存在记录
+  -> 过滤已存在 ID
+  -> 只 INSERT 真正的新消息
+```
+
+同时把 claim 从多行 `UPDATE ... IN` 改为：
+
+```text
+先选候选 ID
+-> 单行条件 UPDATE
+-> 避免多行锁顺序死锁
+```
+
+修复后：
+
+```text
+4 个消费运行时
+10,000 条
+18.4 秒
+542 QPS
+0 死锁
+attempts=10000
+```
+
+### 6.4 相关提交
+
+```text
+98dfa19 fix(tx): avoid duplicate inbox insert lock deadlocks
+```
+
+## 7. 10W QPS 的后续方向
+
+当前不先上分片。优先验证：
+
+```text
+批量幂等/状态写入
+多消费者 + 多 Stream（已跑通）
+真实业务 handler 成本
+MySQL 连接池和锁竞争
+```
+
+如果优化后仍不够，再评估：
+
+```text
+分片
+多库
+按分片领取
+```
+
+原则：
+
+```text
+先证明单库优化上限
+再决定是否分片
+不在没有基准的情况下先改分片
+```
+
+## 8. 运行命令
 
 ```bash
 mvn -pl crm-tx-consumer -am test \
