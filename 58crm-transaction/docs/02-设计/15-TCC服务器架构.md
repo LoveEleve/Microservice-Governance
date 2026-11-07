@@ -85,6 +85,7 @@ Coordinator 直接写参与方业务表
 
 Participant SDK
   └── 业务库：t_branch_barrier + t_local_message
+  └── 主动连接 Coordinator（控制通道）
 ```
 
 原则：
@@ -109,11 +110,13 @@ POST /tcc/rollback
 GET  /tcc/{xid}
 ```
 
-Participant 回调：
+Participant 控制通道：
 
 ```text
-POST /tcc/branch/confirm
-POST /tcc/branch/cancel
+ParticipantStream.Connect
+  RM 注册 participantGroup/actions
+  TC 下发 Confirm/Cancel command
+  RM 返回结果
 ```
 
 Try 由业务方通过 SDK/分支代理调用，不强制由 Coordinator 发起。
@@ -221,32 +224,89 @@ WHERE xid=? AND status=? AND lease_until < now()
 DEAD / 人工队列
 ```
 
-## 8. Participant 的连接
+## 8. Participant 的连接：TC 不发现 RM
 
-RM 在 Try 注册时保存：
-
-```text
-endpoint
-action_name
-resource_key
-application_data
-```
-
-Coordinator Confirm/Cancel：
+错误方案：
 
 ```text
-按 branch.endpoint/action_name 调 RM
-不直接操作 RM 业务表
+Coordinator 查 Nacos
+-> 找 Participant 的 serviceName
+-> 主动调用 Confirm/Cancel
 ```
 
-endpoint 来源：
+这会让服务器依赖客户端，并迫使 TC 配置使用方的服务名，扩展性差。
+
+正确方案：
 
 ```text
-Nacos 服务发现
-或配置的固定地址
+Participant SDK 启动
+  -> 主动连接 Coordinator
+  -> 建立 bidi control stream
+  -> 注册 participantGroup / actions / instanceId
+
+Coordinator
+  -> 只维护 active streams
+  -> Confirm/Cancel 通过已有 stream 下发
+  -> 不查 Nacos 找 RM
 ```
 
-第一版可以先做固定 endpoint，后续接 Nacos。
+branch 只保存：
+
+```text
+participantGroup
+actionName
+resourceKey
+applicationData
+```
+
+不保存：
+
+```text
+RM 的 IP/端口
+RM 的 Nacos serviceName
+```
+
+participantGroup 由 SDK 注册时上报，不是 TC 配置。
+
+如果某实例断线：
+
+```text
+同 participantGroup 的其它实例可接管
+branch 状态仍是 PROCESSING/CONFIRMING
+Coordinator 重试
+barrier 保证幂等
+```
+
+## 8.1 如果坚持用 unary
+
+退化方案：
+
+```text
+RM 在 branch/register 时上报 callback URL
+TC 按 callback URL 调 Confirm/Cancel
+```
+
+这是 DTM 风格：
+
+```text
+客户端提供回调地址
+不是 TC 配置客户端服务名
+```
+
+但代价：
+
+```text
+需要 RM 暴露 gRPC Server
+需要处理 NAT/端口
+断线恢复不如长连接直接
+```
+
+因此本项目优先选择：
+
+```text
+TM -> TC：unary
+RM <-> TC：bidi control stream
+```
 
 ## 9. TCC 与消息
 

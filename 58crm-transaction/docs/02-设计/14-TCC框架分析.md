@@ -166,7 +166,7 @@ DTM：barrier 表 + origin/current 幂等标记
 |---|---|---|---|
 | Try 入口 | 注解 + AOP | 显式 TCC 调用 | 注解 + Template |
 | 分支注册 | TC branchRegister | 服务端分支表 | MySQL t_tcc_branch |
-| 二阶段调用 | TC -> RM | DTM -> HTTP/gRPC | Coordinator -> Participant |
+| 二阶段调用 | TC 通过已有 RM 连接 | DTM -> 分支 URL | Coordinator 通过 RM 控制通道 |
 | 幂等/防悬挂 | tcc_fence_log | barrier 表 | t_branch_barrier |
 | 恢复 | TC 重试 | cron 扫描 | scheduler + lease |
 | 状态存储 | TC 库/日志 | SQL/Redis/Bolt | MySQL |
