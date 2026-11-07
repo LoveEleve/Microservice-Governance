@@ -71,6 +71,28 @@ crm-tx-spring-boot-starter
 Coordinator 直接写参与方业务表
 ```
 
+## 2.1 传输矩阵
+
+```text
+TM -> TC
+  gRPC unary
+  begin / register / report / commit / rollback / query
+
+RM <-> TC
+  gRPC bidi control stream
+  RM 主动连接并注册
+  TC 下发 confirm / cancel
+  RM 返回执行结果
+```
+
+不使用：
+
+```text
+TC 查 Nacos 发现 RM
+TC 配置业务方 serviceName/endpoint
+为了“全一元”让 TC 主动连 RM
+```
+
 ## 3. 部署拓扑
 
 ```text
@@ -341,8 +363,8 @@ TRY / CONFIRM / CANCEL
 1. 只写了 Coordinator 组件，没有独立 server 模块
 2. 没有 API/传输协议
 3. 没有 Coordinator 集群/租约/选主
-4. 没有 participant endpoint 注册
-5. 没有 Nacos 服务发现
+4. 没有 RM 主动控制流/注册协议
+5. 没有明确 Nacos 只发现 TC、不发现 RM
 6. 没有 scheduler 扫描条件
 7. 没有 server 级幂等键
 8. 没有 server 监控/告警
@@ -356,7 +378,10 @@ TRY / CONFIRM / CANCEL
 C-003.1
   crm-tx-tcc-api
   TccStatus / TccAction / BusinessActionContext
-  Coordinator/Participant DTO
+  Coordinator unary DTO
+  Participant control-stream DTO
+  proto 契约（Begin/Register/Report/Commit/Rollback）
+  控制流（Register/Heartbeat/Confirm/Cancel/Result）
 
 C-003.2
   crm-tx-tcc-coordinator 服务器
