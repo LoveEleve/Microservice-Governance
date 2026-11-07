@@ -333,7 +333,7 @@ actionName
 resourceKey
 ```
 
-TC 不发现 RM，也不配置业务方 serviceName。  
+TC 不发现 RM，也不配置业务方 serviceName。
 endpoint 是客户端在一次注册里主动提供的回调地址。
 
 代价：
@@ -351,7 +351,7 @@ TC 集群内部维护 stream owner
 其它 TC 把命令转给 owner
 ```
 
-优点：RM 不需要暴露回调端口。  
+优点：RM 不需要暴露回调端口。
 缺点：TC 内部需要 stream 路由/转发，复杂度更高。
 
 第一版选择：
