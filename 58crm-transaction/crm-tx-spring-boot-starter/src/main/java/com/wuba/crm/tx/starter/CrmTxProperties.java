@@ -91,7 +91,9 @@ public class CrmTxProperties {
                 outbox.scanInterval,
                 outbox.retryAfter,
                 outbox.maxRetries,
-                outbox.senderThreads);
+                outbox.senderThreads,
+                outbox.perBizCapacity,
+                outbox.perBizCapacityBytes);
     }
 
     public static class Outbox {
@@ -105,6 +107,8 @@ public class CrmTxProperties {
         private Duration retryAfter = Duration.ofSeconds(30);
         private int maxRetries = 5;
         private int senderThreads = 8;
+        private int perBizCapacity = 10_000;
+        private long perBizCapacityBytes = 16L * 1024 * 1024;
 
         public Duration getLinger() {
             return linger;
@@ -176,6 +180,22 @@ public class CrmTxProperties {
 
         public void setSenderThreads(int senderThreads) {
             this.senderThreads = senderThreads;
+        }
+
+        public int getPerBizCapacity() {
+            return perBizCapacity;
+        }
+
+        public void setPerBizCapacity(int perBizCapacity) {
+            this.perBizCapacity = perBizCapacity;
+        }
+
+        public long getPerBizCapacityBytes() {
+            return perBizCapacityBytes;
+        }
+
+        public void setPerBizCapacityBytes(long perBizCapacityBytes) {
+            this.perBizCapacityBytes = perBizCapacityBytes;
         }
     }
 }

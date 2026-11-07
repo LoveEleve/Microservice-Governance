@@ -33,15 +33,27 @@ public class OutboxBuffer {
     // 双重容量限制：条数防小消息把队列撑爆，字节数防大 payload 把 JVM 内存撑爆。
     private final int maxMessages;
     private final long maxBytes;
+    private final int perBizMaxMessages;
+    private final long perBizMaxBytes;
+    private final Map<String, Long> bizBytes = new HashMap<>();
     private int messageCount;
     private long byteCount;
 
     public OutboxBuffer(int maxMessages, long maxBytes) {
-        if (maxMessages <= 0 || maxBytes <= 0) {
+        this(maxMessages, maxBytes, maxMessages, maxBytes);
+    }
+
+    public OutboxBuffer(
+            int maxMessages, long maxBytes,
+            int perBizMaxMessages, long perBizMaxBytes) {
+        if (maxMessages <= 0 || maxBytes <= 0
+                || perBizMaxMessages <= 0 || perBizMaxBytes <= 0) {
             throw new IllegalArgumentException("capacity must be positive");
         }
         this.maxMessages = maxMessages;
         this.maxBytes = maxBytes;
+        this.perBizMaxMessages = perBizMaxMessages;
+        this.perBizMaxBytes = perBizMaxBytes;
     }
 
     /**
@@ -50,30 +62,65 @@ public class OutboxBuffer {
     public void put(OutboxRecord record) throws InterruptedException {
         long bytes = estimateBytes(record);
         // 单条就超过总容量时，等待永远不会结束；必须拒绝并让上层转 DEAD。
-        if (bytes > maxBytes) {
+        if (bytes > maxBytes || bytes > perBizMaxBytes) {
             throw new MessageTooLargeException(record.msgId(), bytes, maxBytes);
         }
         lock.lockInterruptibly();
         try {
-            // 先等容量。这里不能用 offer：队列满时必须让 Scanner 慢下来，
-            // 不能把消息丢掉，也不能把内存撑爆。
-            while (messageCount >= maxMessages || byteCount + bytes > maxBytes) {
+            // 这里会让出 CPU 等待；Scanner 使用 tryPut 避免被单个业务线卡住。
+            while (!hasCapacityLocked(record.bizCode(), bytes)) {
                 notFull.await();
             }
-            ArrayDeque<OutboxRecord> queue = queues.computeIfAbsent(
-                    record.bizCode(), ignored -> new ArrayDeque<>());
-            // 只有从空变非空时才加入 ready，避免同一个 bizCode 重复排队。
-            if (queue.isEmpty()) {
-                ready.addLast(record.bizCode());
-            }
-            queue.addLast(record);
-            messageCount++;
-            byteCount += bytes;
-            // 唤醒可能在等第一条消息的 Sender。
-            notEmpty.signalAll();
+            addLocked(record, bytes);
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * 非阻塞入队。某个业务线达到 per-biz 上限时返回 false，
+     * Scanner 可以跳过它继续处理其他业务线。
+     */
+    public boolean tryPut(OutboxRecord record) throws InterruptedException {
+        long bytes = estimateBytes(record);
+        if (bytes > maxBytes || bytes > perBizMaxBytes) {
+            return false;
+        }
+        lock.lockInterruptibly();
+        try {
+            if (!hasCapacityLocked(record.bizCode(), bytes)) {
+                return false;
+            }
+            addLocked(record, bytes);
+            return true;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private boolean hasCapacityLocked(String bizCode, long bytes) {
+        if (messageCount >= maxMessages || byteCount + bytes > maxBytes) {
+            return false;
+        }
+        ArrayDeque<OutboxRecord> queue = queues.get(bizCode);
+        if (queue != null && queue.size() >= perBizMaxMessages) {
+            return false;
+        }
+        long currentBizBytes = bizBytes.getOrDefault(bizCode, 0L);
+        return currentBizBytes + bytes <= perBizMaxBytes;
+    }
+
+    private void addLocked(OutboxRecord record, long bytes) {
+        ArrayDeque<OutboxRecord> queue = queues.computeIfAbsent(
+                record.bizCode(), ignored -> new ArrayDeque<>());
+        if (queue.isEmpty()) {
+            ready.addLast(record.bizCode());
+        }
+        queue.addLast(record);
+        bizBytes.merge(record.bizCode(), bytes, Long::sum);
+        messageCount++;
+        byteCount += bytes;
+        notEmpty.signalAll();
     }
 
     /**
@@ -123,8 +170,10 @@ public class OutboxBuffer {
                         // 还有消息：排到队尾，下一次先处理其它活跃业务线。
                         ready.addLast(bizCode);
                     }
+                    long bytes = estimateBytes(record);
                     messageCount--;
-                    byteCount -= estimateBytes(record);
+                    byteCount -= bytes;
+                    bizBytes.computeIfPresent(bizCode, (key, value) -> value - bytes <= 0 ? null : value - bytes);
                     notFull.signalAll();
                     return record;
                 }
@@ -151,8 +200,10 @@ public class OutboxBuffer {
                     if (queue.isEmpty()) {
                         ready.remove(bizCode);
                     }
+                    long bytes = estimateBytes(record);
                     messageCount--;
-                    byteCount -= estimateBytes(record);
+                    byteCount -= bytes;
+                    bizBytes.computeIfPresent(bizCode, (key, value) -> value - bytes <= 0 ? null : value - bytes);
                     // 释放容量，唤醒可能被 put 阻塞的 Scanner。
                     notFull.signalAll();
                     return record;
@@ -181,8 +232,10 @@ public class OutboxBuffer {
             int drained = 0;
             while (drained < maxElements && !queue.isEmpty()) {
                 OutboxRecord record = queue.removeFirst();
+                long bytes = estimateBytes(record);
                 messageCount--;
-                byteCount -= estimateBytes(record);
+                byteCount -= bytes;
+                bizBytes.computeIfPresent(bizCode, (key, value) -> value - bytes <= 0 ? null : value - bytes);
                 target.add(record);
                 drained++;
             }
@@ -223,8 +276,10 @@ public class OutboxBuffer {
         if (queue.isEmpty()) {
             ready.removeFirst();
         }
+        long bytes = estimateBytes(record);
         messageCount--;
-        byteCount -= estimateBytes(record);
+        byteCount -= bytes;
+        bizBytes.computeIfPresent(bizCode, (key, value) -> value - bytes <= 0 ? null : value - bytes);
         notFull.signalAll();
         return record;
     }

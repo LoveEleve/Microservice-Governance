@@ -19,12 +19,23 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * 有界 buffer：容量、批量 drain、空队列超时。
  */
 class OutboxBufferTest {
+
+    @Test
+    void tryPut_stopsOneBusinessLineFromFillingGlobalBuffer() throws Exception {
+        OutboxBuffer buffer = new OutboxBuffer(10, 4096, 2, 4096);
+        assertTrue(buffer.tryPut(record("lead-1", "lead")));
+        assertTrue(buffer.tryPut(record("lead-2", "lead")));
+        assertFalse(buffer.tryPut(record("lead-3", "lead")));
+        assertTrue(buffer.tryPut(record("quota-1", "quota")));
+    }
 
     @Test
     void buffer_keepsBusinessLinesSeparate() throws Exception {

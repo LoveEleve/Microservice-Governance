@@ -65,7 +65,11 @@ public class OutboxScanner {
                 }
                 try {
                     registry.require(candidate.bizCode());
-                    buffer.put(OutboxRecord.from(candidate));
+                    // 某个业务线 buffer 满了不能阻塞其它业务线：跳过，下一轮再扫。
+                    if (!buffer.tryPut(OutboxRecord.from(candidate))) {
+                        inFlight.remove(candidate.msgId());
+                        continue;
+                    }
                     accepted++;
                 } catch (UnknownBizCodeException ex) {
                     reject(candidate);

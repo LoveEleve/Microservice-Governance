@@ -27,7 +27,11 @@ public record OutboxConfig(
         // XADD/序列化/路由失败的最大重试次数。
         int maxRetries,
         // Sender shard 数；实际值会被 bizCode 数量截断。
-        int senderThreads) {
+        int senderThreads,
+        // 单个 bizCode 在 buffer 里的最大条数。
+        int perBizCapacity,
+        // 单个 bizCode 在 buffer 里的最大字节数。
+        long perBizCapacityBytes) {
 
     public OutboxConfig {
         if (streamPrefix == null || streamPrefix.isBlank()) {
@@ -54,6 +58,25 @@ public record OutboxConfig(
         if (scanBatch <= 0) {
             throw new IllegalArgumentException("scanBatch must be positive");
         }
+        if (perBizCapacity <= 0) {
+            throw new IllegalArgumentException("perBizCapacity must be positive");
+        }
+        if (perBizCapacityBytes <= 0) {
+            throw new IllegalArgumentException("perBizCapacityBytes must be positive");
+        }
+    }
+
+    /**
+     * 兼容旧调用方的构造器：单业务线上限取全局上限。
+     */
+    public OutboxConfig(
+            String streamPrefix, Duration linger, int batchSize,
+            int bufferCapacity, long bufferCapacityBytes, int scanBatch,
+            Duration scanInterval, Duration retryAfter, int maxRetries,
+            int senderThreads) {
+        this(streamPrefix, linger, batchSize, bufferCapacity, bufferCapacityBytes,
+                scanBatch, scanInterval, retryAfter, maxRetries, senderThreads,
+                bufferCapacity, bufferCapacityBytes);
     }
 
     /**
@@ -70,7 +93,9 @@ public record OutboxConfig(
                 Duration.ofMillis(10),
                 Duration.ofSeconds(30),
                 5,
-                8);
+                8,
+                10_000,
+                16L * 1024 * 1024);
     }
 
     private static void requirePositive(Duration value, String name) {

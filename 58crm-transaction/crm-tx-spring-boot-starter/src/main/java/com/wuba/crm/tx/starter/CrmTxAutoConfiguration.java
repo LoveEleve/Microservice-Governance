@@ -60,7 +60,11 @@ public class CrmTxAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public OutboxBuffer crmTxOutboxBuffer(OutboxConfig config) {
-        return new OutboxBuffer(config.bufferCapacity(), config.bufferCapacityBytes());
+        return new OutboxBuffer(
+                config.bufferCapacity(),
+                config.bufferCapacityBytes(),
+                config.perBizCapacity(),
+                config.perBizCapacityBytes());
     }
 
     @Bean
