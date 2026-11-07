@@ -78,11 +78,10 @@ TM -> TC
   gRPC unary
   begin / register / report / commit / rollback / query
 
-RM <-> TC
-  gRPC bidi control stream
-  RM 主动连接并注册
-  TC 下发 confirm / cancel
-  RM 返回执行结果
+TC -> RM
+  gRPC unary callback
+  RM 在 branch register 时提供 callback endpoint
+  TC 不发现 RM
 ```
 
 不使用：
@@ -132,14 +131,14 @@ POST /tcc/rollback
 GET  /tcc/{xid}
 ```
 
-Participant 控制通道：
+Participant 回调：
 
 ```text
-ParticipantStream.Connect
-  RM 注册 participantGroup/actions
-  TC 下发 Confirm/Cancel command
-  RM 返回结果
+POST /tcc/branch/confirm
+POST /tcc/branch/cancel
 ```
+
+endpoint 由 RM 在 branch register 时提供，不是 TC 配置。
 
 Try 由业务方通过 SDK/分支代理调用，不强制由 Coordinator 发起。
 
@@ -299,35 +298,75 @@ Coordinator 重试
 barrier 保证幂等
 ```
 
-## 8.1 如果坚持用 unary
+## 8.1 5 个 TC 下的控制流路由（重要）
 
-退化方案：
-
-```text
-RM 在 branch/register 时上报 callback URL
-TC 按 callback URL 调 Confirm/Cancel
-```
-
-这是 DTM 风格：
+错误方案 A：
 
 ```text
-客户端提供回调地址
-不是 TC 配置客户端服务名
+每个 RM 连接所有 TC
+tc-0 ... tc-4
 ```
 
-但代价：
+问题：
 
 ```text
-需要 RM 暴露 gRPC Server
-需要处理 NAT/端口
-断线恢复不如长连接直接
+连接数按 RM 实例数 × TC 数膨胀
+TC 扩容要所有 RM 重连
+控制流注册表分散在 5 个 TC
+Confirm/Cancel 仍要选择由哪个 TC 下发
 ```
 
-因此本项目优先选择：
+这不是无状态，而是把路由问题转嫁给客户端。
+
+推荐方案 B（DTM 风格 callback）：
+
+```text
+RM 在 register 时上报 callback endpoint
+TC 任意实例都可以按 endpoint 调 Confirm/Cancel
+```
+
+branch 保存：
+
+```text
+callbackEndpoint
+actionName
+resourceKey
+```
+
+TC 不发现 RM，也不配置业务方 serviceName。  
+endpoint 是客户端在一次注册里主动提供的回调地址。
+
+代价：
+
+```text
+RM 需要暴露回调服务（gRPC/HTTP）
+需要处理端口/安全/内网可达
+```
+
+方案 C（Seata 风格单控制流）：
+
+```text
+RM 只连接一个 TC
+TC 集群内部维护 stream owner
+其它 TC 把命令转给 owner
+```
+
+优点：RM 不需要暴露回调端口。  
+缺点：TC 内部需要 stream 路由/转发，复杂度更高。
+
+第一版选择：
 
 ```text
 TM -> TC：unary
-RM <-> TC：bidi control stream
+TC -> RM：unary callback（客户端注册 endpoint）
+```
+
+不在第一版做：
+
+```text
+RM 连接所有 TC
+TC 内部 stream 转发
+sticky xid 到 TC
 ```
 
 ## 9. TCC 与消息
@@ -404,6 +443,7 @@ C-003.6
   Scheduler + lease + retry
   Nacos 接入
   多实例测试
+  callback endpoint 注册/鉴权
 ```
 
 ## 12. 一句话
