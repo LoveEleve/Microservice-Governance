@@ -49,6 +49,7 @@
 | 看 C-002.1 变更范围 | `.harness/changes/C-002.1-consumer-core/change.md` |
 | 看 C-002.2 变更范围 | `.harness/changes/C-002.2-consumer-pull-persist/change.md` |
 | 看 C-002.3 变更范围 | `.harness/changes/C-002.3-consumer-worker/change.md` |
+| 看 C-002.4 变更范围 | `.harness/changes/C-002.4-consumer-bootstrap/change.md` |
 | 看 C-001 变更范围 | `.harness/changes/C-001-outbox-redis-list/change.md` |
 
 ## 目录结构

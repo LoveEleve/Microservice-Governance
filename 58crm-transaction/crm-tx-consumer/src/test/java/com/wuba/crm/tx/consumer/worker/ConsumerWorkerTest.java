@@ -8,6 +8,7 @@ import com.wuba.crm.tx.consumer.domain.ConsumerRecord;
 import com.wuba.crm.tx.consumer.lease.LeaseRegistrar;
 import com.wuba.crm.tx.consumer.lease.LeaseTask;
 import com.wuba.crm.tx.consumer.persistence.ConsumerRecordRepository;
+import com.wuba.crm.tx.consumer.persistence.IdempotentRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -47,7 +48,7 @@ class ConsumerWorkerTest {
         RecordingLeaseRegistrar leases = new RecordingLeaseRegistrar();
         AckBatcher ackBatcher = ackBatcher();
         ConsumerWorker worker = new ConsumerWorker(
-                config(), repository, handlers, transactions(), leases, ackBatcher,
+                config(), repository, idempotent(), handlers, transactions(), leases, ackBatcher,
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         worker.pollOnce();
@@ -71,13 +72,38 @@ class ConsumerWorkerTest {
         });
         RecordingLeaseRegistrar leases = new RecordingLeaseRegistrar();
         ConsumerWorker worker = new ConsumerWorker(
-                config(), repository, handlers, transactions(), leases,
+                config(), repository, idempotent(), handlers, transactions(), leases,
                 ackBatcher(), Clock.fixed(NOW, ZoneOffset.UTC));
 
         worker.pollOnce();
 
         org.junit.jupiter.api.Assertions.assertEquals(2, leases.registered);
         org.junit.jupiter.api.Assertions.assertEquals(2, leases.completed);
+    }
+
+    @Test
+    void duplicateIdempotentKey_skipsHandlerButCompletesAck() {
+        ConsumerRecordRepository repository = mock(ConsumerRecordRepository.class);
+        IdempotentRepository idempotent = mock(IdempotentRepository.class);
+        when(idempotent.tryAcquire(anyString(), anyString(), any(Instant.class)))
+                .thenReturn(false);
+        when(repository.claimReadyBatch(any(ClaimRequest.class)))
+                .thenReturn(List.of(record()));
+        when(repository.markConsumed(anyString(), anyString(), anyLong(), any(Instant.class)))
+                .thenReturn(1);
+        HandlerRegistry handlers = new HandlerRegistry();
+        AtomicInteger handled = new AtomicInteger();
+        handlers.register("lead", "LEAD_ASSIGNED", message -> handled.incrementAndGet());
+        AckBatcher ackBatcher = ackBatcher();
+        ConsumerWorker worker = new ConsumerWorker(
+                config(), repository, idempotent, handlers, transactions(),
+                new RecordingLeaseRegistrar(), ackBatcher, Clock.fixed(NOW, ZoneOffset.UTC));
+
+        worker.pollOnce();
+
+        org.junit.jupiter.api.Assertions.assertEquals(0, handled.get());
+        verify(repository).markConsumed("m-1", "owner-1", 1, NOW);
+        org.junit.jupiter.api.Assertions.assertEquals(1, ackBatcher.size());
     }
 
     @Test
@@ -91,7 +117,7 @@ class ConsumerWorkerTest {
         });
         AckBatcher ackBatcher = ackBatcher();
         ConsumerWorker worker = new ConsumerWorker(
-                config(), repository, handlers, transactions(),
+                config(), repository, idempotent(), handlers, transactions(),
                 new RecordingLeaseRegistrar(), ackBatcher, Clock.fixed(NOW, ZoneOffset.UTC));
 
         worker.pollOnce();
@@ -113,7 +139,7 @@ class ConsumerWorkerTest {
         });
         AckBatcher ackBatcher = ackBatcher();
         ConsumerWorker worker = new ConsumerWorker(
-                config(), repository, handlers, transactions(),
+                config(), repository, idempotent(), handlers, transactions(),
                 new RecordingLeaseRegistrar(), ackBatcher, Clock.fixed(NOW, ZoneOffset.UTC));
 
         worker.pollOnce();
@@ -122,6 +148,13 @@ class ConsumerWorkerTest {
         verify(repository, never()).markRetry(
                 anyString(), anyString(), anyLong(), any(Instant.class), any(Integer.class),
                 any(Instant.class));
+    }
+
+    private IdempotentRepository idempotent() {
+        IdempotentRepository idempotent = mock(IdempotentRepository.class);
+        when(idempotent.tryAcquire(anyString(), anyString(), any(Instant.class)))
+                .thenReturn(true);
+        return idempotent;
     }
 
     private ConsumerWorkerConfig config() {

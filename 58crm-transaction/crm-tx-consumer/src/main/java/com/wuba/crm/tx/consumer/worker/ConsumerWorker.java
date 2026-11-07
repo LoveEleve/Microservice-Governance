@@ -8,6 +8,7 @@ import com.wuba.crm.tx.consumer.domain.ConsumerRecord;
 import com.wuba.crm.tx.consumer.lease.LeaseRegistrar;
 import com.wuba.crm.tx.consumer.lease.LeaseTask;
 import com.wuba.crm.tx.consumer.persistence.ConsumerRecordRepository;
+import com.wuba.crm.tx.consumer.persistence.IdempotentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionOperations;
@@ -28,6 +29,7 @@ public final class ConsumerWorker implements AutoCloseable {
 
     private final ConsumerWorkerConfig config;
     private final ConsumerRecordRepository repository;
+    private final IdempotentRepository idempotent;
     private final HandlerRegistry handlers;
     private final TransactionOperations transactions;
     private final LeaseRegistrar leases;
@@ -39,17 +41,19 @@ public final class ConsumerWorker implements AutoCloseable {
     public ConsumerWorker(
             ConsumerWorkerConfig config,
             ConsumerRecordRepository repository,
+            IdempotentRepository idempotent,
             HandlerRegistry handlers,
             TransactionOperations transactions,
             LeaseRegistrar leases,
             AckBatcher ackBatcher) {
-        this(config, repository, handlers, transactions, leases, ackBatcher,
+        this(config, repository, idempotent, handlers, transactions, leases, ackBatcher,
                 Clock.systemUTC());
     }
 
     ConsumerWorker(
             ConsumerWorkerConfig config,
             ConsumerRecordRepository repository,
+            IdempotentRepository idempotent,
             HandlerRegistry handlers,
             TransactionOperations transactions,
             LeaseRegistrar leases,
@@ -57,6 +61,7 @@ public final class ConsumerWorker implements AutoCloseable {
             Clock clock) {
         this.config = Objects.requireNonNull(config, "config");
         this.repository = Objects.requireNonNull(repository, "repository");
+        this.idempotent = Objects.requireNonNull(idempotent, "idempotent");
         this.handlers = Objects.requireNonNull(handlers, "handlers");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
         this.leases = Objects.requireNonNull(leases, "leases");
@@ -136,11 +141,15 @@ public final class ConsumerWorker implements AutoCloseable {
     private void process(ConsumerRecord record, LeaseTask lease) {
         try {
             transactions.executeWithoutResult(status -> {
-                MessageHandler handler = handlers.require(record.bizCode(), record.eventType());
-                try {
-                    handler.handle(toMessage(record));
-                } catch (Exception ex) {
-                    throw new MessageHandlingException(record.msgId(), ex);
+                boolean firstDelivery = idempotent.tryAcquire(
+                        record.msgId(), record.msgId(), clock.instant());
+                if (firstDelivery) {
+                    MessageHandler handler = handlers.require(record.bizCode(), record.eventType());
+                    try {
+                        handler.handle(toMessage(record));
+                    } catch (Exception ex) {
+                        throw new MessageHandlingException(record.msgId(), ex);
+                    }
                 }
                 int updated = repository.markConsumed(
                         record.msgId(),
