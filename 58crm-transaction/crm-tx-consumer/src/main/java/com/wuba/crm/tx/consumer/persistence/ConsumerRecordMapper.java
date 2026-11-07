@@ -31,6 +31,20 @@ public interface ConsumerRecordMapper extends BaseMapper<ConsumerRecordEntity> {
             """)
     int insertReadyBatch(@Param("records") List<ConsumerRecordEntity> records);
 
+    @Select("""
+            SELECT msg_id
+            FROM t_consume_record
+            WHERE biz_code = #{bizCode}
+              AND status = 'READY'
+              AND (next_retry_at IS NULL OR next_retry_at <= #{now})
+            ORDER BY created_at
+            LIMIT #{limit}
+            """)
+    List<String> selectReadyIds(
+            @Param("bizCode") String bizCode,
+            @Param("now") LocalDateTime now,
+            @Param("limit") int limit);
+
     @Update("""
             UPDATE t_consume_record
             SET status = 'PROCESSING',
@@ -40,19 +54,15 @@ public interface ConsumerRecordMapper extends BaseMapper<ConsumerRecordEntity> {
                 claim_count = claim_count + 1,
                 lease_until = #{leaseUntil},
                 updated_at = #{now}
-            WHERE biz_code = #{bizCode}
+            WHERE msg_id = #{msgId}
               AND status = 'READY'
-              AND (next_retry_at IS NULL OR next_retry_at <= #{now})
-            ORDER BY created_at
-            LIMIT #{limit}
             """)
-    int claimReadyBatch(
-            @Param("bizCode") String bizCode,
+    int claimReadyById(
+            @Param("msgId") String msgId,
             @Param("consumerId") String consumerId,
             @Param("ownerToken") String ownerToken,
             @Param("now") LocalDateTime now,
-            @Param("leaseUntil") LocalDateTime leaseUntil,
-            @Param("limit") int limit);
+            @Param("leaseUntil") LocalDateTime leaseUntil);
 
     @Select("""
             SELECT *

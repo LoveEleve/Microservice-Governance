@@ -69,6 +69,8 @@ public final class PendingRecovery implements AutoCloseable {
         worker.setDaemon(true);
         this.thread = worker;
         worker.start();
+        log.info("pending recovery started, stream={}, group={}, consumer={}, batchSize={}, scanInterval={}",
+                stream, group, consumer, batchSize, scanInterval);
     }
 
     public int recoverOnce() {
@@ -88,6 +90,8 @@ public final class PendingRecovery implements AutoCloseable {
                         stream, message.getIdAsString(), ex);
             }
         }
+        log.debug("pending recovery scan, stream={}, pending={}, recovered={}",
+                stream, pending.size(), recovered);
         return recovered;
     }
 
@@ -107,6 +111,7 @@ public final class PendingRecovery implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
+        log.info("pending recovery stopped, stream={}, group={}", stream, group);
     }
 
     private boolean recover(PendingMessage pending) {

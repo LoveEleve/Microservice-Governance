@@ -51,6 +51,7 @@
 | 看 C-002.3 变更范围 | `.harness/changes/C-002.3-consumer-worker/change.md` |
 | 看 C-002.4 变更范围 | `.harness/changes/C-002.4-consumer-bootstrap/change.md` |
 | 看 C-002.5 变更范围 | `.harness/changes/C-002.5-pending-recovery/change.md` |
+| 看消费端吞吐压测 | `04-验证/04-ConsumerThroughput.md` |
 | 看 C-001 变更范围 | `.harness/changes/C-001-outbox-redis-list/change.md` |
 
 ## 目录结构

@@ -11,6 +11,7 @@ import com.wuba.crm.tx.consumer.persistence.ConsumerRecordRepository;
 import com.wuba.crm.tx.consumer.persistence.IdempotentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Clock;
@@ -26,6 +27,7 @@ public final class ConsumerWorker implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerWorker.class);
     private static final long CLOSE_JOIN_MILLIS = 5_000L;
     private static final long ERROR_BACKOFF_MILLIS = 500L;
+    private static final int CLAIM_DEADLOCK_RETRIES = 3;
 
     private final ConsumerWorkerConfig config;
     private final ConsumerRecordRepository repository;
@@ -78,6 +80,9 @@ public final class ConsumerWorker implements AutoCloseable {
         worker.setDaemon(true);
         this.thread = worker;
         worker.start();
+        log.info("consumer worker started, bizCode={}, consumer={}, stream={}, group={}, batchSize={}",
+                config.bizCode(), config.consumerId(), config.stream(), config.group(),
+                config.batchSize());
     }
 
     public int pollOnce() {
@@ -89,12 +94,34 @@ public final class ConsumerWorker implements AutoCloseable {
                 config.batchSize(),
                 now,
                 now.plus(config.leaseDuration()));
-        List<ConsumerRecord> records = repository.claimReadyBatch(request);
+        List<ConsumerRecord> records = claimWithRetry(request);
+        log.debug("consumer worker claimed batch, bizCode={}, claimed={}",
+                config.bizCode(), records.size());
         List<LeaseTask> leases = registerLeases(records);
         for (int i = 0; i < records.size(); i++) {
             process(records.get(i), leases.get(i));
         }
         return records.size();
+    }
+
+    private List<ConsumerRecord> claimWithRetry(ClaimRequest request) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                List<ConsumerRecord> records = transactions.execute(
+                        status -> repository.claimReadyBatch(request));
+                return records == null ? List.of() : records;
+            } catch (DeadlockLoserDataAccessException ex) {
+                if (attempt >= CLAIM_DEADLOCK_RETRIES) {
+                    throw ex;
+                }
+                try {
+                    Thread.sleep(2L << attempt);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("interrupted while retrying claim", interrupted);
+                }
+            }
+        }
     }
 
     public boolean isRunning() {

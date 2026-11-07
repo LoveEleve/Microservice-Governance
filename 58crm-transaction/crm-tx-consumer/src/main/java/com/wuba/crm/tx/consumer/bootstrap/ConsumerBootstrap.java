@@ -21,6 +21,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.transaction.support.TransactionOperations;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -39,7 +41,7 @@ public final class ConsumerBootstrap implements AutoCloseable {
 
     private LeaseManager leaseManager;
     private AckBatcher ackBatcher;
-    private ConsumerWorker worker;
+    private List<ConsumerWorker> workers = List.of();
     private ConsumePersister persister;
     private PendingRecovery pendingRecovery;
     private StreamPuller puller;
@@ -78,6 +80,8 @@ public final class ConsumerBootstrap implements AutoCloseable {
         }
         try {
             groupInitializer.ensureGroup(config.stream(), config.group());
+            log.info("consumer bootstrap starting, bizCode={}, stream={}, group={}, consumer={}",
+                    config.bizCode(), config.stream(), config.group(), config.consumerId());
 
             BoundedStreamQueue queue = new BoundedStreamQueue(config.queueCapacity());
             RedisStreamSource source = new RedisStreamSource(redisTemplate);
@@ -99,23 +103,32 @@ public final class ConsumerBootstrap implements AutoCloseable {
                     config.ackBatchSize(),
                     config.ackQueueCapacity(),
                     config.ackFlushInterval());
-            ConsumerWorkerConfig workerConfig = new ConsumerWorkerConfig(
-                    config.bizCode(), config.stream(), config.group(), config.consumerId(),
-                    config.workerBatchSize(), config.leaseDuration(), config.maxProcessing(),
-                    config.retryAfter(), config.maxRetries(), config.workerIdlePoll());
-            worker = new ConsumerWorker(
-                    workerConfig, repository, idempotent, handlers, transactions,
-                    leaseManager, ackBatcher);
+            List<ConsumerWorker> consumerWorkers = new ArrayList<>(config.workerThreads());
+            for (int i = 0; i < config.workerThreads(); i++) {
+                ConsumerWorkerConfig workerConfig = new ConsumerWorkerConfig(
+                        config.bizCode(), config.stream(), config.group(),
+                        config.consumerId() + "-" + i,
+                        config.workerBatchSize(), config.leaseDuration(), config.maxProcessing(),
+                        config.retryAfter(), config.maxRetries(), config.workerIdlePoll());
+                consumerWorkers.add(new ConsumerWorker(
+                        workerConfig, repository, idempotent, handlers, transactions,
+                        leaseManager, ackBatcher));
+            }
+            workers = List.copyOf(consumerWorkers);
             pendingRecovery = new PendingRecovery(
                     redisTemplate, config.stream(), config.group(), config.consumerId() + "-recovery",
                     repository, acknowledger, config.recoveryBatchSize(), config.recoveryScanInterval());
 
             leaseManager.start();
             ackBatcher.start();
-            worker.start();
+            for (ConsumerWorker worker : workers) {
+                worker.start();
+            }
             persister.start();
             pendingRecovery.start();
             puller.start();
+            log.info("consumer bootstrap started, bizCode={}, stream={}, group={}",
+                    config.bizCode(), config.stream(), config.group());
         } catch (RuntimeException ex) {
             close();
             throw ex;
@@ -127,10 +140,13 @@ public final class ConsumerBootstrap implements AutoCloseable {
         closeQuietly(puller);
         closeQuietly(pendingRecovery);
         closeQuietly(persister);
-        closeQuietly(worker);
+        for (ConsumerWorker worker : workers) {
+            closeQuietly(worker);
+        }
         closeQuietly(ackBatcher);
         closeQuietly(leaseManager);
         started.set(false);
+        log.info("consumer bootstrap stopped, bizCode={}, stream={}", config.bizCode(), config.stream());
     }
 
     private void closeQuietly(AutoCloseable closeable) {

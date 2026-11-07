@@ -69,6 +69,7 @@ public final class LeaseManager implements AutoCloseable, LeaseRegistrar {
         worker.setDaemon(true);
         this.thread = worker;
         worker.start();
+        log.info("lease manager started, renewAfter={}, inFlight={}", renewAfter, registry.size());
     }
 
     @Override
@@ -105,6 +106,7 @@ public final class LeaseManager implements AutoCloseable, LeaseRegistrar {
             }
         }
         wheel.close();
+        log.info("lease manager stopped, inFlight={}", registry.size());
     }
 
     private void onDue(LeaseTask task) {
@@ -142,6 +144,8 @@ public final class LeaseManager implements AutoCloseable, LeaseRegistrar {
             }
             try {
                 Set<String> renewed = renewer.renewBatch(renewable);
+                log.debug("lease renewal batch, requested={}, renewed={}",
+                        renewable.size(), renewed.size());
                 for (LeaseTask task : renewable) {
                     if (renewed.contains(task.key())) {
                         wheel.schedule(task, renewAfter, this::onDue);

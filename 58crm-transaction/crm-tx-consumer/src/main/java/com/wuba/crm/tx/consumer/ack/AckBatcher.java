@@ -75,6 +75,7 @@ public final class AckBatcher implements AutoCloseable {
                     entry.getKey().group(),
                     entryIds.toArray(String[]::new));
         }
+        log.debug("ack batch flushed, size={}, groups={}", batch.size(), groups.size());
         return batch.size();
     }
 
@@ -104,6 +105,7 @@ public final class AckBatcher implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
+        log.info("ack batcher stopped");
     }
 
     private void runLoop() {

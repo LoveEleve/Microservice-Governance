@@ -67,6 +67,8 @@ public final class StreamPuller implements AutoCloseable {
         worker.setDaemon(true);
         this.thread = worker;
         worker.start();
+        log.info("stream puller started, stream={}, group={}, consumer={}, count={}, block={}",
+                stream, group, consumer, count, block);
     }
 
     public int pullOnce() throws InterruptedException {
@@ -94,6 +96,8 @@ public final class StreamPuller implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
+        log.info("stream puller stopped, stream={}, group={}, consumer={}",
+                stream, group, consumer);
     }
 
     private void runLoop() {

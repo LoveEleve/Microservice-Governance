@@ -11,6 +11,7 @@ public record ConsumerRuntimeConfig(
         int persistBatchSize,
         Duration persistPollTimeout,
         int workerBatchSize,
+        int workerThreads,
         Duration leaseDuration,
         Duration maxProcessing,
         Duration retryAfter,
@@ -34,6 +35,7 @@ public record ConsumerRuntimeConfig(
         requirePositive(persistBatchSize, "persistBatchSize");
         requirePositive(persistPollTimeout, "persistPollTimeout");
         requirePositive(workerBatchSize, "workerBatchSize");
+        requirePositive(workerThreads, "workerThreads");
         requirePositive(leaseDuration, "leaseDuration");
         requirePositive(maxProcessing, "maxProcessing");
         requirePositive(retryAfter, "retryAfter");
@@ -59,6 +61,7 @@ public record ConsumerRuntimeConfig(
                 500,
                 Duration.ofMillis(100),
                 200,
+                8,
                 Duration.ofSeconds(60),
                 Duration.ofMinutes(5),
                 Duration.ofSeconds(30),

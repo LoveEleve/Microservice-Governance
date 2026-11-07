@@ -38,13 +38,22 @@ public class MybatisConsumerRecordRepository implements ConsumerRecordRepository
 
     @Override
     public List<ConsumerRecord> claimReadyBatch(ClaimRequest request) {
-        int claimed = mapper.claimReadyBatch(
+        List<String> ids = mapper.selectReadyIds(
                 request.bizCode(),
-                request.consumerId(),
-                request.ownerToken(),
                 toLocalDateTime(request.now()),
-                toLocalDateTime(request.leaseUntil()),
                 request.limit());
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        int claimed = 0;
+        for (String id : ids) {
+            claimed += mapper.claimReadyById(
+                    id,
+                    request.consumerId(),
+                    request.ownerToken(),
+                    toLocalDateTime(request.now()),
+                    toLocalDateTime(request.leaseUntil()));
+        }
         if (claimed == 0) {
             return List.of();
         }

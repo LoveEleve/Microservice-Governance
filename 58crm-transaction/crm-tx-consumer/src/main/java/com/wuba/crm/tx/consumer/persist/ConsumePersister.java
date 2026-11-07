@@ -57,6 +57,8 @@ public final class ConsumePersister implements AutoCloseable {
         worker.setDaemon(true);
         this.thread = worker;
         worker.start();
+        log.info("consumer persister started, batchSize={}, pollTimeout={}",
+                batchSize, pollTimeout);
     }
 
     public int persistOnce() throws InterruptedException {
@@ -64,7 +66,9 @@ public final class ConsumePersister implements AutoCloseable {
         if (batch.isEmpty()) {
             return 0;
         }
-        return repository.insertReadyBatch(batch, Instant.now());
+        int persisted = repository.insertReadyBatch(batch, Instant.now());
+        log.debug("consumer batch persisted, batchSize={}, inserted={}", batch.size(), persisted);
+        return persisted;
     }
 
     public boolean isRunning() {
@@ -83,6 +87,7 @@ public final class ConsumePersister implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
+        log.info("consumer persister stopped");
     }
 
     private void runLoop() {
