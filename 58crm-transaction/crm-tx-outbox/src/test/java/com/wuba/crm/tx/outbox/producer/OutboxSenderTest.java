@@ -64,6 +64,23 @@ class OutboxSenderTest {
     }
 
     @Test
+    void hotQueue_doesNotStarveOtherAssignedQueues() throws Exception {
+        OutboxBuffer buffer = new OutboxBuffer(100, 1024 * 1024);
+        for (int i = 0; i < 20; i++) {
+            buffer.put(record("lead-" + i, "lead"));
+        }
+        buffer.put(record("quota-1", "quota"));
+        FakePublisher publisher = new FakePublisher();
+        FakeRepository repository = new FakeRepository();
+        OutboxSender sender = sender(buffer, publisher, repository, new OutboxInFlight());
+
+        sender.sendOnce();
+
+        assertTrue(publisher.streams.contains("tx:stream:lead"));
+        assertTrue(publisher.streams.contains("tx:stream:quota"));
+    }
+
+    @Test
     void sendOnce_isolatesOnePoisonMessageBySplittingBatch() throws Exception {
         OutboxBuffer buffer = new OutboxBuffer(10, 4096);
         buffer.put(record("m-1", "lead"));

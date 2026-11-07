@@ -105,20 +105,23 @@ public class OutboxBuffer {
         lock.lockInterruptibly();
         try {
             while (true) {
-                Iterator<String> iterator = ready.iterator();
-                while (iterator.hasNext()) {
-                    String bizCode = iterator.next();
+                // 使用快照遍历，避免在迭代 ready 时修改它。
+                // 取完一个 bizCode 后，如果它还有消息，把它移到队尾，形成公平轮转。
+                java.util.List<String> snapshot = new java.util.ArrayList<>(ready);
+                for (String bizCode : snapshot) {
                     if (!bizCodes.contains(bizCode)) {
                         continue;
                     }
                     ArrayDeque<OutboxRecord> queue = queues.get(bizCode);
                     if (queue == null || queue.isEmpty()) {
-                        iterator.remove();
+                        ready.remove(bizCode);
                         continue;
                     }
                     OutboxRecord record = queue.removeFirst();
-                    if (queue.isEmpty()) {
-                        iterator.remove();
+                    ready.remove(bizCode);
+                    if (!queue.isEmpty()) {
+                        // 还有消息：排到队尾，下一次先处理其它活跃业务线。
+                        ready.addLast(bizCode);
                     }
                     messageCount--;
                     byteCount -= estimateBytes(record);
