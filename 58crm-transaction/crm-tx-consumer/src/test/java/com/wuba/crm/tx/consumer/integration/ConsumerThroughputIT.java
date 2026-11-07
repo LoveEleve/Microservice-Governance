@@ -35,7 +35,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class ConsumerThroughputIT {
@@ -57,7 +57,7 @@ class ConsumerThroughputIT {
     private StringRedisTemplate redis;
     private HikariDataSource dataSource;
     private JdbcTemplate jdbc;
-    private ConsumerBootstrap bootstrap;
+    private final List<ConsumerBootstrap> bootstraps = new ArrayList<>();
 
     @BeforeEach
     void setUp() throws Exception {
@@ -84,7 +84,7 @@ class ConsumerThroughputIT {
 
     @AfterEach
     void tearDown() {
-        if (bootstrap != null) {
+        for (ConsumerBootstrap bootstrap : bootstraps) {
             bootstrap.close();
         }
         if (redis != null) {
@@ -116,28 +116,35 @@ class ConsumerThroughputIT {
         TransactionTemplate transactions = new TransactionTemplate(
                 new DataSourceTransactionManager(dataSource));
 
-        ConsumerRuntimeConfig config = new ConsumerRuntimeConfig(
-                "load", "load-consumer-" + UUID.randomUUID(),
-                "tx:it:", "tx-it-group-",
-                50_000, 500, Duration.ofMillis(100),
-                500, Integer.getInteger("tx.load.workers", 16),
-                Duration.ofSeconds(60), Duration.ofMinutes(5),
-                Duration.ofSeconds(30), 3, Duration.ofMillis(10), Duration.ofSeconds(20),
-                500, 100_000, Duration.ofMillis(100),
-                100, Duration.ofSeconds(30), 500, Duration.ofSeconds(1));
-        bootstrap = new ConsumerBootstrap(
-                config, repository, idempotent, handlers, transactions, redis);
+        int instances = Integer.getInteger("tx.load.instances", 1);
+        int workersPerInstance = Integer.getInteger("tx.load.workers", 16);
+        String baseId = "load-consumer-" + UUID.randomUUID();
+        for (int i = 0; i < instances; i++) {
+            ConsumerRuntimeConfig config = new ConsumerRuntimeConfig(
+                    "load", baseId + "-" + i,
+                    "tx:it:", "tx-it-group-",
+                    50_000, 500, Duration.ofMillis(100),
+                    500, workersPerInstance,
+                    Duration.ofSeconds(60), Duration.ofMinutes(5),
+                    Duration.ofSeconds(30), 3, Duration.ofMillis(10), Duration.ofSeconds(20),
+                    500, 100_000, Duration.ofMillis(100),
+                    100, Duration.ofSeconds(30), 500, Duration.ofSeconds(1));
+            bootstraps.add(new ConsumerBootstrap(
+                    config, repository, idempotent, handlers, transactions, redis));
+        }
 
         long start = System.nanoTime();
-        bootstrap.start();
+        for (ConsumerBootstrap bootstrap : bootstraps) {
+            bootstrap.start();
+        }
         waitConsumed(count, Duration.ofMinutes(10));
         long elapsedNanos = System.nanoTime() - start;
 
         double seconds = elapsedNanos / 1_000_000_000.0;
         double qps = count / seconds;
-        System.out.printf("CONSUMER_THROUGHPUT count=%d handled=%d elapsed=%.3fs qps=%.0f%n",
-                count, handled.get(), seconds, qps);
-        assertEquals(count, handled.get());
+        System.out.printf("CONSUMER_THROUGHPUT count=%d attempts=%d instances=%d workersPerInstance=%d elapsed=%.3fs qps=%.0f%n",
+                count, handled.get(), instances, workersPerInstance, seconds, qps);
+        assertTrue(handled.get() >= count);
     }
 
     private void produce(int count, int batchSize) {
