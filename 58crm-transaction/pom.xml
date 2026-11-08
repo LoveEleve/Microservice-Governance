@@ -21,8 +21,7 @@
         <module>crm-tx-tcc-id</module>
         <module>crm-tx-tcc-coordinator</module>
         <module>crm-tx-tcc-participant</module>
-        <module>crm-tx-tcc-e2e-lead</module>
-        <module>crm-tx-tcc-e2e-quota</module>
+        <module>crm-tx-tcc-examples</module>
         <module>crm-tx-outbox</module>
         <module>crm-tx-consumer</module>
         <module>crm-tx-spring-boot-starter</module>

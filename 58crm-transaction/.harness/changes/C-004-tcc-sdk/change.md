@@ -44,5 +44,6 @@ C-004.1 已完成：公共模型 + DefaultTccTransactionTemplate + 重复 branch
 C-004.2 已完成：proto 拆分 + CoordinatorGrpcClient + e2e lead 使用公共模板
 C-004.3 已完成：@TccActionHandler + 自动注册 + 通用 /tcc/try + E2E 复跑
 C-004.4 已完成：TCC 独立 Starter（client/participant 默认关闭，显式开启）（client/participant 默认关闭）
-C-004.5 未开始：examples 迁移
+C-004.5 已完成：examples 迁移
+C-004.6 未开始：quickstart 文档
 ```

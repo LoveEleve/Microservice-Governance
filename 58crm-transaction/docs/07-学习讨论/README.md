@@ -44,7 +44,7 @@ YYYY-MM-DD-主题.md
 
 ```text
 业务入口：
-  crm-tx-tcc-e2e-lead/src/main/java/com/wuba/crm/tx/e2e/lead/LeadController.java
+  crm-tx-tcc-examples/lead/src/main/java/com/wuba/crm/tx/tcc/example/lead/LeadController.java
 
 真实调用链：
   LeadController

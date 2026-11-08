@@ -28,12 +28,12 @@ java -jar crm-tx-tcc-coordinator/target/crm-tx-tcc-coordinator-0.1.0-SNAPSHOT.ja
 DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=crm_tx_e2e \
 DB_USER=root DB_PASSWORD=root123 \
 NACOS_ADDR=127.0.0.1:8848 \
-java -jar crm-tx-tcc-e2e-quota/target/crm-tx-tcc-e2e-quota-0.1.0-SNAPSHOT.jar
+java -jar crm-tx-tcc-examples/quota/target/crm-tx-tcc-example-quota-0.1.0-SNAPSHOT.jar
 
 # 4. lead
 NACOS_ADDR=127.0.0.1:8848 \
 QUOTA_CALLBACK_ENDPOINT=127.0.0.1:9092 \
-java -jar crm-tx-tcc-e2e-lead/target/crm-tx-tcc-e2e-lead-0.1.0-SNAPSHOT.jar
+java -jar crm-tx-tcc-examples/lead/target/crm-tx-tcc-example-lead-0.1.0-SNAPSHOT.jar
 ```
 
 ## 场景

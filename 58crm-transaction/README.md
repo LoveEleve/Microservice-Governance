@@ -65,7 +65,8 @@ C-004.1：TCC 公共模型 + DefaultTccTransactionTemplate（已完成）
 C-004.2：protocol/client gRPC（已完成）
 C-004.3：@TccActionHandler + 通用 /tcc/try（已完成，E2E 复跑）
 C-004.4：TCC 独立 Starter（已完成，按角色显式开启）
-C-004.5：examples 迁移（下一步）
+C-004.5：examples 迁移（已完成）
+C-004.6：quickstart 文档（下一步）
 ```
 
 TCC 协调器、参与方 barrier、业务示例在后续变更中实现。
