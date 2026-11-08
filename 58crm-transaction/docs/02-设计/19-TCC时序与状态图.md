@@ -878,26 +878,53 @@ barrier 保证业务只执行一次
 owner fencing 保证旧 TC 不覆盖状态
 ```
 
-## AM. DEAD 人工 Confirm/Cancel
+## AM. DEAD / FAILED 处理范围
 
 ```text
 branch DEAD
   -> global FAILED
-  -> 告警
-  -> Ops 查看 barrier + 业务表
-  -> 选择人工 Confirm 或 Cancel
-  -> 调 RM 的幂等 Confirm/Cancel
-  -> barrier 状态确认
-  -> 更新 branch/global 人工结果
+  -> ERROR 日志
+  -> 停止自动推进
+  -> 人工处理不在当前代码范围
+```
+
+ERROR 日志字段：
+
+```text
+xid
+branch_id
+status
+retry_count
+callback_endpoint
+last_error
+```
+
+不做：
+
+```text
+告警平台接入
+管理台重放
+自动人工补偿
 ```
 
 分析：
 
 ```text
-DEAD 不能自动继续
-人工重放也必须走 RM barrier
-不能直接改 t_tcc_branch 状态绕过业务
+第一版只保证 TCC 状态机正确收敛或明确失败
+不会静默卡死
+FAILED 通过 ERROR 日志暴露
 ```
+
+## Review 3：运维范围收口
+
+```text
+告警平台：不做
+管理台：不做
+人工重放：不做
+DEAD/FAILED：ERROR 日志
+```
+
+`last_error` 只在日志中出现，不新增交易表字段。
 
 ## Review 2：深度 review 发现
 
