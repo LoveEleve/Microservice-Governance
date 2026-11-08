@@ -105,7 +105,8 @@ AC. Confirm/Cancel 并发
 AD. commit 时仍有 branch TRYING
 AE. commit 时 branch TRY_FAIL
 AF. owner lease 生命周期
-AG. global FAILED 人工处理
+AG. commit/rollback 落到非 owner TC
+AH. global FAILED 人工处理
 ```
 
 ## A. 正常成功
@@ -771,7 +772,7 @@ TM -> tc-3 commit
 否则 tc-0/tc-3 可能同时 Confirm
 ```
 
-## AG. global FAILED 人工处理
+## AH. global FAILED 人工处理
 
 ```text
 branch DEAD
@@ -949,7 +950,7 @@ SUSPENDED/CANCELLED --Try--> reject
 ## 结论
 
 ```text
-当前完整时序图：A~AG 共 33 个 case
+当前完整时序图：A~AH 共 34 个 case
 每个 case 独立图 + 分析
 branch 不在 TC 执行
 跨 TC 只影响状态读写和 callback 路由
