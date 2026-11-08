@@ -594,11 +594,12 @@ TM              RM2             TC
 
 ```text
 TC              RM2
- |-- cancel ---->|
- |-- try ------->|
+ |-- try -------->|
  |               |-- INSERT TRIED 成功
  |               |-- 预占
- |               |-- Cancel 等待行锁
+ |<-- ok ---------|
+ |-- cancel ----->|
+ |               |-- SELECT FOR UPDATE
  |               |-- TRIED -> CANCELLED
  |               |-- 释放
  |<-- cancelled -|
@@ -608,14 +609,15 @@ TC              RM2
 
 ```text
 TC              RM2
+ |-- cancel ---->|
+ |               |-- 无 barrier
+ |               |-- INSERT SUSPENDED
+ |<-- success ---|
  |-- try -------->|
- |-- cancel ----->|
- |               |-- INSERT SUSPENDED 成功
- |               |-- Try 插入冲突
+ |               |-- INSERT 冲突
  |               |-- 看到 SUSPENDED
  |               |-- 拒绝 Try
- |<-- rejected ---|
- |<-- success ----|
+ |<-- rejected --|
 ```
 
 ## Z. callback 注册 tc-0、commit tc-3
@@ -736,13 +738,37 @@ tc-0            MySQL
  |-- 抢到 owner
  |-- 处理 branch
  |-- 续约 lease
- |-- 完成释放
- |  crash
+ |  crash（未释放）
  |               |-- lease 到期
 tc-1
  |-- UPDATE owner_token/lease_until
  |-- 抢到 owner
  |-- 从 DB 恢复
+ |-- 旧 tc-0 即使恢复，也不能再更新
+```
+
+分析：
+
+```text
+所有 global/branch 状态更新必须带 owner_token + lease 条件
+旧 owner 恢复后 update 影响行数为 0
+```
+
+## AG. commit/rollback 落到非 owner TC
+
+```text
+TM -> tc-3 commit
+       tc-3 发现 owner 是 tc-0
+       -> 尝试抢 owner / 等待
+       -> 抢到才推进
+       -> 否则返回 TCC_BUSY 并重试
+```
+
+分析：
+
+```text
+不能因为请求到了 tc-3 就绕过 owner lease
+否则 tc-0/tc-3 可能同时 Confirm
 ```
 
 ## AG. global FAILED 人工处理
@@ -753,6 +779,83 @@ branch DEAD
   -> 停止自动推进
   -> 告警
   -> 人工根据 branch/barrier 处理
+```
+
+## Review 2：深度 review 发现
+
+### P0：状态更新必须带 owner fencing
+
+```sql
+UPDATE t_tcc_global
+SET status = ?
+WHERE xid = ?
+  AND status = ?
+  AND owner_token = ?
+  AND lease_until > NOW();
+```
+
+```sql
+UPDATE t_tcc_branch
+SET status = ?
+WHERE xid = ?
+  AND branch_id = ?
+  AND status = ?
+  AND EXISTS (
+    SELECT 1 FROM t_tcc_global
+    WHERE xid = ? AND owner_token = ? AND lease_until > NOW()
+  );
+```
+
+不加 owner 条件：
+
+```text
+旧 owner 恢复后仍可更新 branch
+新 owner 可能被覆盖
+```
+
+### P0：commit/rollback 到非 owner TC
+
+```text
+请求落到哪个 TC 不重要
+必须抢到 global owner 才能推进
+抢不到返回 TCC_BUSY
+不能直接 Confirm/Cancel
+```
+
+### P1：Y1/Y2 原图箭头顺序错误
+
+已修：
+
+```text
+Y1：Try 先完成，再 Cancel
+Y2：Cancel 先完成，再 Try
+```
+
+### P1：AF 原图“完成释放后 crash”矛盾
+
+已修：
+
+```text
+crash 发生在处理中/续约前
+lease 到期后新 owner 接管
+```
+
+### P1：还缺的 case
+
+```text
+重复 commit
+重复 rollback
+owner lease 续约失败
+callback 回调与 owner 切换并发
+branch DEAD 后人工 Confirm/Cancel
+```
+
+### P1：FAILED 语义
+
+```text
+FAILED 是人工终态
+不再自动推进
+不代表其他 branch 已全部回滚/确认
 ```
 
 ## 状态图
