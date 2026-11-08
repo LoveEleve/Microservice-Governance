@@ -91,7 +91,7 @@ crm-tx-outbox        Outbox/Scanner/Buffer/Sender/Stream
 crm-tx-consumer      Redis Stream 消费者
 crm-tx-spring-boot-starter  Outbox/Consumer 自动装配
 crm-tx-tcc-spring-boot-starter TCC client/participant/注解自动装配
-crm-tx-tcc-examples  TCC 业务示例（lead/quota）
+crm-tx-tcc-examples  TCC 业务示例（lead/quota/coupon）
 crm-tx-demo          消息业务示例
 ```
 

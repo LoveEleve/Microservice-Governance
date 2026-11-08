@@ -23,6 +23,8 @@ QUICKSTART.md
 crm-tx-tcc-examples/lead/.../LeadController.java
 crm-tx-tcc-examples/lead/.../LeadAssignService.java
 crm-tx-tcc-examples/lead/.../QuotaFeignClient.java
+crm-tx-tcc-examples/lead/.../CouponBranchGateway.java
+crm-tx-tcc-examples/lead/.../CouponFeignClient.java
 crm-tx-tcc-api/.../TccRequest.java
 crm-tx-tcc-api/.../TccBranch.java
 ```
@@ -40,8 +42,8 @@ Try 失败后模板做了什么
 产出：
 
 ```text
-手画成功链路
-手画 Try 失败链路
+手画成功链路（quota + coupon 两个 RM）
+手画失败链路（quota 成功、coupon 失败、quota 被 Cancel）
 ```
 
 ### 阶段 2：参与方 RM
@@ -50,6 +52,7 @@ Try 失败后模板做了什么
 
 ```text
 crm-tx-tcc-examples/quota/.../QuotaTccAction.java
+crm-tx-tcc-examples/coupon/.../CouponTccAction.java
 crm-tx-tcc-participant/.../TccParticipantService.java
 crm-tx-tcc-participant/.../web/TccParticipantTryController.java
 docs/02-设计/16-TCC-Barrier与三防.md

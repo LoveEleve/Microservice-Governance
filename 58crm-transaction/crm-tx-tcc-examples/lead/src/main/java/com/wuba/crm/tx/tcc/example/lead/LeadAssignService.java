@@ -14,14 +14,18 @@ import org.springframework.stereotype.Service;
 public class LeadAssignService {
 
     private final QuotaBranchGateway quotaGateway;
+    private final CouponBranchGateway couponGateway;
 
     /**
      * 创建服务。
      *
-     * @param quotaGateway quota 分支网关
+     * @param quotaGateway  quota 分支网关
+     * @param couponGateway coupon 分支网关
      */
-    public LeadAssignService(QuotaBranchGateway quotaGateway) {
+    public LeadAssignService(
+            QuotaBranchGateway quotaGateway, CouponBranchGateway couponGateway) {
         this.quotaGateway = quotaGateway;
+        this.couponGateway = couponGateway;
     }
 
     /**
@@ -37,6 +41,7 @@ public class LeadAssignService {
             tryTimeoutSeconds = 30)
     public TccResult assign(AssignLeadCommand command) {
         quotaGateway.reserve(command.userId());
+        couponGateway.lock(command.couponId());
         return null;
     }
 }

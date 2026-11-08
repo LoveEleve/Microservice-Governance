@@ -62,15 +62,24 @@ TccAnnotationAspectTest：5
 mvn clean test：222 tests / 0 failures
 ```
 
-## 4. 真实 E2E
-
-注解模板语法：
+## 4. 真实 E2E（两个 RM）
 
 ```text
-成功 xid=1 CONFIRMED / quota assigned=1
-失败 xid=2 CANCELLED / barrier SUSPENDED
-HTTP 200，日志无 ERROR
+成功：xid=1 CONFIRMED
+  quota 1 assigned=1
+  coupon 1 USED
+  branch 1/2 CONFIRMED
+  barrier 1/2 CONFIRMED
+  outbox quota/coupon 各一条
+
+失败：xid=2 CANCELLED
+  quota Try 成功后被 Cancel，reserved 回到 0
+  coupon 999 Try 失败，barrier SUSPENDED
+  branch 1/2 CANCELLED
+  HTTP 200，日志无 ERROR
 ```
+
+这才是“A 成功、B 失败、TC 撤销 A”的真实链路。
 
 ## 5. 剩余边界
 

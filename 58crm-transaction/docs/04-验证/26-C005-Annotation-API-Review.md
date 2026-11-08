@@ -1,3 +1,5 @@
+> 后续：C-006 已把示例扩为 quota + coupon 两个 RM；本文保留当时单 RM 的记录。
+
 # C-005 注解 API 与包边界 Review
 
 > 审查对象：@TccTransactional / @TccBranch、TccContext、starter 条件装配、

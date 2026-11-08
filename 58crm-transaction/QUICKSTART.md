@@ -3,12 +3,15 @@
 > 目标：5 分钟理解业务方怎么用；不要求先读 Coordinator 源码。
 > 默认写法是指注解法；`TccRequest.builder()` 只作为高级逃生口保留。
 
-## 1. 两个角色
+## 1. 三个角色
 
 ```text
-TM 业务方：@TccTransactional + @TccBranch
-RM 参与方：实现 TccAction + @TccActionHandler
+TM 业务方：@TccTransactional + 两个 @TccBranch
+RM1 quota：TccAction + @TccActionHandler("reserveQuota")
+RM2 coupon：TccAction + @TccActionHandler("lockCoupon")
 ```
+
+Lead 只做 TM，不实现 TccAction；Confirm/Cancel 在 quota/coupon 的 RM 动作里。
 
 ## 2. Maven 依赖
 
@@ -61,9 +64,12 @@ RM：
 public class LeadAssignService {
 
     private final QuotaBranchGateway quotaGateway;
+    private final CouponBranchGateway couponGateway;
 
-    public LeadAssignService(QuotaBranchGateway quotaGateway) {
+    public LeadAssignService(
+            QuotaBranchGateway quotaGateway, CouponBranchGateway couponGateway) {
         this.quotaGateway = quotaGateway;
+        this.couponGateway = couponGateway;
     }
 
     @TccTransactional(
@@ -73,6 +79,7 @@ public class LeadAssignService {
             tryTimeoutSeconds = 30)
     public TccResult assign(AssignLeadCommand command) {
         quotaGateway.reserve(command.userId());
+        couponGateway.lock(command.couponId());
         return null;
     }
 }
@@ -107,6 +114,35 @@ public class QuotaBranchGateway {
 }
 ```
 
+第二个 RM 同理：
+
+```java
+@Service
+public class CouponBranchGateway {
+
+    private final CouponFeignClient couponClient;
+
+    public CouponBranchGateway(CouponFeignClient couponClient) {
+        this.couponClient = couponClient;
+    }
+
+    @TccBranch(
+            actionName = "lockCoupon",
+            resourceKey = "coupon:#{#couponId}",
+            callbackEndpoint = "${coupon.callback-endpoint}",
+            applicationData = "#{#couponId}")
+    public TccTryResult lock(long couponId) {
+        TccContext context = TccContext.current();
+        TryCouponResponse response = couponClient.tryCoupon(new TryCouponRequest(
+                context.xid(),
+                context.branchId(),
+                "lockCoupon",
+                "{\"couponId\":" + couponId + "}"));
+        return response.success() ? TccTryResult.SUCCESS : TccTryResult.FAILURE;
+    }
+}
+```
+
 业务代码不需要：
 
 ```text
@@ -129,7 +165,7 @@ rollback
 循环分支必须保证 resourceKey 唯一；重复 key 会直接失败并回滚
 ```
 
-## 4. RM 实现 TCC 动作
+## 4. RM 实现 TCC 动作（每个 RM 一个）
 
 ```java
 @Component
@@ -181,6 +217,41 @@ public class QuotaTccAction implements TccAction {
 }
 ```
 
+coupon 的 RM 动作同样实现三个方法；Confirm/Cancel 在这里，不在 Lead：
+
+```java
+@TccActionHandler("lockCoupon")
+public class CouponTccAction implements TccAction {
+
+    @Override
+    public TccTryResult tryAction(BusinessActionContext context) {
+        return couponMapper.lock(couponId(context)) == 1
+                ? TccTryResult.SUCCESS : TccTryResult.FAILURE;
+    }
+
+    @Override
+    public TccPhaseResult confirmAction(BusinessActionContext context) {
+        long couponId = couponId(context);
+        if (couponMapper.confirm(couponId) != 1) {
+            return TccPhaseResult.PERMANENT_FAILURE;
+        }
+        outboxPublisher.publish(new BusinessEvent(
+                "coupon-confirmed:" + context.xid() + ":" + context.branchId(),
+                "coupon",
+                String.valueOf(couponId),
+                "COUPON_USED",
+                "{\"couponId\":" + couponId + "}"));
+        return TccPhaseResult.SUCCESS;
+    }
+
+    @Override
+    public TccPhaseResult cancelAction(BusinessActionContext context) {
+        return couponMapper.cancel(couponId(context)) == 1
+                ? TccPhaseResult.SUCCESS : TccPhaseResult.PERMANENT_FAILURE;
+    }
+}
+```
+
 不需要：
 
 ```text
@@ -214,10 +285,10 @@ crm:
     tcc:
       participant:
         enabled: true
-        grpc-port: 9092
+        grpc-port: 9092   # coupon 用 9093
 ```
 
-`client/participant` 默认都关闭，按角色显式开启。
+`client/participant` 默认都关闭，按角色显式开启；每个 RM 一个 callback 端口。
 
 ## 6. 启动真实示例
 
@@ -245,8 +316,15 @@ DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=crm_tx_e2e \
 DB_USER=root DB_PASSWORD=root123 NACOS_ADDR=127.0.0.1:8848 \
 java -jar crm-tx-tcc-examples/quota/target/crm-tx-tcc-example-quota-0.1.0-SNAPSHOT.jar
 
+# coupon
+DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=crm_tx_e2e \
+DB_USER=root DB_PASSWORD=root123 NACOS_ADDR=127.0.0.1:8848 \
+java -jar crm-tx-tcc-examples/coupon/target/crm-tx-tcc-example-coupon-0.1.0-SNAPSHOT.jar
+
 # lead
-NACOS_ADDR=127.0.0.1:8848 QUOTA_CALLBACK_ENDPOINT=127.0.0.1:9092 \
+NACOS_ADDR=127.0.0.1:8848 \
+QUOTA_CALLBACK_ENDPOINT=127.0.0.1:9092 \
+COUPON_CALLBACK_ENDPOINT=127.0.0.1:9093 \
 java -jar crm-tx-tcc-examples/lead/target/crm-tx-tcc-example-lead-0.1.0-SNAPSHOT.jar
 ```
 
@@ -255,7 +333,7 @@ java -jar crm-tx-tcc-examples/lead/target/crm-tx-tcc-example-lead-0.1.0-SNAPSHOT
 成功：
 
 ```bash
-curl -X POST 'http://127.0.0.1:8081/leads/1001/assign?userId=1'
+curl -X POST 'http://127.0.0.1:8081/leads/1001/assign?userId=1&couponId=1'
 ```
 
 ```json
@@ -265,7 +343,7 @@ curl -X POST 'http://127.0.0.1:8081/leads/1001/assign?userId=1'
 失败：
 
 ```bash
-curl -X POST 'http://127.0.0.1:8081/leads/1001/assign?userId=999'
+curl -X POST 'http://127.0.0.1:8081/leads/1001/assign?userId=1&couponId=999'
 ```
 
 ```json
@@ -277,11 +355,11 @@ Try 失败是业务结果，不是 HTTP 500：注解事务返回 `TccResult(CANC
 数据库：
 
 ```text
-quota assigned=1
+quota assigned=1 / coupon USED（成功）
+失败时 quota reserved 回到 0，quota barrier=CANCELLED
+coupon Try 失败，coupon barrier=SUSPENDED
 global CONFIRMED / CANCELLED
-branch CONFIRMED / CANCELLED
-barrier CONFIRMED / SUSPENDED
-outbox INIT（成功链路）
+outbox INIT（成功链路，quota + coupon 各一条）
 ```
 
 ## 8. 常见错误
@@ -303,5 +381,5 @@ resourceKey 重复 -> 同一事务内分支键冲突，直接回滚
 docs/07-学习讨论/00-项目学习路线.md
 docs/02-设计/19-TCC时序与状态图.md
 docs/02-设计/21-TCC表结构与SQL.md
-docs/04-验证/25-C004-API-Package-Review.md
+docs/04-验证/28-C006-Multi-Branch-Spel-Review.md
 ```

@@ -22,3 +22,6 @@ crm:
 
 quota:
   callback-endpoint: ${QUOTA_CALLBACK_ENDPOINT:127.0.0.1:9092}
+
+coupon:
+  callback-endpoint: ${COUPON_CALLBACK_ENDPOINT:127.0.0.1:9093}

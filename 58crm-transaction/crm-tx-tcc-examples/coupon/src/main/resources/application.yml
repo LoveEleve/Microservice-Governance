@@ -1,0 +1,32 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: coupon-service
+  cloud:
+    nacos:
+      discovery:
+        enabled: true
+        server-addr: ${NACOS_ADDR:127.0.0.1:8848}
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:crm_tx_e2e}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&rewriteBatchedStatements=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:root123}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+crm:
+  tx:
+    biz-codes: coupon
+    auto-start: false
+    consumer:
+      enabled: false
+    tcc:
+      participant:
+        enabled: true
+        grpc-enabled: true
+        grpc-port: 9093

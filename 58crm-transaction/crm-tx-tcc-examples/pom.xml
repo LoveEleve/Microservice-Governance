@@ -17,5 +17,6 @@
     <modules>
         <module>lead</module>
         <module>quota</module>
+        <module>coupon</module>
     </modules>
 </project>

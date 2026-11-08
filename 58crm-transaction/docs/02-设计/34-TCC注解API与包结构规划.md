@@ -14,8 +14,10 @@
         bizId = "#{#command.leadId}",
         tryTimeoutSeconds = 30
 )
-public void assign(AssignLeadCommand command) {
-    quotaClient.tryQuota(command.userId());
+public TccResult assign(AssignLeadCommand command) {
+    quotaGateway.reserve(command.userId());   // RM1
+    couponGateway.lock(command.couponId());   // RM2
+    return null;
 }
 ```
 
@@ -35,9 +37,15 @@ begin/register/report/commit
 public class QuotaTccAction implements TccAction {
     // try / confirm / cancel
 }
+
+@Component
+@TccActionHandler("lockCoupon")
+public class CouponTccAction implements TccAction {
+    // try / confirm / cancel
+}
 ```
 
-RM 仍只实现 TccAction。
+RM 仍只实现 TccAction；Lead 只做 TM。
 
 ### 1.3 分支声明
 
@@ -58,6 +66,20 @@ public class QuotaBranchGateway {
                 context.xid(), context.branchId(), "reserveQuota", payload(userId)));
         return response.success() ? TccTryResult.SUCCESS : TccTryResult.FAILURE;
     }
+}
+```
+
+coupon 分支同理：
+
+```java
+@TccBranch(
+        actionName = "lockCoupon",
+        resourceKey = "coupon:#{#couponId}",
+        callbackEndpoint = "${coupon.callback-endpoint}",
+        applicationData = "#{#couponId}")
+public TccTryResult lock(long couponId) {
+    TccContext context = TccContext.current();
+    // Feign 调 coupon /tcc/try
 }
 ```
 

@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS id_segment;
 DROP TABLE IF EXISTS t_branch_barrier;
 DROP TABLE IF EXISTS t_local_message;
 DROP TABLE IF EXISTS t_quota;
+DROP TABLE IF EXISTS t_coupon;
 DROP TABLE IF EXISTS t_lead;
 
 CREATE TABLE id_segment (
@@ -83,6 +84,13 @@ CREATE TABLE t_quota (
   assigned INT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 INSERT INTO t_quota (user_id, reserved, assigned) VALUES (1, 0, 0);
+
+CREATE TABLE t_coupon (
+  coupon_id BIGINT PRIMARY KEY,
+  status VARCHAR(16) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+INSERT INTO t_coupon (coupon_id, status) VALUES (1, 'AVAILABLE');
+INSERT INTO t_coupon (coupon_id, status) VALUES (999, 'USED');
 
 CREATE TABLE t_lead (
   id BIGINT PRIMARY KEY,

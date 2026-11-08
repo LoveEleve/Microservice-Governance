@@ -28,16 +28,19 @@ public class LeadController {
     /**
      * 分配线索。
      *
-     * @param leadId 线索
-     * @param userId 用户
+     * @param leadId   线索
+     * @param userId   用户
+     * @param couponId 优惠券
      * @return 结果
      */
     @PostMapping("/leads/{leadId}/assign")
     public AssignResult assign(
             @PathVariable("leadId") long leadId,
-            @RequestParam("userId") long userId) {
-        String requestId = "lead-" + leadId + "-" + userId + "-" + UUID.randomUUID();
-        TccResult result = service.assign(new AssignLeadCommand(requestId, leadId, userId));
+            @RequestParam("userId") long userId,
+            @RequestParam("couponId") long couponId) {
+        String requestId = "lead-" + leadId + "-" + userId + "-" + couponId + "-" + UUID.randomUUID();
+        TccResult result = service.assign(
+                new AssignLeadCommand(requestId, leadId, userId, couponId));
         return new AssignResult(result.xid(), result.status().name());
     }
 }
