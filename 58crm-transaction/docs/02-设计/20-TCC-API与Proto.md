@@ -7,7 +7,8 @@
 ```text
 TM -> TC：控制面 unary
 TC -> RM：callback unary
-TM -> RM：Try 由业务 API 发起，不由 TC 发起
+TM -> RM：Try 是业务 API（本地方法或业务 RPC）
+TC：不提供 Try RPC，只提供 Confirm/Cancel callback
 ```
 
 ```text
