@@ -62,7 +62,8 @@ C-003.5：Confirm 事务契约与 Outbox 示例（已完成）
 C-003.6：Scheduler / 重试（已完成）
 C-003.7：生产化接入（Starter + Metrics + Nacos + 真实 E2E 已完成）
 C-004.1：TCC 公共模型 + DefaultTccTransactionTemplate（已完成）
-C-004.2：protocol/client gRPC（下一步）
+C-004.2：protocol/client gRPC（已完成）
+C-004.3：@TccAction + 通用 /tcc/try（下一步）
 ```
 
 TCC 协调器、参与方 barrier、业务示例在后续变更中实现。
@@ -72,6 +73,7 @@ TCC 协调器、参与方 barrier、业务示例在后续变更中实现。
 ```text
 crm-tx-common        通用模型/状态/错误码
 crm-tx-tcc-api       TCC 公共 API / 状态 / DTO / proto
+crm-tx-tcc-protocol  TCC proto / gRPC stubs
 crm-tx-tcc-client    公共 TCC 模板 / Coordinator 客户端
 crm-tx-tcc-id        TCC XID 号段生成
 crm-tx-tcc-coordinator TCC 协调器核心

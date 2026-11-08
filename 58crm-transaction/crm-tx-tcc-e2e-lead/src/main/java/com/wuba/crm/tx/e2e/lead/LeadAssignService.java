@@ -1,42 +1,42 @@
 package com.wuba.crm.tx.e2e.lead;
 
-import com.wuba.crm.tx.tcc.api.grpc.BeginRequest;
-import com.wuba.crm.tx.tcc.api.grpc.BeginResponse;
-import com.wuba.crm.tx.tcc.api.grpc.BranchStatus;
-import com.wuba.crm.tx.tcc.api.grpc.CommitResponse;
-import com.wuba.crm.tx.tcc.api.grpc.RegisterBranchRequest;
-import com.wuba.crm.tx.tcc.api.grpc.RegisterBranchResponse;
+import com.wuba.crm.tx.tcc.api.TccBranch;
+import com.wuba.crm.tx.tcc.api.TccRequest;
+import com.wuba.crm.tx.tcc.api.TccResult;
+import com.wuba.crm.tx.tcc.api.TccTransactionTemplate;
+import com.wuba.crm.tx.tcc.api.TccTryResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.UUID;
 
 /**
  * 业务方 TCC 编排示例。
  *
- * <p>Try 通过 OpenFeign 调用 quota-service；TC 的 Confirm/Cancel
- * callback 仍通过 gRPC 调用 quota 的 participant server。</p>
+ * <p>业务代码只构造 TccRequest 和 Try 回调；begin/register/report/commit
+ * 全部由 DefaultTccTransactionTemplate 处理。</p>
  */
 @Service
 public class LeadAssignService {
 
-    private final TccCoordinatorClient coordinator;
+    private final TccTransactionTemplate tcc;
     private final QuotaFeignClient quotaClient;
     private final String quotaCallbackEndpoint;
 
     /**
      * 创建编排服务。
      *
-     * @param coordinator           Coordinator gRPC 客户端
-     * @param quotaClient           quota OpenFeign 客户端
+     * @param tcc                  公共 TCC 模板
+     * @param quotaClient          quota OpenFeign 客户端
      * @param quotaCallbackEndpoint quota gRPC callback endpoint
      */
     public LeadAssignService(
-            TccCoordinatorClient coordinator,
+            TccTransactionTemplate tcc,
             QuotaFeignClient quotaClient,
             @Value("${quota.callback-endpoint:127.0.0.1:9092}")
             String quotaCallbackEndpoint) {
-        this.coordinator = coordinator;
+        this.tcc = tcc;
         this.quotaClient = quotaClient;
         this.quotaCallbackEndpoint = quotaCallbackEndpoint;
     }
@@ -49,43 +49,25 @@ public class LeadAssignService {
      * @return 分配结果
      */
     public AssignResult assign(long leadId, long userId) {
-        String requestId = "lead-" + leadId + "-" + userId + "-" + UUID.randomUUID();
-        BeginResponse begin = coordinator.begin(BeginRequest.newBuilder()
-                .setRequestId(requestId)
-                .setBizCode("lead")
-                .setBizId(String.valueOf(leadId))
-                .setTryTimeoutSeconds(30)
+        TccResult result = tcc.execute(TccRequest.builder()
+                .requestId("lead-" + leadId + "-" + userId + "-" + UUID.randomUUID())
+                .bizCode("lead")
+                .bizId(String.valueOf(leadId))
+                .tryTimeout(Duration.ofSeconds(30))
+                .branch(TccBranch.builder()
+                        .resourceKey("quota:" + userId)
+                        .actionName("reserveQuota")
+                        .callbackEndpoint(quotaCallbackEndpoint)
+                        .applicationData("{\"userId\":" + userId + "}")
+                        .tryAction(context -> {
+                            TryQuotaResponse response = quotaClient.tryQuota(
+                                    new TryQuotaRequest(
+                                            context.xid(), context.branchId(), userId));
+                            return response.success()
+                                    ? TccTryResult.SUCCESS : TccTryResult.FAILURE;
+                        })
+                        .build())
                 .build());
-        long xid = begin.getXid();
-
-        try {
-            RegisterBranchResponse branch = coordinator.registerBranch(
-                    RegisterBranchRequest.newBuilder()
-                            .setXid(xid)
-                            .setResourceKey("quota:" + userId)
-                            .setActionName("reserveQuota")
-                            .setCallbackEndpoint(quotaCallbackEndpoint)
-                            .setApplicationData("{\"userId\":" + userId + "}")
-                            .build());
-
-            TryQuotaResponse tryResponse = quotaClient.tryQuota(
-                    new TryQuotaRequest(xid, branch.getBranchId(), userId));
-            if (!tryResponse.success()) {
-                coordinator.report(xid, branch.getBranchId(), BranchStatus.BRANCH_TRY_FAIL);
-                coordinator.rollback(xid);
-                return new AssignResult(xid, "TRY_FAIL");
-            }
-
-            coordinator.report(xid, branch.getBranchId(), BranchStatus.BRANCH_TRY_SUCCESS);
-            CommitResponse commit = coordinator.commit(xid);
-            return new AssignResult(xid, commit.getStatus().name());
-        } catch (RuntimeException failure) {
-            try {
-                coordinator.rollback(xid);
-            } catch (RuntimeException ignored) {
-                // 保留原始失败原因。
-            }
-            throw failure;
-        }
+        return new AssignResult(result.xid(), result.status().name());
     }
 }

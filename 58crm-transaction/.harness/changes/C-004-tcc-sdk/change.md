@@ -41,5 +41,6 @@ README quickstart 可复制运行
 
 ```text
 C-004.1 已完成：公共模型 + DefaultTccTransactionTemplate + 重复 branch 校验
-C-004.2 未开始：protocol/client gRPC
+C-004.2 已完成：proto 拆分 + CoordinatorGrpcClient + e2e lead 使用公共模板
+C-004.3 未开始：@TccAction + 通用 /tcc/try
 ```
