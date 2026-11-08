@@ -95,10 +95,11 @@ crm-tx-tcc-examples  TCC 业务示例（lead/quota/coupon）
 crm-tx-demo          消息业务示例
 ```
 
-## 学习入口
+## 学习与面试入口
 
 ```text
 docs/07-学习讨论/00-项目学习路线.md
+docs/08-面试思维导图/58CRM-TCC.md
 ```
 
 ## 验证

@@ -46,6 +46,7 @@ YYYY-MM-DD-主题.md
 | `09-2026-11-08-分支注册职责讨论.md` | TM register 与 RM self-register 的职责讨论 |
 | `10-2026-11-08-branchId作用域讨论.md` | branchId 是 xid 内编号，不是全局 ID |
 | `11-2026-11-08-Barrier三防.md` | barrier 的空回滚、悬挂、幂等与 Confirm+Outbox |
+| `../08-面试思维导图/58CRM-TCC.md` | 项目背景/模块/架构/流程/66 问总导图 |
 
 ## 3. 学习入口
 
