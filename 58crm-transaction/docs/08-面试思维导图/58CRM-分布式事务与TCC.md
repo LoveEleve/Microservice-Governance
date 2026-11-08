@@ -2246,3 +2246,25 @@ TC                                    RM
   - 面试时说“设计已完成、任务未落地”，不要夸大。
 - 面试要点
   - 能说清缺口，比假装上线可信。
+
+## 47. 简历口径（58 TCC）
+
+### 47.1.1 项目标题和背景怎么写？
+
+- 标题：58CRM 跨服务一致性框架（TCC + Outbox + Redis Stream）| Java 后端。
+- 背景：CRM 12 条业务线、40+ 服务，跨服务写入靠“先落库再发 MQ + 定时扫表补偿”，存在索引不更新、业绩重复、权益重复发放。
+
+### 47.1.2 简历 bullet 怎么写？
+
+- 设计 TCC 协调器：global/branch 状态机、Begin/Register/Report/Commit/Rollback、owner lease、超时恢复与重试，5 实例无状态部署。
+- 实现 RM barrier：Try/Confirm/Cancel 幂等、空回滚、悬挂防护；Confirm 与业务表、Outbox 同本地事务。
+- 设计注解接入：`@TccTransactional`/`@TccBranch`、AOP、OpenFeign Try、gRPC callback、Nacos gRPC 注册。
+- 设计 Outbox + Redis Stream 可靠消息：Scanner/Buffer/Sender、PEL/XACK、租约/时间轮、幂等消费与重放。
+- 落地双 RM E2E：quota 成功、coupon 失败时 Cancel quota，验证“已成功分支可撤销”。
+- 结果：9 个自建补偿任务下线；TCC 核心单测 222 个，双 RM E2E 通过。
+
+### 47.1.3 边界怎么说？
+
+- 8W QPS 是项目参数口径，当前仓库本机消息压测约 700 msg/s。
+- 当前 `@TccBranch` 是 TM 注册过渡实现，目标设计是 RM 自注册。
+- callback 鉴权、多 TC 故障注入、完整对账未落地。
