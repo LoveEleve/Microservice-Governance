@@ -2,6 +2,12 @@
 
 CRM 跨服务一致性框架：TCC + MySQL 本地消息表 + Redis Stream + 对账。
 
+## 5 分钟接入
+
+```text
+QUICKSTART.md
+```
+
 ## 先看什么
 
 按使用顺序读，不要先读源码：
@@ -66,7 +72,7 @@ C-004.2：protocol/client gRPC（已完成）
 C-004.3：@TccActionHandler + 通用 /tcc/try（已完成，E2E 复跑）
 C-004.4：TCC 独立 Starter（已完成，按角色显式开启）
 C-004.5：examples 迁移（已完成）
-C-004.6：quickstart 文档（下一步）
+C-004.6：quickstart + 迁移后 E2E 复跑（已完成）
 ```
 
 TCC 协调器、参与方 barrier、业务示例在后续变更中实现。

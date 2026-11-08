@@ -96,6 +96,7 @@
 | 看 C-004.3 Review | `04-验证/21-C004.3-Review.md` |
 | 看 C-004.4 Review | `04-验证/22-C004.4-Review.md` |
 | 看 C-004.5 Review | `04-验证/23-C004.5-Review.md` |
+| 看 C-004.6 Review | `04-验证/24-C004.6-Review.md` |
 | 看学习讨论记录 | `07-学习讨论/README.md` |
 
 ## 目录结构
