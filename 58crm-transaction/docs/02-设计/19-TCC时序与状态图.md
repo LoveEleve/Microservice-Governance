@@ -540,29 +540,77 @@ Confirm 后到
 ### global
 
 ```text
-TRYING -> CONFIRMING -> CONFIRMED
-   |          |
-   v          v
-CANCELLING -> CANCELLED
-   |
-   v
+TRYING
+  | all Try success + commit
+  v
+CONFIRMING
+  | all CONFIRMED
+  v
+CONFIRMED
+
+TRYING
+  | Try fail/timeout
+  v
+CANCELLING
+  | all CANCELLED/SUSPENDED
+  v
+CANCELLED
+
+CONFIRMING
+  | retry exhausted
+  v
+FAILED
+
+CANCELLING
+  | retry exhausted
+  v
 FAILED
 ```
 
 ### branch
 
 ```text
-TRYING -> TRY_SUCCESS -> CONFIRMING -> CONFIRMED
-   |          |               |
-   |          |               v
-   |          |             DEAD
-   |          v
-   |       CANCELLING -> CANCELLED
-   |               |
-   |               v
-   |             SUSPENDED
-   v
-TRY_FAIL -> CANCELLING
+TRYING
+  | Try success
+  v
+TRY_SUCCESS
+  | commit
+  v
+CONFIRMING
+  | Confirm success
+  v
+CONFIRMED
+
+CONFIRMING
+  | retry exhausted
+  v
+DEAD
+
+TRYING
+  | Try fail
+  v
+TRY_FAIL
+  | rollback
+  v
+CANCELLING
+  | Cancel success
+  v
+CANCELLED
+
+TRYING
+  | cancel/timeout
+  v
+CANCELLING
+
+CANCELLING
+  | no barrier
+  v
+SUSPENDED
+
+CANCELLING
+  | retry exhausted
+  v
+DEAD
 ```
 
 ### barrier
@@ -573,6 +621,113 @@ TRIED --Confirm--> CONFIRMED
 TRIED --Cancel--> CANCELLED
 CONFIRMED --Cancel--> reject
 SUSPENDED/CANCELLED --Try--> reject
+```
+
+## Review 修正记录
+
+### P0：状态图原先漏了迁移
+
+```text
+CONFIRMING -> FAILED
+CANCELLING -> FAILED
+CANCELLING -> DEAD
+TRYING -> CANCELLING
+```
+
+已补。
+
+### P0：新增 Commit 前置条件
+
+#### AD. commit 时仍有 branch TRYING
+
+```text
+TM              TC
+ |-- commit ---->|
+ |<-- TCC_NOT_READY
+ |-- 等待 report / rollback
+```
+
+分析：
+
+```text
+不能把未完成 Try 的事务推进到 CONFIRMING
+```
+
+#### AE. commit 时 branch TRY_FAIL
+
+```text
+TM              TC
+ |-- commit ---->|
+ |               |-- 发现 TRY_FAIL
+ |               |-- CANCELLING
+ |<-------------------------------- CANCELLED
+```
+
+分析：
+
+```text
+commit 请求不能覆盖 Try_FAIL
+TC 必须走 Cancel
+```
+
+### P0：新增 owner lease 生命周期
+
+```text
+tc-0 scheduler
+  -> UPDATE global owner_token/lease_until
+  -> 成功才处理
+  -> 处理中续约
+  -> 完成释放 owner
+
+tc-0 crash
+  -> lease 到期
+  -> tc-3 抢 owner
+  -> 从 DB 恢复
+```
+
+### P0：新增 callback 跨 TC 图
+
+```text
+TM -> tc-0 registerBranch
+       INSERT t_tcc_branch(callbackEndpoint)
+TM -> tc-3 commit
+       SELECT callbackEndpoint
+tc-3 -> RM confirm/cancel
+RM -> tc-3 result
+```
+
+分析：
+
+```text
+branch 业务不在 TC 执行
+tc-3 只读 DB + 回调 RM
+不需要 sticky
+```
+
+### P1：仍待改成独立时序图的 case
+
+```text
+N / O / P / Q / R / S / T / U / V / W / X / Y / AA / AB / AC
+```
+
+当前这些只有文字描述，不是完整时序图。下一轮必须补成：
+
+```text
+参与者列
+请求/响应箭头
+本地事务边界
+状态变化
+重试/告警
+```
+
+## 结论
+
+```text
+当前不是 28 张完整时序图
+完整图约 12 张，其余是文字 case
+状态图迁移已修正
+commit 前置条件、lease、跨 TC callback 已补
+剩余 case 必须补图后才能冻结
 ```
 
 ## 结论
