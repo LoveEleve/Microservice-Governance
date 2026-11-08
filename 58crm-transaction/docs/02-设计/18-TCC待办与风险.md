@@ -86,14 +86,16 @@ Scheduler 扫不到，事务永久卡住
 ## 下一步
 
 ```text
-C-003.2 Coordinator Server
+C-003.2.1 Coordinator 核心
   begin / register / report
-  gRPC codegen
   t_tcc_global / t_tcc_branch persistence
+  已完成
 
-前置：
-  crm-tx-tcc-id 已提供 MyBatis-Plus 原子号段
-  C-003.2 直接注入 TccXidGenerator
+C-003.2.2 Coordinator gRPC Server
+  proto codegen
+  service adapter
+  error mapping
+  下一步
 ```
 
 一句话：

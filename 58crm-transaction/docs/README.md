@@ -65,8 +65,10 @@
 | 看 TCC 表结构与 SQL | `02-设计/21-TCC表结构与SQL.md` |
 | 看 TCC 决策日志 | `02-设计/09-讨论决策日志.md` |
 | 看 TCC 号段 ID | `02-设计/22-TCC-号段ID.md` |
+| 看 TCC Coordinator 核心 | `02-设计/23-TCC-Coordinator核心.md` |
 | 看 C-003 变更范围 | `.harness/changes/C-003-tcc-core/change.md` |
 | 看 C-003.1 Review | `04-验证/05-C003.1-Review.md` |
+| 看 C-003.2.1 Review | `04-验证/06-C003.2.1-Review.md` |
 
 ## 目录结构
 
