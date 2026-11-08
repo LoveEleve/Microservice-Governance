@@ -99,7 +99,7 @@ crm-tx-demo          消息业务示例
 
 ```text
 docs/07-学习讨论/00-项目学习路线.md
-docs/08-面试思维导图/58CRM-TCC.md
+docs/08-面试思维导图/58CRM-分布式事务与TCC.md
 ```
 
 ## 验证
