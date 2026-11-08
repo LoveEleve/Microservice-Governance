@@ -14,7 +14,8 @@ import org.springframework.boot.test.context.SpringBootTest;
                 "spring.datasource.driver-class-name=org.h2.Driver",
                 "spring.datasource.username=sa",
                 "spring.datasource.password=",
-                "crm.tx.tcc.coordinator.grpc-port=0"
+                "crm.tx.tcc.coordinator.grpc-port=0",
+                "crm.tx.tcc.coordinator.scheduler-enabled=false"
         })
 class TccCoordinatorApplicationTest {
 

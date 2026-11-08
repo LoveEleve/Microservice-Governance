@@ -108,7 +108,11 @@ C-003.5 Confirm 事务契约与 Outbox 示例
   框架不生成事件
   已完成
 
-C-003.6 Scheduler / 重试 / Nacos
+C-003.6 Scheduler / 重试
+  已完成
+
+C-003.7 生产化接入
+  Nacos/Sentinel/metrics/真实集成
   下一步
 ```
 

@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import java.time.Clock;
@@ -20,6 +21,7 @@ import java.time.Duration;
  * {@code TccCoordinatorService} 负责。</p>
  */
 @Configuration
+@EnableScheduling
 @EnableTransactionManagement(proxyTargetClass = true)
 @MapperScan(
         basePackages = {

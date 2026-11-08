@@ -40,6 +40,15 @@ public interface TccGlobalRepository {
     TccGlobalEntity findByXid(long xid);
 
     /**
+     * 查询 Try 超时的 XID。
+     *
+     * @param now   当前时间
+     * @param limit 最大数量
+     * @return XID 列表
+     */
+    java.util.List<Long> findExpiredTryingXids(java.time.LocalDateTime now, int limit);
+
+    /**
      * 抢占 owner。
      *
      * @param xid        全局事务号

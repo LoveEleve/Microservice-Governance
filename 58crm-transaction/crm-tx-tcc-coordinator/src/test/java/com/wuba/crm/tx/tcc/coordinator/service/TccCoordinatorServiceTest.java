@@ -64,6 +64,7 @@ class TccCoordinatorServiceTest {
     private AnnotationConfigApplicationContext context;
     private TccCoordinatorService service;
     private TccPhase2Coordinator phase2;
+    private TccRetryScheduler scheduler;
     private TccParticipantClient participantClient;
     private JdbcTemplate jdbc;
 
@@ -72,6 +73,7 @@ class TccCoordinatorServiceTest {
         context = new AnnotationConfigApplicationContext(TestConfig.class);
         service = context.getBean(TccCoordinatorService.class);
         phase2 = context.getBean(TccPhase2Coordinator.class);
+        scheduler = context.getBean(TccRetryScheduler.class);
         participantClient = context.getBean(TccParticipantClient.class);
         jdbc = context.getBean(JdbcTemplate.class);
         jdbc.execute("DROP TABLE IF EXISTS t_tcc_branch");
@@ -441,6 +443,58 @@ class TccCoordinatorServiceTest {
     }
 
     @Test
+    void scheduler_retriesDueConfirm() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
+        reportSuccess(xid, branchId);
+        when(participantClient.confirm(any())).thenReturn(
+                com.wuba.crm.tx.tcc.api.TccCallbackResult.retryable("temporary"));
+        phase2.commit(xid);
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT retry_count FROM t_tcc_branch WHERE xid = ?", Integer.class, xid));
+        jdbc.update("UPDATE t_tcc_branch SET next_retry_at = ? WHERE xid = ?",
+                java.time.LocalDateTime.ofInstant(
+                        java.time.Instant.parse("2025-12-31T00:00:00Z"),
+                        java.time.ZoneOffset.UTC),
+                xid);
+        jdbc.update("UPDATE t_tcc_global SET lease_until = ? WHERE xid = ?",
+                java.time.LocalDateTime.ofInstant(
+                        java.time.Instant.parse("2025-12-31T00:00:00Z"),
+                        java.time.ZoneOffset.UTC),
+                xid);
+        when(participantClient.confirm(any())).thenReturn(
+                com.wuba.crm.tx.tcc.api.TccCallbackResult.success());
+
+        scheduler.scanOnce();
+
+        assertEquals("CONFIRMED", jdbc.queryForObject(
+                "SELECT status FROM t_tcc_global WHERE xid = ?", String.class, xid));
+        assertEquals("CONFIRMED", jdbc.queryForObject(
+                "SELECT status FROM t_tcc_branch WHERE xid = ?", String.class, xid));
+    }
+
+    @Test
+    void scheduler_rollsBackExpiredTrying() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
+        jdbc.update("UPDATE t_tcc_global SET timeout_at = ? WHERE xid = ?",
+                java.time.LocalDateTime.ofInstant(
+                        java.time.Instant.parse("2025-12-31T00:00:00Z"),
+                        java.time.ZoneOffset.UTC),
+                xid);
+        when(participantClient.cancel(any())).thenReturn(
+                com.wuba.crm.tx.tcc.api.TccCallbackResult.success());
+
+        scheduler.scanOnce();
+
+        assertEquals("CANCELLED", jdbc.queryForObject(
+                "SELECT status FROM t_tcc_global WHERE xid = ?", String.class, xid));
+        assertEquals("CANCELLED", jdbc.queryForObject(
+                "SELECT status FROM t_tcc_branch WHERE xid = ? AND branch_id = ?",
+                String.class, xid, branchId));
+    }
+
+    @Test
     void commit_whileBranchTrying_isNotReady() {
         long xid = service.begin(begin("req-1", "lead-1")).xid();
         service.registerBranch(branch(xid, "lead:1"));
@@ -574,6 +628,15 @@ class TccCoordinatorServiceTest {
                 Clock clock) {
             return new TccPhase2Coordinator(
                     globals, branches, participantClient, transactionManager, clock);
+        }
+
+        @Bean
+        TccRetryScheduler tccRetryScheduler(
+                TccGlobalRepository globals,
+                TccBranchRepository branches,
+                TccPhase2Coordinator phase2Coordinator,
+                Clock clock) {
+            return new TccRetryScheduler(globals, branches, phase2Coordinator, clock);
         }
     }
 }

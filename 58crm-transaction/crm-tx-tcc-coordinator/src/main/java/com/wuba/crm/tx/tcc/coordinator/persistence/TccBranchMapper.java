@@ -201,6 +201,67 @@ public interface TccBranchMapper {
             @Param("now") LocalDateTime now);
 
     /**
+     * 查询到期待重试的全局事务。
+     *
+     * @param now   当前时间
+     * @param limit 最大数量
+     * @return XID 列表
+     */
+    @Select("""
+            SELECT DISTINCT xid
+            FROM t_tcc_branch
+            WHERE status IN ('CONFIRMING','CANCELLING')
+              AND next_retry_at <= #{now}
+            ORDER BY xid
+            LIMIT #{limit}
+            """)
+    java.util.List<Long> findDueRetryXids(
+            @Param("now") LocalDateTime now,
+            @Param("limit") int limit);
+
+    /**
+     * 记录一次持久化重试并设置下一次退避时间。
+     *
+     * @param xid       全局事务号
+     * @param branchId  分支号
+     * @param status    分支状态
+     * @param retryCount 新重试次数
+     * @param nextRetry 下次重试时间
+     * @param owner     owner token
+     * @param now       当前时间
+     * @return 影响行数
+     */
+    @Update("""
+            UPDATE t_tcc_branch
+            SET retry_count = #{retryCount},
+                next_retry_at = #{nextRetry},
+                updated_at = #{now}
+            WHERE xid = #{xid}
+              AND branch_id = #{branchId}
+              AND status = #{status}
+              AND EXISTS (
+                  SELECT 1 FROM t_tcc_global g
+                  WHERE g.xid = #{xid}
+                    AND g.owner_token = #{owner}
+                    AND g.lease_until > #{now}
+              )
+            """)
+    int scheduleRetry(
+            @Param("xid") long xid,
+            @Param("branchId") long branchId,
+            @Param("status") String status,
+            @Param("retryCount") int retryCount,
+            @Param("nextRetry") LocalDateTime nextRetry,
+            @Param("owner") String owner,
+            @Param("now") LocalDateTime now);
+
+    /**
+     * 插入分支。
+     *
+     * @param entity 分支实体
+     * @return 影响行数
+     */
+    /**
      * 插入分支。
      *
      * @param entity 分支实体

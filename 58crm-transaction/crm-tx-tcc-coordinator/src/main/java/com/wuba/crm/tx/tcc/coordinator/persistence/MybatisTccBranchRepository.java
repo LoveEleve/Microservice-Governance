@@ -44,6 +44,19 @@ public class MybatisTccBranchRepository implements TccBranchRepository {
 
     /** {@inheritDoc} */
     @Override
+    public java.util.List<Long> findDueRetryXids(LocalDateTime now, int limit) {
+        return mapper.findDueRetryXids(now, limit);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int scheduleRetry(long xid, long branchId, String status, int retryCount,
+                             LocalDateTime nextRetry, String owner, LocalDateTime now) {
+        return mapper.scheduleRetry(xid, branchId, status, retryCount, nextRetry, owner, now);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public int updateToConfirming(long xid, LocalDateTime nextRetry, LocalDateTime updatedAt) {
         return mapper.updateToConfirming(xid, nextRetry, updatedAt);
     }

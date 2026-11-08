@@ -34,6 +34,31 @@ public interface TccBranchRepository {
     java.util.List<TccBranchEntity> findByXid(long xid);
 
     /**
+     * 查询到期待重试的 XID。
+     *
+     * @param now   当前时间
+     * @param limit 最大数量
+     * @return XID 列表
+     */
+    java.util.List<Long> findDueRetryXids(java.time.LocalDateTime now, int limit);
+
+    /**
+     * 记录持久化重试。
+     *
+     * @param xid        全局事务号
+     * @param branchId   分支号
+     * @param status     分支状态
+     * @param retryCount 新重试次数
+     * @param nextRetry  下次重试时间
+     * @param owner      owner token
+     * @param now        当前时间
+     * @return 影响行数
+     */
+    int scheduleRetry(long xid, long branchId, String status, int retryCount,
+                      java.time.LocalDateTime nextRetry, String owner,
+                      java.time.LocalDateTime now);
+
+    /**
      * TRY_SUCCESS -> CONFIRMING。
      *
      * @param xid       全局事务号

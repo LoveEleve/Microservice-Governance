@@ -71,6 +71,27 @@ public interface TccGlobalMapper {
     TccGlobalEntity findByXidForUpdate(@Param("xid") long xid);
 
     /**
+     * 查询 Try 阶段已超时的全局事务。
+     *
+     * @param now   当前时间
+     * @param limit 最大数量
+     * @return XID 列表
+     */
+    @Select("""
+            SELECT xid
+            FROM t_tcc_global
+            WHERE status = 'TRYING'
+              AND timeout_at <= #{now}
+            ORDER BY timeout_at
+            LIMIT #{limit}
+            """)
+    java.util.List<Long> findExpiredTryingXids(
+            @Param("now") LocalDateTime now,
+            @Param("limit") int limit);
+
+    /**
+     * 按 XID 查询，不加锁；用于 Query RPC。
+    /**
      * 按 XID 查询，不加锁；用于 Query RPC。
      *
      * @param xid 全局事务号

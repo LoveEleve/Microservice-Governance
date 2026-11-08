@@ -50,6 +50,12 @@ public class MybatisTccGlobalRepository implements TccGlobalRepository {
 
     /** {@inheritDoc} */
     @Override
+    public java.util.List<Long> findExpiredTryingXids(LocalDateTime now, int limit) {
+        return mapper.findExpiredTryingXids(now, limit);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public int claimOwner(long xid, String owner, LocalDateTime leaseUntil, LocalDateTime now) {
         return mapper.claimOwner(xid, owner, leaseUntil, now);
     }

@@ -37,6 +37,7 @@ public class TccPhase2Coordinator {
 
     private static final long LEASE_SECONDS = 30;
 
+    private final TccRetryPolicy retryPolicy = TccRetryPolicy.defaults();
     private final TccGlobalRepository globals;
     private final TccBranchRepository branches;
     private final TccParticipantClient participantClient;
@@ -234,7 +235,7 @@ public class TccPhase2Coordinator {
             }
             TccCallbackResult result = participantClient.confirm(branch);
             if (result.result() == TccPhaseResult.RETRYABLE) {
-                return new TccCommitResult(GlobalStatus.CONFIRMING);
+                return retryConfirmBranch(prepared, branch);
             }
             if (result.result() == TccPhaseResult.PERMANENT_FAILURE) {
                 return failCommitBranch(prepared, branch);
@@ -261,7 +262,7 @@ public class TccPhase2Coordinator {
             }
             TccCallbackResult result = participantClient.cancel(branch);
             if (result.result() == TccPhaseResult.RETRYABLE) {
-                return new TccRollbackResult(GlobalStatus.CANCELLING);
+                return retryCancelBranch(prepared, branch);
             }
             if (result.result() == TccPhaseResult.PERMANENT_FAILURE) {
                 return failCancelBranch(prepared, branch);
@@ -276,6 +277,56 @@ public class TccPhase2Coordinator {
         }
         return new TccRollbackResult(finalizeStatus(
                 prepared.xid, prepared.owner, GlobalStatus.CANCELLING));
+    }
+
+    private TccCommitResult retryConfirmBranch(
+            Prepared prepared, TccBranchEntity branch) {
+        GlobalStatus status = transactionTemplate.execute(transactionStatus -> {
+            TccBranchEntity current = branches.findByBranchId(
+                    prepared.xid, branch.getBranchId());
+            if (current == null) {
+                return GlobalStatus.CONFIRMING;
+            }
+            int retries = (current.getRetryCount() == null ? 0 : current.getRetryCount()) + 1;
+            LocalDateTime now = LocalDateTime.now(clock);
+            if (retries >= retryPolicy.maxRetries()) {
+                branches.markDead(prepared.xid, branch.getBranchId(), prepared.owner, now);
+                globals.transitionOwned(
+                        prepared.xid, GlobalStatus.CONFIRMING.name(), GlobalStatus.FAILED.name(),
+                        prepared.owner, now);
+                return GlobalStatus.FAILED;
+            }
+            branches.scheduleRetry(
+                    prepared.xid, branch.getBranchId(), BranchStatus.CONFIRMING.name(),
+                    retries, now.plus(retryPolicy.delay(retries)), prepared.owner, now);
+            return GlobalStatus.CONFIRMING;
+        });
+        return new TccCommitResult(status == null ? GlobalStatus.CONFIRMING : status);
+    }
+
+    private TccRollbackResult retryCancelBranch(
+            Prepared prepared, TccBranchEntity branch) {
+        GlobalStatus status = transactionTemplate.execute(transactionStatus -> {
+            TccBranchEntity current = branches.findByBranchId(
+                    prepared.xid, branch.getBranchId());
+            if (current == null) {
+                return GlobalStatus.CANCELLING;
+            }
+            int retries = (current.getRetryCount() == null ? 0 : current.getRetryCount()) + 1;
+            LocalDateTime now = LocalDateTime.now(clock);
+            if (retries >= retryPolicy.maxRetries()) {
+                branches.markDead(prepared.xid, branch.getBranchId(), prepared.owner, now);
+                globals.transitionOwned(
+                        prepared.xid, GlobalStatus.CANCELLING.name(), GlobalStatus.FAILED.name(),
+                        prepared.owner, now);
+                return GlobalStatus.FAILED;
+            }
+            branches.scheduleRetry(
+                    prepared.xid, branch.getBranchId(), BranchStatus.CANCELLING.name(),
+                    retries, now.plus(retryPolicy.delay(retries)), prepared.owner, now);
+            return GlobalStatus.CANCELLING;
+        });
+        return new TccRollbackResult(status == null ? GlobalStatus.CANCELLING : status);
     }
 
     private TccCommitResult failCommitBranch(
