@@ -115,6 +115,22 @@ Confirm/Cancel gRPC server
 action registry
 ```
 
+## 3.3 接口边界
+
+```text
+公开：
+  TccTransactionTemplate.execute
+  TccRequest / TccBranch / TccResult
+  TccAction
+
+内部：
+  TccBeginRequest / TccBranchRegisterRequest / ...
+  CoordinatorGrpcClient
+  proto 生成类
+```
+
+`TccTransactionTemplate` 不再暴露 begin/register/report/commit 给业务方。
+
 ## 4. API 模型
 
 ```text
@@ -156,8 +172,9 @@ TccBranchResult
 requestId 必填，业务幂等键
 branches 不能为空
 applicationData <= 64KB
-callbackEndpoint 必填
+callbackEndpoint 必填且为 gRPC host:port
 Try 回调必须由业务提供
+Try 回调可以抛异常；模板统一转成 rollback
 ```
 
 ## 5. 执行语义
@@ -212,11 +229,20 @@ crm:
     tcc:
       participant:
         enabled: true
-        callback-endpoint: http://quota-service:8080
+        callback-endpoint: quota-service:9092
         grpc-port: 9092
 ```
 
-注意：callbackEndpoint 是 TC 回调地址，不是 Nacos serviceName；TC 不发现 RM。
+注意：`callbackEndpoint` 是 TC 调用的 gRPC 地址，格式是 `host:port`，不是业务 HTTP 地址。
+TC 不发现 RM，所以不能只写 Nacos serviceName；业务方要提供稳定可达地址。
+
+## 7.1 @TccAction 扫描
+
+```text
+按 Bean 类型扫描
+不按代理类注解扫描
+同名 actionName 启动失败
+```
 
 ## 8. Client 自动装配
 
@@ -237,6 +263,7 @@ Nacos discovery
 直连地址（本地测试）
 连接复用
 统一错误码
+deadline 配置
 ```
 
 ## 9. 重构切片
@@ -309,7 +336,18 @@ e2e 能自动跑
 README quickstart 能复制运行
 ```
 
-## 11. 不做
+## 11. 开源门面
+
+```text
+README quickstart
+examples 可复制
+LICENSE
+CONTRIBUTING
+API javadoc
+版本兼容说明
+```
+
+## 12. 不做
 
 ```text
 Sentinel
@@ -319,6 +357,6 @@ Prometheus/Grafana/告警
 并行 Try（先顺序）
 ```
 
-## 12. 一句话
+## 13. 一句话
 
 > **框架的价值不是把协议跑通，而是让业务方只写 `tryAction/confirmAction/cancelAction` 和一个 `tcc.execute(...)`。**
