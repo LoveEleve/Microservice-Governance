@@ -474,6 +474,33 @@ class TccCoordinatorServiceTest {
     }
 
     @Test
+    void scheduler_afterMaxRetries_marksDeadAndFailed() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
+        reportSuccess(xid, branchId);
+        when(participantClient.confirm(any())).thenReturn(
+                com.wuba.crm.tx.tcc.api.TccCallbackResult.retryable("temporary"));
+        phase2.commit(xid);
+
+        for (int i = 0; i < 4; i++) {
+            jdbc.update("UPDATE t_tcc_branch SET next_retry_at = ? WHERE xid = ?",
+                    java.time.LocalDateTime.ofInstant(
+                            java.time.Instant.parse("2025-12-31T00:00:00Z"),
+                            java.time.ZoneOffset.UTC), xid);
+            jdbc.update("UPDATE t_tcc_global SET lease_until = ? WHERE xid = ?",
+                    java.time.LocalDateTime.ofInstant(
+                            java.time.Instant.parse("2025-12-31T00:00:00Z"),
+                            java.time.ZoneOffset.UTC), xid);
+            scheduler.scanOnce();
+        }
+
+        assertEquals("DEAD", jdbc.queryForObject(
+                "SELECT status FROM t_tcc_branch WHERE xid = ?", String.class, xid));
+        assertEquals("FAILED", jdbc.queryForObject(
+                "SELECT status FROM t_tcc_global WHERE xid = ?", String.class, xid));
+    }
+
+    @Test
     void scheduler_rollsBackExpiredTrying() {
         long xid = service.begin(begin("req-1", "lead-1")).xid();
         long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
