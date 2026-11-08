@@ -15,6 +15,7 @@ crm.tx.tcc.participant 开关
 grpc-enabled / grpc-port
 SqlSessionTemplate -> BarrierMapper
 TccMetrics / Scheduler 指标
+Nacos gRPC 注册器（默认关闭）
 ```
 
 ## 不包含

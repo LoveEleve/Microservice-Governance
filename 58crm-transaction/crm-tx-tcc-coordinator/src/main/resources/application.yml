@@ -4,6 +4,16 @@ server:
 spring:
   application:
     name: crm-tx-tcc-coordinator
+  config:
+    import: optional:nacos:${spring.application.name}.yml
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+        server-addr: ${NACOS_ADDR:127.0.0.1:8848}
+      config:
+        enabled: ${NACOS_ENABLED:false}
+        server-addr: ${NACOS_ADDR:127.0.0.1:8848}
   datasource:
     url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:crm_tx}?useSSL=false&serverTimezone=UTC&rewriteBatchedStatements=true
     username: ${DB_USER:root}
