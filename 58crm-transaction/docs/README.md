@@ -156,3 +156,4 @@ docs/
 ```
 
 | 看 C-004 API 与包结构 Review | `04-验证/25-C004-API-Package-Review.md` |
+| 看 TCC 注解 API 与包结构规划 | `02-设计/34-TCC注解API与包结构规划.md` |

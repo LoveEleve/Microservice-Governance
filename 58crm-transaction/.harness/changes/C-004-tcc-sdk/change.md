@@ -47,3 +47,13 @@ C-004.4 已完成：TCC 独立 Starter（client/participant 默认关闭，显�
 C-004.5 已完成：examples 迁移
 C-004.6 已完成：quickstart + 迁移后 E2E 复跑
 ```
+
+
+## C-005 规划
+
+```text
+C-005.1 proto 包名 + 低层 DTO + client internal + BOM
+C-005.2 @TccTransactional / @TccBranch 内核
+C-005.3 AOP + Feign interceptor + 通用 /tcc/try header
+C-005.4 examples 注解化 + quickstart 重写
+```
