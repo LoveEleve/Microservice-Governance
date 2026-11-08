@@ -133,6 +133,11 @@ public class TccCoordinatorService {
         }
 
         LocalDateTime now = LocalDateTime.now(clock);
+        if (!global.getTimeoutAt().isAfter(now)) {
+            throw new TccException(TccResultCode.TCC_INVALID_STATE,
+                    "global try timeout has expired");
+        }
+
         long branchId = global.getBranchSeq() + 1;
         int updated = globals.updateBranchSeq(request.xid(), branchId, now);
         if (updated != 1) {
@@ -166,22 +171,38 @@ public class TccCoordinatorService {
      */
     @Transactional
     public void reportBranch(TccBranchReportRequest request) {
-        LocalDateTime now = LocalDateTime.now(clock);
-        int updated = branches.reportTryResult(
-                request.xid(), request.branchId(), request.status().name(), now);
-        if (updated == 1) {
-            return;
+        // 与 Commit/Rollback 保持“先 global、后 branch”的锁顺序，避免死锁。
+        TccGlobalEntity global = globals.findByXidForUpdate(request.xid());
+        if (global == null) {
+            throw new TccException(TccResultCode.TCC_NOT_FOUND, "global tcc not found");
         }
 
+        String requestedStatus = request.status().name();
         TccBranchEntity branch = branches.findByBranchId(request.xid(), request.branchId());
         if (branch == null) {
             throw new TccException(TccResultCode.TCC_NOT_FOUND, "branch not found");
         }
-        if (Objects.equals(branch.getStatus(), request.status().name())) {
+
+        if (parseGlobalStatus(global.getStatus()) != GlobalStatus.TRYING) {
+            if (Objects.equals(branch.getStatus(), requestedStatus)) {
+                return;
+            }
+            throw new TccException(TccResultCode.TCC_INVALID_STATE,
+                    "global is not TRYING: " + global.getStatus());
+        }
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        int updated = branches.reportTryResult(
+                request.xid(), request.branchId(), requestedStatus, now);
+        if (updated == 1) {
+            return;
+        }
+
+        if (Objects.equals(branch.getStatus(), requestedStatus)) {
             return;
         }
         throw new TccException(TccResultCode.TCC_INVALID_STATE,
-                "branch cannot report " + request.status().name()
+                "branch cannot report " + requestedStatus
                         + " from " + branch.getStatus());
     }
 

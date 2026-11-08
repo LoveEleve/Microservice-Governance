@@ -191,6 +191,48 @@ class TccCoordinatorServiceTest {
     }
 
     @Test
+    void registerBranch_afterGlobalLeavesTry_isRejected() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        jdbc.update("UPDATE t_tcc_global SET status = 'CANCELLING' WHERE xid = ?", xid);
+
+        TccException failure = assertThrows(TccException.class,
+                () -> service.registerBranch(branch(xid, "lead:1")));
+
+        assertEquals(TccResultCode.TCC_INVALID_STATE, failure.getCode());
+        assertEquals(0, count("t_tcc_branch"));
+    }
+
+    @Test
+    void registerBranch_existingBranchRemainsIdempotentAfterTryTimeout() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
+        jdbc.update("UPDATE t_tcc_global SET timeout_at = ? WHERE xid = ?",
+                java.time.LocalDateTime.ofInstant(
+                        java.time.Instant.parse("2025-12-31T00:00:00Z"),
+                        java.time.ZoneOffset.UTC),
+                xid);
+
+        TccBranchRegisterResult retried = service.registerBranch(branch(xid, "lead:1"));
+
+        assertEquals(branchId, retried.branchId());
+    }
+
+    @Test
+    void registerBranch_afterTryTimeout_isRejected() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        jdbc.update("UPDATE t_tcc_global SET timeout_at = ? WHERE xid = ?",
+                java.time.LocalDateTime.ofInstant(
+                        java.time.Instant.parse("2025-12-31T00:00:00Z"),
+                        java.time.ZoneOffset.UTC),
+                xid);
+
+        TccException failure = assertThrows(TccException.class,
+                () -> service.registerBranch(branch(xid, "lead:1")));
+
+        assertEquals(TccResultCode.TCC_INVALID_STATE, failure.getCode());
+    }
+
+    @Test
     void registerBranch_allocatesSequentialIds() {
         TccBeginResult begin = service.begin(begin("req-1", "lead-1"));
 
@@ -253,6 +295,36 @@ class TccCoordinatorServiceTest {
         TccException failure = assertThrows(TccException.class,
                 () -> service.reportBranch(new TccBranchReportRequest(
                         xid, branchId, BranchStatus.TRY_FAIL, null)));
+
+        assertEquals(TccResultCode.TCC_INVALID_STATE, failure.getCode());
+    }
+
+    @Test
+    void reportBranch_afterGlobalLeavesTry_isIdempotentOrRejected() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
+        service.reportBranch(new TccBranchReportRequest(
+                xid, branchId, BranchStatus.TRY_SUCCESS, null));
+        jdbc.update("UPDATE t_tcc_global SET status = 'CANCELLING' WHERE xid = ?", xid);
+
+        service.reportBranch(new TccBranchReportRequest(
+                xid, branchId, BranchStatus.TRY_SUCCESS, null));
+
+        TccException failure = assertThrows(TccException.class,
+                () -> service.reportBranch(new TccBranchReportRequest(
+                        xid, branchId, BranchStatus.TRY_FAIL, null)));
+        assertEquals(TccResultCode.TCC_INVALID_STATE, failure.getCode());
+    }
+
+    @Test
+    void reportBranch_afterGlobalLeavesTry_rejectsUnreportedBranch() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
+        jdbc.update("UPDATE t_tcc_global SET status = 'CANCELLING' WHERE xid = ?", xid);
+
+        TccException failure = assertThrows(TccException.class,
+                () -> service.reportBranch(new TccBranchReportRequest(
+                        xid, branchId, BranchStatus.TRY_SUCCESS, null)));
 
         assertEquals(TccResultCode.TCC_INVALID_STATE, failure.getCode());
     }

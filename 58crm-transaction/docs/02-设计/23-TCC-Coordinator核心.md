@@ -81,7 +81,7 @@ requestId 重复只复用同一笔事务
 
 ```text
 1. SELECT t_tcc_global ... FOR UPDATE
-2. global 必须是 TRYING
+2. global 必须是 TRYING 且 timeout_at 未过期
 3. 按 (xid, resource_key) 查已有分支
 4. 已有 -> 校验 actionName/callbackEndpoint/applicationData -> 返回同一 branchId
 5. 没有 -> branchId = global.branch_seq + 1
@@ -106,18 +106,25 @@ branchId 允许空洞，不回退
 
 ## 5. ReportBranch
 
+流程：
+
+```text
+SELECT t_tcc_global ... FOR UPDATE
+  -> global 必须是 TRYING
+  -> UPDATE t_tcc_branch
+     WHERE xid/branch_id/status='TRYING'
+```
+
 SQL：
 
 ```sql
+SELECT status FROM t_tcc_global WHERE xid = ? FOR UPDATE;
+
 UPDATE t_tcc_branch
 SET status = ?, updated_at = ?
 WHERE xid = ?
   AND branch_id = ?
-  AND status = 'TRYING'
-  AND EXISTS (
-      SELECT 1 FROM t_tcc_global g
-      WHERE g.xid = ? AND g.status = 'TRYING'
-  )
+  AND status = 'TRYING';
 ```
 
 语义：
@@ -127,7 +134,7 @@ global TRYING + branch TRYING -> 更新
 已是同一结果 -> 幂等成功
 冲突结果 -> TCC_INVALID_STATE
 branch 不存在 -> TCC_NOT_FOUND
-global 已进入二阶段 -> TCC_INVALID_STATE
+global 已进入二阶段且 branch 不是同一结果 -> TCC_INVALID_STATE
 ```
 
 ReportBranch 不加 owner：
@@ -137,12 +144,19 @@ ReportBranch 不加 owner：
 owner 只用于 Commit/Cancel
 ```
 
+但 ReportBranch 必须先锁 global：
+
+```text
+统一锁顺序 global -> branch
+避免和 Commit/Rollback 反向加锁死锁
+```
+
 ## 6. 事务边界
 
 ```text
 Begin            @Transactional
 RegisterBranch   @Transactional + global FOR UPDATE
-ReportBranch     @Transactional + 条件 UPDATE
+ReportBranch     @Transactional + global FOR UPDATE + 条件 UPDATE
 ```
 
 没有跨库事务：
@@ -178,6 +192,8 @@ RegisterBranch:
   branchId 连续
   同 resourceKey 幂等
   同 resourceKey 不同 action 拒绝
+  Try 超时后拒绝新分支
+  已有分支在超时后仍可幂等返回
   8 线程并发注册 branchId 不重复
 
 ReportBranch:

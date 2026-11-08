@@ -76,14 +76,15 @@ public interface TccBranchMapper {
     /**
      * 把 TRYING 分支更新为指定的 Try 结果。
      *
-     * <p>只有 global 仍为 TRYING 时才允许写入；这样 ReportBranch 不会
-     * 覆盖已经进入二阶段的分支。</p>
+     * <p>调用方必须先锁定 global 行并确认 global 仍是 TRYING。
+     * 这里只做 branch 状态条件更新，避免在持有 branch 锁时反向锁
+     * global，造成与 Commit/Rollback 的锁顺序冲突。</p>
      *
      * @param xid       全局事务号
      * @param branchId  分支号
      * @param status    TRY_SUCCESS 或 TRY_FAIL
      * @param updatedAt 更新时间
-     * @return 影响行数；0 表示状态或 global 不满足条件
+     * @return 影响行数；0 表示 branch 不满足条件
      */
     @Update("""
             UPDATE t_tcc_branch
@@ -91,12 +92,6 @@ public interface TccBranchMapper {
             WHERE xid = #{xid}
               AND branch_id = #{branchId}
               AND status = 'TRYING'
-              AND EXISTS (
-                  SELECT 1
-                  FROM t_tcc_global g
-                  WHERE g.xid = #{xid}
-                    AND g.status = 'TRYING'
-              )
             """)
     int reportTryResult(
             @Param("xid") long xid,

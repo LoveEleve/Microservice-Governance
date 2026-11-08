@@ -122,7 +122,8 @@ UPDATE t_tcc_global
 SET branch_seq = branch_seq + 1,
     updated_at = NOW(3)
 WHERE xid = ?
-  AND status = 'TRYING';
+  AND status = 'TRYING'
+  AND timeout_at > NOW(3);
 
 SELECT branch_seq
 FROM t_tcc_global
@@ -149,14 +150,23 @@ SELECT branch_id, status FROM t_tcc_branch WHERE xid = ? AND resource_key = ?;
 ## 6. ReportBranch
 
 ```sql
-UPDATE t_tcc_branch b
-JOIN t_tcc_global g ON g.xid = b.xid
-SET b.status = ?,
-    b.updated_at = NOW(3)
-WHERE b.xid = ?
-  AND b.branch_id = ?
-  AND b.status = 'TRYING'
-  AND g.status = 'TRYING';
+START TRANSACTION;
+
+SELECT status
+FROM t_tcc_global
+WHERE xid = ?
+FOR UPDATE;
+
+-- global 必须是 TRYING，否则回滚并返回 TCC_INVALID_STATE
+
+UPDATE t_tcc_branch
+SET status = ?,
+    updated_at = NOW(3)
+WHERE xid = ?
+  AND branch_id = ?
+  AND status = 'TRYING';
+
+COMMIT;
 ```
 
 只允许：
@@ -169,11 +179,20 @@ TRY_FAIL
 重复上报：
 
 ```text
-已是 TRY_SUCCESS/TRY_FAIL -> 幂等返回
-已进入 CONFIRMING/CANCELLING -> TCC_INVALID_STATE
+已是同一 Try 结果 -> 幂等返回
+已进入 CONFIRMING/CANCELLING 且结果不同 -> TCC_INVALID_STATE
 ```
 
 这里不加 owner 条件：Try 上报不推进二阶段，只允许在 global TRYING 时落分支结果。
+
+但必须先锁 global，再更新 branch：
+
+```text
+ReportBranch: global -> branch
+Commit/Rollback: global -> branch
+```
+
+否则 ReportBranch 先锁 branch、子查询再锁 global，会和二阶段形成反向锁顺序，可能死锁。
 
 ## 7. Commit
 

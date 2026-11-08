@@ -30,7 +30,7 @@ gRPC server（C-003.2.2）
 ```text
 AC1 Begin 生成正整数 XID，写 t_tcc_global
 AC2 重复 requestId 返回同一 XID
-AC3 RegisterBranch 原子递增 branch_seq
+AC3 RegisterBranch 原子递增 branch_seq，Try 超时后拒绝
 AC4 重复 resourceKey 返回同一 branch
 AC5 ReportBranch 只接受 TRY_SUCCESS / TRY_FAIL
 AC6 重复上报同状态幂等
@@ -67,7 +67,7 @@ Begin / RegisterBranch / ReportBranch
 
 ```text
 mvn -q test
-tests=144 failures=0 errors=0 skipped=1
+tests=149 failures=0 errors=0 skipped=1
 ```
 
 C-003.2.2 继续：
