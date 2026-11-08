@@ -64,6 +64,7 @@
 | 看 TCC API 与 Proto | `02-设计/20-TCC-API与Proto.md` |
 | 看 TCC 表结构与 SQL | `02-设计/21-TCC表结构与SQL.md` |
 | 看 TCC 决策日志 | `02-设计/09-讨论决策日志.md` |
+| 看 TCC 号段 ID | `02-设计/22-TCC-号段ID.md` |
 | 看 C-003 变更范围 | `.harness/changes/C-003-tcc-core/change.md` |
 | 看 C-003.1 Review | `04-验证/05-C003.1-Review.md` |
 

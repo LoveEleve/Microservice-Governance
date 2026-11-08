@@ -7,6 +7,9 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/**
+ * 验证 TCC DTO 的必填、状态和 64KB 上下文校验。
+ */
 class TccRequestValidationTest {
 
     @Test

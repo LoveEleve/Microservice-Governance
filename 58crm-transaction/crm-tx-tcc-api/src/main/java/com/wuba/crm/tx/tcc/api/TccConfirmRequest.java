@@ -1,5 +1,8 @@
 package com.wuba.crm.tx.tcc.api;
 
+/**
+ * TC 调用 RM Confirm 的请求。
+ */
 public record TccConfirmRequest(
         long xid,
         long branchId,

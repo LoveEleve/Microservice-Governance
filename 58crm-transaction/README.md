@@ -51,7 +51,10 @@ Prometheus + Grafana + 链路追踪
 ```text
 C-001.1：OutboxPublisher（已完成）
 C-001.2：Scanner + Buffer + Sender + Redis Stream（已完成）
-C-001.3：StreamConsumer + XACK/PEL + 消费方 Inbox（下一步）
+C-002：Redis Stream 消费者（已完成）
+C-003.1：TCC API / 状态 / DTO / proto（已完成）
+C-003.1.1：TCC 号段 ID（已完成）
+C-003.2：Coordinator Server（下一步）
 ```
 
 TCC 协调器、参与方 barrier、业务示例在后续变更中实现。
@@ -59,10 +62,13 @@ TCC 协调器、参与方 barrier、业务示例在后续变更中实现。
 ## 工程目录
 
 ```text
-tx-common        通用模型/状态/错误码
-tx-coordinator   TCC 协调器
-tx-participant   参与方 SDK/barrier
-tx-outbox        Outbox/Scanner/Buffer/Sender/Stream/消费
+crm-tx-common        通用模型/状态/错误码
+crm-tx-tcc-api       TCC API / 状态 / DTO / proto
+crm-tx-tcc-id        TCC XID 号段生成
+crm-tx-tcc-coordinator TCC 协调器（后续）
+crm-tx-tcc-participant 参与方 SDK/barrier（后续）
+crm-tx-outbox        Outbox/Scanner/Buffer/Sender/Stream
+crm-tx-consumer      Redis Stream 消费者
 crm-tx-spring-boot-starter  Spring Boot 自动装配
 crm-tx-demo      业务方接入示例（线索分配）
 ```

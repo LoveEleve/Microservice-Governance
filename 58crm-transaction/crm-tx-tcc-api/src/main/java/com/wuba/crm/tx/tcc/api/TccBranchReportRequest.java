@@ -2,6 +2,11 @@ package com.wuba.crm.tx.tcc.api;
 
 import java.util.Objects;
 
+/**
+ * TM 上报 Try 结果的请求。
+ *
+ * <p>只允许 TRY_SUCCESS 和 TRY_FAIL 两种状态；其他状态会被拒绝。</p>
+ */
 public record TccBranchReportRequest(
         long xid,
         long branchId,

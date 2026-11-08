@@ -1,5 +1,13 @@
 package com.wuba.crm.tx.tcc.api;
 
+/**
+ * 开启全局事务的请求。
+ *
+ * @param requestId        begin 幂等键
+ * @param bizCode          业务域
+ * @param bizId            业务单号
+ * @param tryTimeoutSeconds Try 阶段超时秒数
+ */
 public record TccBeginRequest(
         String requestId,
         String bizCode,

@@ -44,6 +44,10 @@ crm-tx-tcc-api
   TccTransactionTemplate 接口
   Coordinator 与 Participant 的 DTO
 
+crm-tx-tcc-id
+  号段 XID 生成
+  MyBatis-Plus + 独立事务
+
 crm-tx-tcc-coordinator
   Spring Boot 独立服务
   TC 类角色

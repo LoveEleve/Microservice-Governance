@@ -95,3 +95,20 @@ tests=119 failures=0 errors=0 skipped=1
 proto 源文件已建立
 gRPC codegen 和 Server 放到 C-003.2
 ```
+
+
+## C-003.1.1 号段 ID 内联
+
+```text
+新增 crm-tx-tcc-id
+MyBatis-Plus IdSegmentMapper / MybatisSegmentAllocator
+@Transactional(REQUIRES_NEW)
+TccXidGenerator 跳过 0，保证 XID > 0
+```
+
+验证：
+
+```text
+mvn -q test
+tests=133 failures=0 errors=0 skipped=1
+```

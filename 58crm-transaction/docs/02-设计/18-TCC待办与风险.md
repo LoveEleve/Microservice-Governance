@@ -1,53 +1,53 @@
 # TCC 待办与风险
 
-## P0：号段分配器不是原子操作
+## P0：号段分配器不是原子操作（已修）
 
-文件：
+历史来源：
 
 ```text
 xhs-demo/id-lab/src/main/java/com/scalab/id/segment/JdbcSegmentAllocator.java
 ```
 
-当前：
-
-```java
-UPDATE id_segment SET max_id = max_id + ? WHERE biz_type = ?;
-SELECT max_id FROM id_segment WHERE biz_type = ?;
-```
-
-问题：
+原实现的问题：
 
 ```text
-两条 SQL、两次连接
+UPDATE 和 SELECT 是两次 JdbcTemplate 调用
+可能来自连接池的两个连接
 并发领号可能读到同一个 max_id
 两个 TC 拿到重叠号段
-XID 重复
 ```
 
-修复方向：
-
-```sql
-UPDATE id_segment
-SET max_id = LAST_INSERT_ID(max_id + ?)
-WHERE biz_type = ?;
-
-SELECT LAST_INSERT_ID();
-```
-
-要求同一 Connection；或使用 `SELECT ... FOR UPDATE` + `UPDATE` 的事务。
-
-必须补测试：
+本项目不再直接依赖 id-lab。修复后的实现：
 
 ```text
-两个 DataSource / 两个 SegmentIdGenerator
-并发领号
-断言所有号段不重叠
+crm-tx-tcc-id
+  MybatisSegmentAllocator
+  @Transactional(REQUIRES_NEW)
+  UPDATE + SELECT 同一连接、同一事务
 ```
 
-在修复前：
+为什么不用 `LAST_INSERT_ID`：
 
 ```text
-不能把该 SegmentIdGenerator 用于 TCC XID
+本项目用 MyBatis-Plus + Spring TX
+UPDATE 持有行锁，SELECT 同事务读取新水位
+不引入 MySQL 特有函数，H2 测试和 MySQL 行为一致
+```
+
+测试：
+
+```text
+8 线程 × 25 次领号
+断言 max_id 返回值不重复
+断言 DB 最终水位 = 200 × 100
+外层事务回滚，号段仍独立提交
+```
+
+注意：
+
+```text
+id-lab 里的旧 JdbcTemplate 实现仍然是学习代码
+不进入 58crm 运行时
 ```
 
 ## P0：Scheduler 恢复窗口
@@ -92,7 +92,8 @@ C-003.2 Coordinator Server
   t_tcc_global / t_tcc_branch persistence
 
 前置：
-  修复 JdbcSegmentAllocator 原子领号
+  crm-tx-tcc-id 已提供 MyBatis-Plus 原子号段
+  C-003.2 直接注入 TccXidGenerator
 ```
 
 一句话：

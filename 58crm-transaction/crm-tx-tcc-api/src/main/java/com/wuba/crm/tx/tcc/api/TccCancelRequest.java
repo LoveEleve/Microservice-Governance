@@ -1,5 +1,8 @@
 package com.wuba.crm.tx.tcc.api;
 
+/**
+ * TC 调用 RM Cancel 的请求。
+ */
 public record TccCancelRequest(
         long xid,
         long branchId,

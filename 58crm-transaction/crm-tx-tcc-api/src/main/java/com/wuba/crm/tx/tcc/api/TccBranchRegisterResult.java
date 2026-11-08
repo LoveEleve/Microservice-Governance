@@ -2,6 +2,12 @@ package com.wuba.crm.tx.tcc.api;
 
 import java.util.Objects;
 
+/**
+ * 注册分支事务的结果。
+ *
+ * @param branchId 分支号
+ * @param status   分支初始状态
+ */
 public record TccBranchRegisterResult(long branchId, BranchStatus status) {
 
     public TccBranchRegisterResult {

@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证分支状态迁移矩阵、终态和 Cancel 收敛判断。
+ */
 class BranchStatusTest {
 
     @Test
