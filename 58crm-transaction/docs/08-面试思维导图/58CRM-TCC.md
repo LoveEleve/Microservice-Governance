@@ -7,6 +7,7 @@
 > 1. 本文流程按目标设计讲：**RM 在 Try 入口自己注册分支**，TM 不配置 RM 回调地址。
 > 2. 当前仓库 `@TccBranch` 仍是 TM 先注册的过渡实现，差异见第 10 节，不把过渡实现当目标设计。
 > 3. 第 11 节的 06 文档 66 问按“原项目口径 / 本仓库口径”分别标注，不混用 8W QPS 等未验证数字。
+> 4. 消息服务深入版见 `58CRM-消息服务.md`，本文只保留 TCC 主线和消息边界。
 
 ## 0. 30 秒总览
 
@@ -638,7 +639,7 @@ XREADGROUP
 
 ```text
 PEL 里还有未 ACK 消息
-  -> XAUTOCLAIM / 恢复任务
+  -> XPENDING / XCLAIM 恢复
   -> 重新投递或重试
 ```
 
@@ -858,7 +859,7 @@ Sentinel / Prometheus
 2. 一条消息从生产到消费经过哪些模块？
    - 业务本地事务写 Outbox -> Scanner -> Buffer -> Sender XADD -> Consumer XREADGROUP -> handler -> XACK。
 3. MySQL 和 Redis 各放什么？
-   - MySQL 放事务日志、消息正本、幂等、barrier；Redis 放 Stream 传输和幂等加速。
+   - MySQL 放事务日志、消息正本、幂等、barrier；Redis Stream 只做传输。
 4. 为什么两个载体？
    - MySQL 保可靠和可恢复，Redis 保吞吐和削峰。
 5. TCC 三阶段谁执行？
@@ -1012,3 +1013,119 @@ Outbox 解决业务事实发生后的可靠通知，MySQL 是正本，Redis Stre
 ## 13. 一句话
 
 > **TCC 保证资源状态正确，Outbox 保证事实通知可靠；RM 负责自己的分支注册和回调元数据，TM 只负责发起和调用 Try。**
+
+
+## 14. TCC 故障矩阵
+
+### 14.1.1 Try 失败
+
+```text
+场景：quota 成功，coupon Try 返回 FAILURE
+动作：coupon report TRY_FAIL -> TM rollback
+结果：quota Cancel，coupon 空回滚 SUSPENDED
+```
+
+### 14.1.2 Try 成功但 report 丢失
+
+```text
+场景：RM 已预占，TM 没收到/没上报
+状态：TC branch 仍是 TRYING
+动作：TM rollback 或 TC timeout
+结果：Cancel 已成功分支；未上报分支按超时收敛
+```
+
+### 14.1.3 begin 响应丢失
+
+```text
+场景：TC 已插 t_tcc_global，TM 没收到响应
+动作：TM 认为 begin 失败，不执行 assign
+结果：global 留 TRYING，靠 timeout 收敛
+注意：当前 begin 没有自动重试
+```
+
+### 14.1.4 TC 崩溃在 CONFIRMING
+
+```text
+状态：global CONFIRMING，branch 部分 CONFIRMING
+恢复：其他 TC 抢 owner lease
+动作：Scheduler 继续 Confirm
+结果：全部 CONFIRMED 或 DEAD
+```
+
+### 14.1.5 Confirm 重试
+
+```text
+场景：RM 超时/返回 RETRYABLE
+动作：next_retry_at 退避
+恢复：Scheduler 重新回调
+幂等：barrier CONFIRMED 直接 SUCCESS
+```
+
+### 14.1.6 Cancel 先到
+
+```text
+场景：Cancel 比 Try 先到
+动作：barrier 无记录 -> 插入 SUSPENDED
+结果：返回 SUCCESS；迟到 Try 被拒绝
+```
+
+### 14.1.7 重复 Confirm/Cancel
+
+```text
+Confirm 已 CONFIRMED -> SUCCESS
+Cancel 已 CANCELLED/SUSPENDED -> SUCCESS
+冲突状态 -> 抛 INVALID_STATE
+```
+
+### 14.1.8 owner lease 过期
+
+```text
+场景：owner TC 卡住/崩溃
+动作：lease 到期，其他 TC 抢 owner
+风险：旧 owner 仍可能写
+防护：更新 SQL 带 owner_token/status
+```
+
+### 14.1.9 callback endpoint 不可达
+
+```text
+场景：RM 地址不可达
+动作：本次回调失败 -> RETRYABLE
+恢复：Scheduler 重试
+边界：当前没有 callback 鉴权
+```
+
+### 14.1.10 多分支部分失败
+
+```text
+场景：branch1 TRY_SUCCESS，branch2 TRY_FAIL
+动作：rollback
+结果：branch1 Cancel，branch2 空回滚/SUSPENDED
+关键：不能只回滚 branch2
+```
+
+## 15. 目标设计与当前实现差异
+
+```text
+目标设计：
+  RM 在 Try 入口 registerBranch
+  TM 只传 xid + payload
+  callbackEndpoint 由 RM 自己提供
+
+当前仓库：
+  TM 的 @TccBranch 先 registerBranch
+  callbackEndpoint 写在 TM 注解
+  这是过渡实现，不是目标设计
+
+差异文档：
+  docs/07-学习讨论/09-2026-11-08-分支注册职责讨论.md
+```
+
+## 16. 关联文档
+
+```text
+消息服务深入：58CRM-消息服务.md
+TCC 逐段讲解：../07-学习讨论/07-2026-11-08-双RM-TCC逐段讲解.md
+Barrier 三防：../07-学习讨论/11-2026-11-08-Barrier三防.md
+分支注册职责：../07-学习讨论/09-2026-11-08-分支注册职责讨论.md
+```
