@@ -61,6 +61,31 @@ Scheduler 扫不到，事务永久卡住
 
 已补设计，代码在 C-003.3 必须按此实现并测试。
 
+## P1：分支注册职责错位
+
+```text
+当前 TM 的 @TccBranch 先 registerBranch，再调 RM Try
+TM 因此知道 actionName/resourceKey/callbackEndpoint
+```
+
+目标：
+
+```text
+RM 在 Try 入口自注册
+TM 只负责 begin + 调用 Try
+TC 从 RM 注册的分支行读 callback endpoint
+```
+
+影响：
+
+```text
+RM 需要接入 BranchRegistrar
+Try 请求需要携带 xid
+TM 的 @TccBranch 需要移除或降级为本地标记
+```
+
+详见 `docs/07-学习讨论/09-2026-11-08-分支注册职责讨论.md`。
+
 ## P1：TM 耦合 RM callbackEndpoint
 
 ```text
