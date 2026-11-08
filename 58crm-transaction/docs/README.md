@@ -87,6 +87,7 @@
 | 看 C-003.7 Nacos Review | `04-验证/14-C003.7-Nacos-Review.md` |
 | 看 C-003.7 真实 E2E | `04-验证/15-C003.7-E2E.md` |
 | 开始学习本项目 | `07-学习讨论/00-项目学习路线.md` |
+| 看框架接入层 Review | `04-验证/16-Framework-Access-Review.md` |
 | 看学习讨论记录 | `07-学习讨论/README.md` |
 
 ## 目录结构
