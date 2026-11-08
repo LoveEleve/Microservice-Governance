@@ -1,0 +1,2 @@
+com.wuba.crm.tx.tcc.starter.CrmTxTccClientAutoConfiguration
+com.wuba.crm.tx.tcc.starter.CrmTxTccParticipantAutoConfiguration

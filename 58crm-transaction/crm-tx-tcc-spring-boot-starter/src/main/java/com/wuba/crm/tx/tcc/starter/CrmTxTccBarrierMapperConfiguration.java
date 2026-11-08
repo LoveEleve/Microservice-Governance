@@ -1,4 +1,4 @@
-package com.wuba.crm.tx.starter;
+package com.wuba.crm.tx.tcc.starter;
 
 import com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration;
 import org.apache.ibatis.annotations.Mapper;
@@ -9,7 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 有 MyBatis 工厂时扫描 BarrierMapper，避免 getMapper 未注册。
+ * 有 MyBatis 工厂时扫描 BarrierMapper。
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnBean(SqlSessionFactory.class)
@@ -18,5 +18,5 @@ import org.springframework.context.annotation.Configuration;
         basePackages = "com.wuba.crm.tx.tcc.participant.barrier",
         annotationClass = Mapper.class
 )
-class CrmTxTccParticipantBarrierMapperConfiguration {
+class CrmTxTccBarrierMapperConfiguration {
 }

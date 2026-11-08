@@ -1,4 +1,4 @@
-package com.wuba.crm.tx.starter;
+package com.wuba.crm.tx.tcc.starter;
 
 import com.wuba.crm.tx.tcc.participant.action.TccActionRegistrar;
 import com.wuba.crm.tx.tcc.participant.action.TccActionRegistry;
@@ -9,40 +9,36 @@ import com.wuba.crm.tx.tcc.participant.barrier.TccParticipantService;
 import com.wuba.crm.tx.tcc.participant.grpc.TccParticipantCallbackGrpcService;
 import com.wuba.crm.tx.tcc.participant.grpc.TccParticipantGrpcServer;
 import com.wuba.crm.tx.tcc.participant.web.TccParticipantTryController;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.session.SqlSessionFactory;
-import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /**
- * TCC Participant Starter 自动装配。
- *
- * <p>业务方只需要提供 {@link BarrierMapper} 和数据源；barrier、动作注册、
- * callback gRPC server 由 Starter 装配。</p>
+ * TCC RM 参与方自动装配。
  */
 @AutoConfiguration
+@ConditionalOnClass(TccParticipantService.class)
+@EnableConfigurationProperties(CrmTxTccProperties.class)
 @ConditionalOnProperty(
         prefix = "crm.tx.tcc.participant",
         name = "enabled",
         havingValue = "true",
         matchIfMissing = true)
 @EnableTransactionManagement(proxyTargetClass = true)
-@Import(CrmTxTccParticipantBarrierMapperConfiguration.class)
+@Import(CrmTxTccBarrierMapperConfiguration.class)
 public class CrmTxTccParticipantAutoConfiguration {
 
     /**
      * 动作注册表。
      *
-     * @return 注册表
+     * @return registry
      */
     @Bean
     @ConditionalOnMissingBean
@@ -50,19 +46,25 @@ public class CrmTxTccParticipantAutoConfiguration {
         return new TccActionRegistry();
     }
 
+    /**
+     * 自动注册 @TccActionHandler。
+     *
+     * @param context  Spring context
+     * @param registry registry
+     * @return registrar
+     */
     @Bean
     @ConditionalOnMissingBean
     public TccActionRegistrar tccActionRegistrar(
-            org.springframework.context.ApplicationContext context,
-            TccActionRegistry registry) {
+            ApplicationContext context, TccActionRegistry registry) {
         return new TccActionRegistrar(context, registry);
     }
 
     /**
      * barrier 仓储。
      *
-     * @param mapper barrier Mapper
-     * @return 仓储
+     * @param mapper mapper
+     * @return repository
      */
     @Bean
     @ConditionalOnMissingBean
@@ -71,11 +73,11 @@ public class CrmTxTccParticipantAutoConfiguration {
     }
 
     /**
-     * Participant 执行器。
+     * participant 执行器。
      *
-     * @param barriers       barrier 仓储
-     * @param actionRegistry 动作注册表
-     * @return 执行器
+     * @param barriers       repository
+     * @param actionRegistry registry
+     * @return service
      */
     @Bean
     @ConditionalOnMissingBean
@@ -84,32 +86,43 @@ public class CrmTxTccParticipantAutoConfiguration {
         return new TccParticipantService(barriers, actionRegistry);
     }
 
+    /**
+     * 通用 Try endpoint。
+     *
+     * @param service participant service
+     * @return controller
+     */
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    @ConditionalOnProperty(
+            prefix = "crm.tx.tcc.participant",
+            name = "try-endpoint-enabled",
+            havingValue = "true",
+            matchIfMissing = true)
     public TccParticipantTryController tccParticipantTryController(
-            TccParticipantService participantService) {
-        return new TccParticipantTryController(participantService);
+            TccParticipantService service) {
+        return new TccParticipantTryController(service);
     }
 
     /**
-     * participant callback adapter。
+     * callback adapter。
      *
-     * @param participantService 执行器
+     * @param service participant service
      * @return adapter
      */
     @Bean
     @ConditionalOnMissingBean
     public TccParticipantCallbackGrpcService tccParticipantCallbackGrpcService(
-            TccParticipantService participantService) {
-        return new TccParticipantCallbackGrpcService(participantService);
+            TccParticipantService service) {
+        return new TccParticipantCallbackGrpcService(service);
     }
 
     /**
-     * participant gRPC server。
+     * callback gRPC server。
      *
      * @param service callback adapter
-     * @param port    gRPC 端口
+     * @param properties 配置
      * @return server
      */
     @Bean(destroyMethod = "destroy")
@@ -121,7 +134,8 @@ public class CrmTxTccParticipantAutoConfiguration {
             matchIfMissing = true)
     public TccParticipantGrpcServer tccParticipantGrpcServer(
             TccParticipantCallbackGrpcService service,
-            @Value("${crm.tx.tcc.participant.grpc-port:9091}") int port) {
-        return new TccParticipantGrpcServer(service, port);
+            CrmTxTccProperties properties) {
+        return new TccParticipantGrpcServer(
+                service, properties.getParticipant().getGrpcPort());
     }
 }

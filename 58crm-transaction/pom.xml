@@ -17,6 +17,7 @@
         <module>crm-tx-tcc-api</module>
         <module>crm-tx-tcc-protocol</module>
         <module>crm-tx-tcc-client</module>
+        <module>crm-tx-tcc-spring-boot-starter</module>
         <module>crm-tx-tcc-id</module>
         <module>crm-tx-tcc-coordinator</module>
         <module>crm-tx-tcc-participant</module>
