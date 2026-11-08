@@ -40,5 +40,6 @@ README quickstart 可复制运行
 ## 当前状态
 
 ```text
-规划完成，未开始代码重构
+C-004.1 已完成：公共模型 + DefaultTccTransactionTemplate
+C-004.2 未开始：protocol/client gRPC
 ```

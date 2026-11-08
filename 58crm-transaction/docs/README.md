@@ -90,6 +90,7 @@
 | 看框架接入层 Review | `04-验证/16-Framework-Access-Review.md` |
 | 看 TCC 公开 API 重构规划 | `02-设计/33-TCC公开API与SDK重构规划.md` |
 | 看 C-004 规划 Review | `04-验证/17-C004-Plan-Review.md` |
+| 看 C-004.1 Review | `04-验证/18-C004.1-Review.md` |
 | 看学习讨论记录 | `07-学习讨论/README.md` |
 
 ## 目录结构
