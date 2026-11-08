@@ -16,6 +16,6 @@ public interface QuotaFeignClient {
      * @param request Try 请求
      * @return Try 结果
      */
-    @PostMapping("/quota/try")
+    @PostMapping("/tcc/try")
     TryQuotaResponse tryQuota(@RequestBody TryQuotaRequest request);
 }

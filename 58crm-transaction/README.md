@@ -63,7 +63,8 @@ C-003.6：Scheduler / 重试（已完成）
 C-003.7：生产化接入（Starter + Metrics + Nacos + 真实 E2E 已完成）
 C-004.1：TCC 公共模型 + DefaultTccTransactionTemplate（已完成）
 C-004.2：protocol/client gRPC（已完成）
-C-004.3：@TccAction + 通用 /tcc/try（下一步）
+C-004.3：@TccActionHandler + 通用 /tcc/try（已完成，E2E 复跑）
+C-004.4：TCC 独立 Starter（下一步）
 ```
 
 TCC 协调器、参与方 barrier、业务示例在后续变更中实现。

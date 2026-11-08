@@ -62,7 +62,9 @@ public class LeadAssignService {
                         .tryAction(context -> {
                             TryQuotaResponse response = quotaClient.tryQuota(
                                     new TryQuotaRequest(
-                                            context.xid(), context.branchId(), userId));
+                                            context.xid(), context.branchId(),
+                                            "reserveQuota",
+                                            "{\"userId\":" + userId + "}"));
                             return response.success()
                                     ? TccTryResult.SUCCESS : TccTryResult.FAILURE;
                         })

@@ -1,17 +1,21 @@
-package com.wuba.crm.tx.e2e.quota;
+package com.wuba.crm.tx.tcc.participant.web;
 
 import com.wuba.crm.tx.tcc.api.BusinessActionContext;
 import com.wuba.crm.tx.tcc.api.TccTryResult;
 import com.wuba.crm.tx.tcc.participant.barrier.TccParticipantService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * quota Try HTTP 入口，由业务方通过 OpenFeign 调用。
+ * Participant 通用 Try endpoint。
+ *
+ * <p>业务方不再为每个动作手写 Try controller。</p>
  */
 @RestController
-public class QuotaController {
+@RequestMapping("/tcc")
+public class TccParticipantTryController {
 
     private final TccParticipantService participantService;
 
@@ -20,25 +24,23 @@ public class QuotaController {
      *
      * @param participantService participant 执行器
      */
-    public QuotaController(TccParticipantService participantService) {
+    public TccParticipantTryController(TccParticipantService participantService) {
         this.participantService = participantService;
     }
 
     /**
-     * 执行 quota Try。
+     * 执行 Try。
      *
      * @param request 请求
      * @return 结果
      */
-    @PostMapping("/quota/try")
-    public TryQuotaResponse tryQuota(@RequestBody TryQuotaRequest request) {
+    @PostMapping("/try")
+    public TccTryResponse tryAction(@RequestBody TccTryRequest request) {
         TccTryResult result = participantService.tryAction(new BusinessActionContext(
                 request.xid(),
                 request.branchId(),
-                "reserveQuota",
-                "{\"userId\":" + request.userId() + "}"));
-        return new TryQuotaResponse(
-                result == TccTryResult.SUCCESS,
-                result.name());
+                request.actionName(),
+                request.applicationData()));
+        return new TccTryResponse(result == TccTryResult.SUCCESS, result.name());
     }
 }

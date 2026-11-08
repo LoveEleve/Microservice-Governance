@@ -88,7 +88,7 @@ curl -X POST 'http://127.0.0.1:8081/leads/1001/assign?userId=999'
 返回：
 
 ```json
-{"xid":2,"status":"TRY_FAIL"}
+{"xid":2,"status":"CANCELLED"}
 ```
 
 DB：

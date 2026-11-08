@@ -1,5 +1,6 @@
 package com.wuba.crm.tx.starter;
 
+import com.wuba.crm.tx.tcc.participant.action.TccActionRegistrar;
 import com.wuba.crm.tx.tcc.participant.action.TccActionRegistry;
 import com.wuba.crm.tx.tcc.participant.barrier.BarrierMapper;
 import com.wuba.crm.tx.tcc.participant.barrier.BarrierRepository;
@@ -7,6 +8,7 @@ import com.wuba.crm.tx.tcc.participant.barrier.MybatisBarrierRepository;
 import com.wuba.crm.tx.tcc.participant.barrier.TccParticipantService;
 import com.wuba.crm.tx.tcc.participant.grpc.TccParticipantCallbackGrpcService;
 import com.wuba.crm.tx.tcc.participant.grpc.TccParticipantGrpcServer;
+import com.wuba.crm.tx.tcc.participant.web.TccParticipantTryController;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.annotation.MapperScan;
@@ -14,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,6 +50,14 @@ public class CrmTxTccParticipantAutoConfiguration {
         return new TccActionRegistry();
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    public TccActionRegistrar tccActionRegistrar(
+            org.springframework.context.ApplicationContext context,
+            TccActionRegistry registry) {
+        return new TccActionRegistrar(context, registry);
+    }
+
     /**
      * barrier 仓储。
      *
@@ -71,6 +82,14 @@ public class CrmTxTccParticipantAutoConfiguration {
     public TccParticipantService tccParticipantService(
             BarrierRepository barriers, TccActionRegistry actionRegistry) {
         return new TccParticipantService(barriers, actionRegistry);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    public TccParticipantTryController tccParticipantTryController(
+            TccParticipantService participantService) {
+        return new TccParticipantTryController(participantService);
     }
 
     /**

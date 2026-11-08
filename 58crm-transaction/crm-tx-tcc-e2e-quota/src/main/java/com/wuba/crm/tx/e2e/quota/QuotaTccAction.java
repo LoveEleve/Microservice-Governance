@@ -7,12 +7,14 @@ import com.wuba.crm.tx.tcc.api.BusinessActionContext;
 import com.wuba.crm.tx.tcc.api.TccAction;
 import com.wuba.crm.tx.tcc.api.TccPhaseResult;
 import com.wuba.crm.tx.tcc.api.TccTryResult;
+import com.wuba.crm.tx.tcc.api.TccActionHandler;
 
 /**
  * quota TCC 动作。
  *
  * <p>Confirm 内同时写 quota 业务终态和 Outbox，二者与 barrier 同一事务。</p>
  */
+@TccActionHandler("reserveQuota")
 public class QuotaTccAction implements TccAction {
 
     private final QuotaMapper quotaMapper;
