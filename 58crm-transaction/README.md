@@ -79,6 +79,12 @@ crm-tx-spring-boot-starter  Spring Boot 自动装配
 crm-tx-demo      业务方接入示例（线索分配）
 ```
 
+## 学习入口
+
+```text
+docs/07-学习讨论/00-项目学习路线.md
+```
+
 ## 验证
 
 ```text
