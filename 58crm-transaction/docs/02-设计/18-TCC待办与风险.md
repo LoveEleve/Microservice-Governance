@@ -113,7 +113,8 @@ C-003.6 Scheduler / 重试
 
 C-003.7 生产化接入
   Participant Starter 已完成
-  Nacos/Sentinel/metrics/真实集成 待做
+  Metrics 已完成
+  Nacos/Sentinel/真实集成 待做
 ```
 
 一句话：

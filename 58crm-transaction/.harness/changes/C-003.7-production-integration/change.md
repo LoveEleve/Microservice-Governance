@@ -13,7 +13,8 @@ Participant Starter 自动装配
 CrmTxTccParticipantAutoConfiguration
 crm.tx.tcc.participant 开关
 grpc-enabled / grpc-port
-业务提供 BarrierMapper
+SqlSessionTemplate -> BarrierMapper
+TccMetrics / Scheduler 指标
 ```
 
 ## 不包含
@@ -29,6 +30,7 @@ Micrometer
 
 ```text
 CrmTxTccParticipantAutoConfigurationTest
+TccMetricsTest
 ```
 
 ## 完成记录

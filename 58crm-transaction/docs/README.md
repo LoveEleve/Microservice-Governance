@@ -81,6 +81,8 @@
 | 看 C-003.6 Review | `04-验证/11-C003.6-Review.md` |
 | 看 TCC Participant Starter | `02-设计/29-TCC-Production-Starter.md` |
 | 看 C-003.7 Starter Review | `04-验证/12-C003.7-Starter-Review.md` |
+| 看 TCC Metrics | `02-设计/30-TCC-Metrics.md` |
+| 看 C-003.7 Metrics Review | `04-验证/13-C003.7-Metrics-Review.md` |
 
 ## 目录结构
 

@@ -50,5 +50,5 @@ TccParticipantGrpcServerTest
 
 ```text
 mvn -q test
-tests=198 failures=0 errors=0 skipped=1
+tests=200 failures=0 errors=0 skipped=1
 ```

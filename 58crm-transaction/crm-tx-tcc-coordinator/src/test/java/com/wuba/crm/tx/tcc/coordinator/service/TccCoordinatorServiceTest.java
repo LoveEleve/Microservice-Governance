@@ -15,6 +15,7 @@ import com.wuba.crm.tx.tcc.api.TccQueryResult;
 import com.wuba.crm.tx.tcc.api.TccResultCode;
 import com.wuba.crm.tx.tcc.api.TccRollbackResult;
 import com.wuba.crm.tx.tcc.coordinator.callback.TccParticipantClient;
+import com.wuba.crm.tx.tcc.coordinator.metrics.TccMetrics;
 import com.wuba.crm.tx.tcc.coordinator.persistence.MybatisTccBranchRepository;
 import com.wuba.crm.tx.tcc.coordinator.persistence.MybatisTccGlobalRepository;
 import com.wuba.crm.tx.tcc.coordinator.persistence.TccBranchMapper;
@@ -662,8 +663,14 @@ class TccCoordinatorServiceTest {
                 TccGlobalRepository globals,
                 TccBranchRepository branches,
                 TccPhase2Coordinator phase2Coordinator,
+                TccMetrics metrics,
                 Clock clock) {
-            return new TccRetryScheduler(globals, branches, phase2Coordinator, clock);
+            return new TccRetryScheduler(globals, branches, phase2Coordinator, metrics, clock);
+        }
+
+        @Bean
+        TccMetrics tccMetrics() {
+            return new TccMetrics((io.micrometer.core.instrument.MeterRegistry) null);
         }
     }
 }
