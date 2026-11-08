@@ -18,13 +18,21 @@ TccMetrics / Scheduler 指标
 Nacos gRPC 注册器（默认关闭）
 ```
 
+## 已完成补充
+
+```text
+Nacos gRPC 注册
+真实 Nacos + MySQL + lead + quota 进程
+OpenFeign Try + gRPC callback
+成功/失败 E2E
+```
+
 ## 不包含
 
 ```text
-Nacos 注册/配置
 Sentinel
-Micrometer
-真实多实例压测
+Prometheus/Grafana/告警
+多 TC 实例故障注入
 ```
 
 ## 测试

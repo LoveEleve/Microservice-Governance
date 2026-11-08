@@ -115,7 +115,8 @@ C-003.7 生产化接入
   Participant Starter 已完成
   Metrics 已完成
   Nacos 注册器已完成
-  Sentinel/真实集成 待做
+  真实 E2E 已完成
+  Sentinel 待做
 ```
 
 一句话：

@@ -15,7 +15,7 @@ spring:
         enabled: ${NACOS_ENABLED:false}
         server-addr: ${NACOS_ADDR:127.0.0.1:8848}
   datasource:
-    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:crm_tx}?useSSL=false&serverTimezone=UTC&rewriteBatchedStatements=true
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:crm_tx}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&rewriteBatchedStatements=true
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -29,3 +29,7 @@ crm:
     tcc:
       coordinator:
         grpc-port: ${TCC_GRPC_PORT:9090}
+        nacos:
+          enabled: ${NACOS_ENABLED:false}
+          group: ${NACOS_GROUP:DEFAULT_GROUP}
+          cluster: ${NACOS_CLUSTER:DEFAULT}

@@ -7,13 +7,17 @@ import com.wuba.crm.tx.tcc.participant.barrier.MybatisBarrierRepository;
 import com.wuba.crm.tx.tcc.participant.barrier.TccParticipantService;
 import com.wuba.crm.tx.tcc.participant.grpc.TccParticipantCallbackGrpcService;
 import com.wuba.crm.tx.tcc.participant.grpc.TccParticipantGrpcServer;
-import org.mybatis.spring.SqlSessionTemplate;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /**
@@ -29,6 +33,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         havingValue = "true",
         matchIfMissing = true)
 @EnableTransactionManagement(proxyTargetClass = true)
+@Import(CrmTxTccParticipantBarrierMapperConfiguration.class)
 public class CrmTxTccParticipantAutoConfiguration {
 
     /**
@@ -36,13 +41,6 @@ public class CrmTxTccParticipantAutoConfiguration {
      *
      * @return 注册表
      */
-    @Bean
-    @ConditionalOnMissingBean
-    @ConditionalOnBean(SqlSessionTemplate.class)
-    public BarrierMapper tccBarrierMapper(SqlSessionTemplate template) {
-        return template.getMapper(BarrierMapper.class);
-    }
-
     @Bean
     @ConditionalOnMissingBean
     public TccActionRegistry tccActionRegistry() {
@@ -57,7 +55,6 @@ public class CrmTxTccParticipantAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(BarrierMapper.class)
     public BarrierRepository tccBarrierRepository(BarrierMapper mapper) {
         return new MybatisBarrierRepository(mapper);
     }
@@ -71,7 +68,6 @@ public class CrmTxTccParticipantAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(BarrierRepository.class)
     public TccParticipantService tccParticipantService(
             BarrierRepository barriers, TccActionRegistry actionRegistry) {
         return new TccParticipantService(barriers, actionRegistry);
@@ -85,7 +81,6 @@ public class CrmTxTccParticipantAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(TccParticipantService.class)
     public TccParticipantCallbackGrpcService tccParticipantCallbackGrpcService(
             TccParticipantService participantService) {
         return new TccParticipantCallbackGrpcService(participantService);
@@ -100,7 +95,6 @@ public class CrmTxTccParticipantAutoConfiguration {
      */
     @Bean(destroyMethod = "destroy")
     @ConditionalOnMissingBean
-    @ConditionalOnBean(TccParticipantCallbackGrpcService.class)
     @ConditionalOnProperty(
             prefix = "crm.tx.tcc.participant",
             name = "grpc-enabled",

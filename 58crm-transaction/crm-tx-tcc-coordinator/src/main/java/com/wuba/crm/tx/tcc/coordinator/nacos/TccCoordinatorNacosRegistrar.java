@@ -35,6 +35,7 @@ public class TccCoordinatorNacosRegistrar implements DisposableBean {
     private final String serviceName;
     private final String group;
     private final String cluster;
+    private final String ip;
     private final int grpcPort;
 
     /**
@@ -44,6 +45,7 @@ public class TccCoordinatorNacosRegistrar implements DisposableBean {
      * @param serviceName Nacos service name
      * @param group       分组
      * @param cluster     集群
+     * @param ip          注册 IP，空则取本机地址
      * @param grpcPort    gRPC 端口
      * @throws Exception 初始化失败
      */
@@ -52,6 +54,7 @@ public class TccCoordinatorNacosRegistrar implements DisposableBean {
             @Value("${spring.application.name:crm-tx-tcc-coordinator}") String serviceName,
             @Value("${crm.tx.tcc.coordinator.nacos.group:DEFAULT_GROUP}") String group,
             @Value("${crm.tx.tcc.coordinator.nacos.cluster:DEFAULT}") String cluster,
+            @Value("${crm.tx.tcc.coordinator.nacos.ip:}") String ip,
             @Value("${crm.tx.tcc.coordinator.grpc-port:9090}") int grpcPort) throws Exception {
         Properties properties = new Properties();
         properties.setProperty("serverAddr", serverAddr);
@@ -59,6 +62,7 @@ public class TccCoordinatorNacosRegistrar implements DisposableBean {
         this.serviceName = serviceName;
         this.group = group;
         this.cluster = cluster;
+        this.ip = ip;
         this.grpcPort = grpcPort;
     }
 
@@ -70,7 +74,8 @@ public class TccCoordinatorNacosRegistrar implements DisposableBean {
     @EventListener(ApplicationReadyEvent.class)
     public void register() throws Exception {
         Instance instance = new Instance();
-        instance.setIp(InetAddress.getLocalHost().getHostAddress());
+        instance.setIp(ip == null || ip.isBlank()
+                ? InetAddress.getLocalHost().getHostAddress() : ip);
         instance.setPort(grpcPort);
         instance.setClusterName(cluster);
         instance.setServiceName(serviceName);
