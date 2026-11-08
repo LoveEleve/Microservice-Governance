@@ -1,10 +1,11 @@
 package com.wuba.crm.tx.tcc.participant.action;
 
+import com.wuba.crm.tx.tcc.api.TccAction;
 import com.wuba.crm.tx.tcc.api.TccActionHandler;
 import org.springframework.aop.support.AopUtils;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationListener;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.core.annotation.AnnotationUtils;
 
 import java.util.Map;
@@ -44,9 +45,10 @@ public class TccActionRegistrar implements ApplicationListener<ApplicationReadyE
      * 执行扫描注册。
      */
     public void registerAll() {
-        Map<String, Object> beans = applicationContext.getBeansWithAnnotation(TccActionHandler.class);
-        for (Map.Entry<String, Object> entry : beans.entrySet()) {
-            Object bean = entry.getValue();
+        // 按接口类型查找，避免 JDK/CGLIB 代理导致 getBeansWithAnnotation 漏掉 Bean。
+        Map<String, TccAction> beans = applicationContext.getBeansOfType(TccAction.class);
+        for (Map.Entry<String, TccAction> entry : beans.entrySet()) {
+            TccAction bean = entry.getValue();
             Class<?> targetClass = AopUtils.getTargetClass(bean);
             TccActionHandler annotation = AnnotationUtils.findAnnotation(
                     targetClass, TccActionHandler.class);
@@ -57,12 +59,7 @@ public class TccActionRegistrar implements ApplicationListener<ApplicationReadyE
             if (annotation == null) {
                 continue;
             }
-            if (!(bean instanceof com.wuba.crm.tx.tcc.api.TccAction)) {
-                throw new IllegalStateException(
-                        "TccActionHandler bean is not TccAction: " + entry.getKey());
-            }
-            registry.register(annotation.value(),
-                    (com.wuba.crm.tx.tcc.api.TccAction) bean);
+            registry.register(annotation.value(), bean);
         }
     }
 }

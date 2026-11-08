@@ -1,6 +1,7 @@
 package com.wuba.crm.tx.tcc.participant.web;
 
 import com.wuba.crm.tx.tcc.api.BusinessActionContext;
+import com.wuba.crm.tx.tcc.api.TccException;
 import com.wuba.crm.tx.tcc.api.TccTryResult;
 import com.wuba.crm.tx.tcc.participant.barrier.TccParticipantService;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,11 +37,17 @@ public class TccParticipantTryController {
      */
     @PostMapping("/try")
     public TccTryResponse tryAction(@RequestBody TccTryRequest request) {
-        TccTryResult result = participantService.tryAction(new BusinessActionContext(
-                request.xid(),
-                request.branchId(),
-                request.actionName(),
-                request.applicationData()));
-        return new TccTryResponse(result == TccTryResult.SUCCESS, result.name());
+        try {
+            TccTryResult result = participantService.tryAction(new BusinessActionContext(
+                    request.xid(),
+                    request.branchId(),
+                    request.actionName(),
+                    request.applicationData()));
+            return new TccTryResponse(result == TccTryResult.SUCCESS, result.name());
+        } catch (TccException failure) {
+            return new TccTryResponse(false, failure.getCode().name());
+        } catch (IllegalArgumentException invalid) {
+            return new TccTryResponse(false, "TCC_INVALID_ARGUMENT");
+        }
     }
 }
