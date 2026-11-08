@@ -20,10 +20,12 @@ e2e 模块作为根模块，被误认为业务接入示例
 crm-tx-bom
 crm-tx-tcc-api
   公共接口、注解、状态、请求/结果模型
+  不包含低层 begin/register DTO
 
 crm-tx-tcc-protocol
   proto + 生成 stub
-  只给 coordinator/client 使用
+  generated package: com.wuba.crm.tx.tcc.protocol.grpc
+  只给 coordinator/client/participant 使用
 
 crm-tx-tcc-client
   DefaultTccTransactionTemplate
@@ -51,6 +53,26 @@ e2e
 ```
 
 ## 3. 公共 API
+
+### 3.0 注解目标
+
+```java
+@TccTransactional
+public void assign(long leadId, long userId) {
+    quotaClient.tryQuota(...);
+}
+```
+
+注解必须同时解决：
+
+```text
+分支发现
+resourceKey/applicationData 动态参数
+callbackEndpoint
+xid/branchId 注入
+```
+
+builder 保留为高级 API，不作为唯一接入方式。
 
 ### 3.1 发起方
 
