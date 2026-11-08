@@ -64,6 +64,9 @@ public class GrpcTccParticipantClient implements TccParticipantClient {
                             .setApplicationData(safe(branch.getApplicationData()))
                             .build());
             return callbackResult(response.getResult(), response.getMessage());
+        } catch (IllegalArgumentException invalid) {
+            log.log(Level.WARNING, "Invalid TCC callback endpoint", invalid);
+            return TccCallbackResult.permanentFailure(invalid.getMessage());
         } catch (RuntimeException failure) {
             log.log(Level.WARNING, "TCC confirm callback failed for "
                     + branch.getXid() + "/" + branch.getBranchId(), failure);
@@ -93,6 +96,9 @@ public class GrpcTccParticipantClient implements TccParticipantClient {
                             .setApplicationData(safe(branch.getApplicationData()))
                             .build());
             return callbackResult(response.getResult(), response.getMessage());
+        } catch (IllegalArgumentException invalid) {
+            log.log(Level.WARNING, "Invalid TCC callback endpoint", invalid);
+            return TccCallbackResult.permanentFailure(invalid.getMessage());
         } catch (RuntimeException failure) {
             log.log(Level.WARNING, "TCC cancel callback failed for "
                     + branch.getXid() + "/" + branch.getBranchId(), failure);

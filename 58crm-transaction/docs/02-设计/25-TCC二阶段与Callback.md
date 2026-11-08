@@ -63,6 +63,9 @@ owner 有效 -> TCC_BUSY
 owner 过期 -> 新 TC 可接管
 transitionOwned/markConfirmed/markCancelled/markDead
   都必须校验 owner + lease
+
+终态更新检查影响行数：
+  update == 0 -> 返回当前状态，不假装完成
 ```
 
 ## 4. RM callback
@@ -102,6 +105,10 @@ RETRYABLE
 PERMANENT_FAILURE
   -> branch DEAD
   -> global FAILED
+
+非法 callbackEndpoint
+  -> PERMANENT_FAILURE
+  -> 不进入无限 retry
 ```
 
 ## 6. 事务边界

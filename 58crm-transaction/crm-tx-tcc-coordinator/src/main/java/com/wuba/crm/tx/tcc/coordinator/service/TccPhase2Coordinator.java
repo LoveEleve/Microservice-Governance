@@ -280,26 +280,30 @@ public class TccPhase2Coordinator {
 
     private TccCommitResult failCommitBranch(
             Prepared prepared, TccBranchEntity branch) {
-        transactionTemplate.executeWithoutResult(status -> {
-            branches.markDead(
+        Boolean failed = transactionTemplate.execute(status -> {
+            int marked = branches.markDead(
                     prepared.xid, branch.getBranchId(), prepared.owner, LocalDateTime.now(clock));
-            globals.transitionOwned(
+            int transitioned = globals.transitionOwned(
                     prepared.xid, GlobalStatus.CONFIRMING.name(), GlobalStatus.FAILED.name(),
                     prepared.owner, LocalDateTime.now(clock));
+            return marked == 1 && transitioned == 1;
         });
-        return new TccCommitResult(GlobalStatus.FAILED);
+        return new TccCommitResult(Boolean.TRUE.equals(failed)
+                ? GlobalStatus.FAILED : GlobalStatus.CONFIRMING);
     }
 
     private TccRollbackResult failCancelBranch(
             Prepared prepared, TccBranchEntity branch) {
-        transactionTemplate.executeWithoutResult(status -> {
-            branches.markDead(
+        Boolean failed = transactionTemplate.execute(status -> {
+            int marked = branches.markDead(
                     prepared.xid, branch.getBranchId(), prepared.owner, LocalDateTime.now(clock));
-            globals.transitionOwned(
+            int transitioned = globals.transitionOwned(
                     prepared.xid, GlobalStatus.CANCELLING.name(), GlobalStatus.FAILED.name(),
                     prepared.owner, LocalDateTime.now(clock));
+            return marked == 1 && transitioned == 1;
         });
-        return new TccRollbackResult(GlobalStatus.FAILED);
+        return new TccRollbackResult(Boolean.TRUE.equals(failed)
+                ? GlobalStatus.FAILED : GlobalStatus.CANCELLING);
     }
 
     private GlobalStatus finalizeStatus(long xid, String owner, GlobalStatus from) {
@@ -313,9 +317,9 @@ public class TccPhase2Coordinator {
             boolean anyDead = current.stream()
                     .anyMatch(branch -> BranchStatus.DEAD.name().equals(branch.getStatus()));
             if (anyDead) {
-                globals.transitionOwned(xid, from.name(), GlobalStatus.FAILED.name(),
+                int changed = globals.transitionOwned(xid, from.name(), GlobalStatus.FAILED.name(),
                         owner, LocalDateTime.now(clock));
-                return GlobalStatus.FAILED;
+                return changed == 1 ? GlobalStatus.FAILED : from;
             }
             boolean allDone = current.stream().allMatch(branch ->
                     from == GlobalStatus.CONFIRMING
@@ -328,8 +332,9 @@ public class TccPhase2Coordinator {
             GlobalStatus target = from == GlobalStatus.CONFIRMING
                     ? GlobalStatus.CONFIRMED
                     : GlobalStatus.CANCELLED;
-            globals.transitionOwned(xid, from.name(), target.name(), owner, LocalDateTime.now(clock));
-            return target;
+            int changed = globals.transitionOwned(
+                    xid, from.name(), target.name(), owner, LocalDateTime.now(clock));
+            return changed == 1 ? target : from;
         });
         return result == null ? from : result;
     }

@@ -411,6 +411,23 @@ class TccCoordinatorServiceTest {
     }
 
     @Test
+    void commit_withActiveOwner_returnsBusy() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
+        reportSuccess(xid, branchId);
+        jdbc.update("UPDATE t_tcc_global SET owner_token = ?, lease_until = ? WHERE xid = ?",
+                "other-owner",
+                java.time.LocalDateTime.ofInstant(
+                        java.time.Instant.parse("2026-01-01T00:10:00Z"),
+                        java.time.ZoneOffset.UTC),
+                xid);
+
+        TccException failure = assertThrows(TccException.class, () -> phase2.commit(xid));
+
+        assertEquals(TccResultCode.TCC_BUSY, failure.getCode());
+    }
+
+    @Test
     void query_mapsGlobalAndBranches() {
         long xid = service.begin(begin("req-1", "lead-1")).xid();
         long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
