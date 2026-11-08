@@ -833,3 +833,501 @@
 - 核心原理：没有免费的一致性。
 - 关键机制：RM 自注册、barrier 三防、状态机、重试、对账。
 - 面试要点：能说清代价，比背协议更加分。
+
+## 22. 正确设计总则
+
+### 22.1.1 什么才是正确的 TCC 分工？
+
+- 核心结论：TM 发起并调用 Try，RM 自己注册分支并执行三阶段，TC 只维护状态和回调。
+- 核心原理
+  - TM 不该知道 RM 的 actionName、resourceKey、callbackEndpoint。
+  - RM 最清楚自己的资源和回调地址。
+  - TC 不执行业务，也不主动发现 RM。
+- 关键机制
+  - Try 是业务 API。
+  - register/report 是 RM 到 TC 的协议。
+  - Confirm/Cancel 是 TC 到 RM 的回调。
+- 面试要点
+  - 能画出“TM → RM Try → RM → TC 注册 → TM commit → TC 回调”的链路。
+
+### 22.1.2 哪些东西必须持久化？
+
+- 核心结论：global、branch、barrier、outbox 都必须在 MySQL，不能只放内存或 Redis。
+- 核心原理
+  - 事务状态要能崩溃恢复。
+  - 幂等/防悬挂要能重查。
+  - 消息正本要能重放。
+- 关键机制
+  - TC 库：global/branch。
+  - RM 库：barrier + 业务表 + outbox。
+- 面试要点
+  - Redis 是传输，不是事实源。
+
+### 22.1.3 哪些边界必须明确拒绝？
+
+- 核心结论：TM 配置 RM 地址、TC 发现 RM、TM 代 RM 注册，都是错误方向。
+- 核心原理
+  - 这些做法把 RM 的部署细节泄漏给 TM/TC。
+  - 扩展新 RM 要改上游，不可维护。
+- 关键机制
+  - 目标由 RM 注册 endpoint。
+  - 当前项目 TM 注册是过渡实现。
+- 面试要点
+  - 主动指出这是设计债，不要把它讲成标准。
+
+## 23. RM 自注册设计
+
+### 23.1.1 RM 在 Try 入口应该做什么？
+
+- 核心结论：RM 接收 Try 后先注册分支，再写 barrier、执行业务 Try、上报结果。
+- 核心原理
+  - 分支元数据由 RM 本地决定。
+  - branchId 由 TC 分配，RM 写入 barrier。
+- 关键机制
+  - 注册成功后绑定 `(xid, branchId)`。
+  - 失败时返回明确结果给 TM。
+- 面试要点
+  - 顺序不能反：先注册，再写 barrier/业务。
+
+```text
+TM                 RM                         TC
+ |-- Try(xid,payload) ->|                      |
+ |                     |-- registerBranch ---->|
+ |                     |<-- branchId ----------|
+ |                     |-- barrier TRIED        |
+ |                     |-- tryAction            |
+ |                     |-- report TRY_* ------->|
+ |<-- TryResult --------|                      |
+```
+
+### 23.1.2 RM 怎么知道自己的元数据？
+
+- 核心结论：actionName、resourceKey、callbackEndpoint 都由 RM 自己配置/推导。
+- 核心原理
+  - actionName 来自 `@TccActionHandler` 或显式注册。
+  - resourceKey 来自业务 payload（如 `quota:userId`）。
+  - callbackEndpoint 来自 RM 的 gRPC 服务配置/注册中心。
+- 关键机制
+  - TM 只传 xid 和业务 payload。
+- 面试要点
+  - 这样新增 RM 不需要改 TM。
+
+### 23.1.3 分支注册失败怎么办？
+
+- 核心结论：注册失败就不执行 Try，TM 直接失败/回滚。
+- 核心原理
+  - TC 没有分支，后续没有回调对象。
+  - 本地 barrier 不能先写。
+- 关键机制
+  - 注册是 Try 的前置条件。
+  - 网络失败可重试，靠 `(xid,resourceKey)` 幂等。
+- 面试要点
+  - 注册幂等键是 xid + resourceKey。
+
+### 23.1.4 注册成功但 Try 失败怎么办？
+
+- 核心结论：上报 TRY_FAIL，外层回滚；分支进入 CANCELLED/SUSPENDED 收敛。
+- 核心原理
+  - barrier 事务回滚，可能没有 barrier。
+  - TC Cancel 空回滚。
+- 关键机制
+  - 失败也要让全局状态收敛。
+- 面试要点
+  - 不能把“本地失败”当作“全局已结束”。
+
+## 24. TC 回调设计
+
+### 24.1.1 TC 回调的完整链路是什么？
+
+- 核心结论：TC 先推进 branch 状态，再在 DB 事务外调 RM，最后按结果推进 global。
+- 核心原理
+  - 先落状态，防止 TC 崩溃后不知道要回调。
+  - 远程调用不能占数据库事务。
+- 关键机制
+  - 回调带 xid、branchId、actionName、applicationData。
+  - RM 按 actionName 找 TccAction。
+- 面试要点
+  - 能说清“DB 事务内推进状态，DB 事务外回调”。
+
+```text
+TC                                    RM
+ |-- 抢 owner lease                     |
+ |-- branch: TRIED -> CONFIRMING        |
+ |-- commit DB tx                       |
+ |-- gRPC Confirm(xid,branchId,action) ->|
+ |                                      |-- barrier 行锁
+ |                                      |-- confirmAction
+ |                                      |-- barrier CONFIRMED
+ |<-- SUCCESS/RETRYABLE/PERMANENT ------|
+ |-- branch CAS -> CONFIRMED/DEAD       |
+ |-- global -> CONFIRMED/FAILED         |
+```
+
+### 24.1.2 TC 怎么找到 RM 的地址？
+
+- 核心结论：从 RM 注册的 branch 行读取 callbackEndpoint，不查 Nacos 发现 RM。
+- 核心原理
+  - RM 注册时带上 endpoint。
+  - TC 任意实例都能从 DB 拿到。
+- 关键机制
+  - endpoint 要经过校验，不能任意 URL（防 SSRF）。
+- 面试要点
+  - TC 不依赖客户端服务发现。
+
+### 24.1.3 TC 回调失败怎么分类？
+
+- 核心结论：网络/超时/5xx 归 RETRYABLE；参数/状态/永久业务失败归 PERMANENT。
+- 核心原理
+  - 超时结果未知，不能当成功。
+  - 永久失败重试无意义。
+- 关键机制
+  - RM 返回明确的 phase result。
+  - TC 统一映射重试策略。
+- 面试要点
+  - 不能把所有失败都无限重试。
+
+### 24.1.4 TC 回调超时怎么办？
+
+- 核心结论：超时按 RETRYABLE 处理，依赖 RM 幂等，不能直接判定成功/失败。
+- 核心原理
+  - RM 可能已经执行成功，只是响应丢了。
+- 关键机制
+  - 重试 Confirm/Cancel；barrier 状态判断。
+- 面试要点
+  - 超时是“结果未知”，不是“失败”。
+
+### 24.1.5 重复回调怎么保证幂等？
+
+- 核心结论：RM 用 barrier `(xid,branchId)` 状态做幂等。
+- 核心原理
+  - Confirm 已 CONFIRMED -> 直接 SUCCESS。
+  - Cancel 已 CANCELLED/SUSPENDED -> 直接 SUCCESS。
+- 关键机制
+  - 业务动作 + barrier 同本地事务。
+- 面试要点
+  - TC 重试是常态，不幂等一定出事故。
+
+### 24.1.6 Confirm 和 Cancel 并发怎么办？
+
+- 核心结论：barrier 行锁 + 状态 CAS，只允许一个方向成功。
+- 核心原理
+  - 不可能既 CONFIRMED 又 CANCELLED。
+  - 冲突状态返回明确错误。
+- 关键机制
+  - `SELECT ... FOR UPDATE` 或条件 UPDATE。
+- 面试要点
+  - 不能“先查状态再更新”两步走。
+
+### 24.1.7 旧 TC 的迟到回调怎么办？
+
+- 核心结论：branch 状态已终态时直接幂等返回；旧 owner 的推进被 fencing。
+- 核心原理
+  - 新 owner 可能已经处理过。
+  - 旧回调不能覆盖终态。
+- 关键机制
+  - owner_token/lease + branch CAS。
+- 面试要点
+  - 多 TC 场景必须考虑迟到请求。
+
+### 24.1.8 回调怎么鉴权？
+
+- 核心结论：目标设计需要 token/mTLS/allowlist/重放防护，当前项目未实现。
+- 核心原理
+  - 内网也可能被 SSRF/伪造请求攻击。
+  - callback 地址不能任意。
+- 关键机制
+  - 短期 token 绑定 xid/branchId。
+  - mTLS 或签名 + nonce。
+- 面试要点
+  - 能主动说“当前是内网可信假设，不是生产安全方案”。
+
+### 24.1.9 回调要不要重试队列/线程池？
+
+- 核心结论：要，回调是远程 IO，必须限流、隔离、超时，不能占满主线程。
+- 核心原理
+  - 慢 RM 会拖垮 TC。
+  - 大量回调需要背压。
+- 关键机制
+  - 独立线程池/信号量。
+  - 每 RM/每 endpoint 限流。
+- 面试要点
+  - TC 也要防雪崩。
+
+### 24.1.10 回调结果怎么落库？
+
+- 核心结论：只按 CAS 更新 branch/global，不覆盖终态。
+- 核心原理
+  - 并发/旧回调可能重复。
+  - 条件更新判断影响行数。
+- 关键机制
+  - `WHERE status=? AND owner_token=?`。
+- 面试要点
+  - 状态机更新必须带前置状态。
+
+## 25. AOP 与核心代码形态
+
+### 25.1.1 `@TccTransactional` 切面的正确顺序是什么？
+
+- 核心结论：解析参数 → begin → 绑定 xid → 执行业务 → commit/rollback → 清理上下文。
+- 核心原理
+  - begin 在业务方法之前。
+  - commit 在业务方法之后。
+  - 异常必须 rollback。
+- 关键机制
+  - finally 清理 ThreadLocal。
+  - 嵌套事务要明确拒绝或挂起。
+- 面试要点
+  - 顺序错一个，状态就不一致。
+
+### 25.1.2 切面应该处理哪些异常？
+
+- 核心结论：业务异常 rollback；分支失败转 CANCELLED；系统异常保留原始异常。
+- 核心原理
+  - 不同异常对应不同语义。
+  - 不能把所有异常都吞掉。
+- 关键机制
+  - 分支失败返回业务结果。
+  - 系统异常让上层感知。
+- 面试要点
+  - 异常分类比 try-catch 本身重要。
+
+### 25.1.3 分支 AOP 应该放在哪一侧？
+
+- 核心结论：目标设计放在 RM 的 Try 入口，不放在 TM 的分支网关。
+- 核心原理
+  - RM 才知道自己的 actionName/resourceKey/endpoint。
+  - 放在 TM 会把元数据泄漏给业务方。
+- 关键机制
+  - RM 拦截 Try：注册分支、写 barrier、执行、上报。
+- 面试要点
+  - 当前项目 TM 侧是过渡，不要讲成标准。
+
+### 25.1.4 代理失效的常见场景？
+
+- 核心结论：同类自调用、异步线程、非 Spring Bean 都会绕过 AOP。
+- 核心原理
+  - Spring AOP 靠代理。
+  - ThreadLocal 不会自动传播到异步线程。
+- 关键机制
+  - 分支方法必须独立 Bean。
+  - 异步要显式传 xid/branchId。
+- 面试要点
+  - 能解释“为什么注解没生效”。
+
+### 25.1.5 事务边界应该怎么放？
+
+- 核心结论：DB 事务只包本地动作，远程调用放事务外。
+- 核心原理
+  - 远程调用不可控，不能长时间持有数据库连接/锁。
+- 关键机制
+  - 分支注册远程调用在本地事务前。
+  - barrier + 业务 + outbox 在本地事务内。
+  - report/confirm 在事务提交后。
+- 面试要点
+  - 事务里做 RPC 是常见事故源。
+
+## 26. 各种异常场景
+
+### 26.1.1 Try 超时/结果未知怎么处理？
+
+- 核心结论：按失败或超时收敛，不能假设没执行。
+- 核心原理
+  - RM 可能已预占，只是响应丢。
+- 关键机制
+  - TM rollback；TC Cancel；barrier 判断。
+- 面试要点
+  - 超时是未知，不是失败。
+
+### 26.1.2 Try 成功但 report 丢失怎么办？
+
+- 核心结论：branch 仍是 TRYING，全局只能超时 Cancel。
+- 核心原理
+  - TC 没收到成功上报。
+  - RM 实际已有 barrier。
+- 关键机制
+  - Cancel 时 barrier TRIED -> CANCELLED。
+- 面试要点
+  - 状态以 TC 日志为准，但资源以 RM 为准。
+
+### 26.1.3 begin 响应丢失怎么办？
+
+- 核心结论：TC 可能已建 global，TM 认为失败；靠 timeout 收敛。
+- 核心原理
+  - requestId 幂等，重试可拿回同一 xid。
+- 关键机制
+  - 当前 begin 没自动重试，是缺口。
+- 面试要点
+  - 重试前先确认 global 状态。
+
+### 26.1.4 TM 崩溃在部分 Try 后怎么办？
+
+- 核心结论：TC 超时后 Cancel 已成功分支。
+- 核心原理
+  - TM 不再 commit/rollback。
+- 关键机制
+  - 全局 timeout + Scheduler。
+- 面试要点
+  - TCC 不能假设 TM 一定活着。
+
+### 26.1.5 TC 崩溃在 CONFIRMING/CANCELLING 怎么办？
+
+- 核心结论：其他 TC 抢 owner lease，从 branch 状态继续回调。
+- 核心原理
+  - 状态已持久化。
+  - owner fencing 防旧 TC。
+- 关键机制
+  - Scheduler 扫 next_retry_at。
+- 面试要点
+  - 无状态 TC + 有状态 DB。
+
+### 26.1.6 RM 崩溃在 Try 前/后怎么办？
+
+- 核心结论：Try 前没资源；Try 后 barrier 可能 TRIED，Cancel 释放。
+- 核心原理
+  - 以 barrier 和业务表为准。
+- 关键机制
+  - Cancel 幂等。
+- 面试要点
+  - RM 崩溃窗口决定资源状态。
+
+### 26.1.7 Confirm 永久失败怎么办？
+
+- 核心结论：标记 DEAD/FAILED，ERROR 日志，人工介入。
+- 核心原理
+  - 重试不能解决业务永久错误。
+- 关键机制
+  - 不无限重试。
+- 面试要点
+  - 要有死信/人工兜底。
+
+### 26.1.8 Cancel 空回滚/悬挂怎么处理？
+
+- 核心结论：空回滚插 SUSPENDED；迟到 Try 看到 SUSPENDED 拒绝。
+- 核心原理
+  - 没有 Try 就没有资源。
+  - Cancel 后不能再占资源。
+- 关键机制
+  - barrier 状态机。
+- 面试要点
+  - 这是 TCC 三防的核心。
+
+### 26.1.9 分支重复 resourceKey 怎么办？
+
+- 核心结论：同一 xid 内直接失败，不能静默复用。
+- 核心原理
+  - `(xid, resourceKey)` 唯一。
+  - 复用会导致幂等语义混乱。
+- 关键机制
+  - 注册前本地检查 + DB 唯一键。
+- 面试要点
+  - 循环分支必须保证 key 唯一。
+
+### 26.1.10 回调 endpoint 不可达怎么办？
+
+- 核心结论：按 RETRYABLE 退避重试，超过上限进 DEAD。
+- 核心原理
+  - 网络/RM 重启是暂时故障。
+- 关键机制
+  - 重试 + 告警 + 人工。
+- 面试要点
+  - 不能让全局永远卡在 CONFIRMING。
+
+## 27. 面试官追问
+
+### 27.1.1 为什么 Try 不由 TC 发起？
+
+- 核心结论：Try 是业务 API，需要业务参数和业务语义；TC 只认 xid/branch/action。
+- 核心原理
+  - TC 不该依赖业务接口。
+  - TM 最接近业务参数。
+- 关键机制
+  - TC 只在二阶段回调。
+- 面试要点
+  - 一句话：TC 管状态，不管业务。
+
+### 27.1.2 为什么分支注册不放 TM？
+
+- 核心结论：actionName/resourceKey/callbackEndpoint 属于 RM。
+- 核心原理
+  - TM 代注册会泄漏 RM 部署细节。
+  - 新增 RM 要改 TM。
+- 关键机制
+  - RM 在 Try 入口自注册。
+- 面试要点
+  - 这是当前项目要改的设计债。
+
+### 27.1.3 为什么 TC 不查 Nacos 找 RM？
+
+- 核心结论：TC 不依赖 RM 的注册中心，回调地址由分支元数据提供。
+- 核心原理
+  - 服务端不应该反向发现客户端。
+  - endpoint 变化由 RM 注册时更新。
+- 关键机制
+  - branch 行存 callbackEndpoint。
+- 面试要点
+  - 能说清“控制面/数据面”边界。
+
+### 27.1.4 TC 怎么保证回调不丢？
+
+- 核心结论：先持久化 branch 状态，再回调；失败可重扫。
+- 核心原理
+  - 状态在 DB，不在内存。
+  - Scheduler 按 next_retry_at 恢复。
+- 关键机制
+  - 回调幂等 + 重试 + DEAD。
+- 面试要点
+  - 不是“保证一次”，是“保证最终收敛”。
+
+### 27.1.5 回调超时怎么判？
+
+- 核心结论：超时按 RETRYABLE，结果未知。
+- 核心原理
+  - RM 可能已成功。
+  - 重试靠 barrier 幂等。
+- 关键机制
+  - 不能把超时当永久失败。
+- 面试要点
+  - 能区分网络错误/业务失败。
+
+### 27.1.6 怎么防止回调被伪造？
+
+- 核心结论：mTLS/token/allowlist/重放防护，当前未实现。
+- 核心原理
+  - callback endpoint 是攻击面。
+- 关键机制
+  - 短期 token 绑定 xid/branchId。
+  - 只允许注册过的 endpoint。
+- 面试要点
+  - 主动承认当前安全边界。
+
+### 27.1.7 怎么证明 TCC 设计正确？
+
+- 核心结论：用故障注入证明“资源最终与全局状态收敛”。
+- 核心原理
+  - Try 失败、report 丢、TC 崩、RM 崩、重复回调都要测。
+- 关键机制
+  - 断言：无孤儿预占、无重复扣减、无悬挂。
+- 面试要点
+  - 不要只测成功链路。
+
+## 28. 正确设计检查清单
+
+### 28.1.1 画图时先检查什么？
+
+- 核心结论：角色、状态、资源、回调、异常五件事。
+- 核心原理
+  - 任何一项缺失，面试都会被追问。
+- 关键机制
+  - 先画成功，再画失败，再画崩溃。
+- 面试要点
+  - 能白板讲 10 分钟不卡壳。
+
+### 28.1.2 设计评审必问什么？
+
+- 核心结论：谁注册、谁回调、怎么幂等、怎么恢复、怎么鉴权。
+- 核心原理
+  - 这五个问题覆盖 TCC 主要风险。
+- 关键机制
+  - 每个问题都有状态/代码落点。
+- 面试要点
+  - 不要只讲框架名词。
