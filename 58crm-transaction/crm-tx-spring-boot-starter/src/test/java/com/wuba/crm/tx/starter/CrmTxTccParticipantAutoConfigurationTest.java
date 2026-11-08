@@ -7,6 +7,7 @@ import com.wuba.crm.tx.tcc.participant.barrier.TccParticipantService;
 import com.wuba.crm.tx.tcc.participant.grpc.TccParticipantCallbackGrpcService;
 import com.wuba.crm.tx.tcc.participant.grpc.TccParticipantGrpcServer;
 import org.junit.jupiter.api.Test;
+import org.mybatis.spring.SqlSessionTemplate;
 import org.mockito.Mockito;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -39,6 +40,20 @@ class CrmTxTccParticipantAutoConfigurationTest {
     }
 
     @Test
+    void autoCreatesBarrierMapperFromSqlSessionTemplate() {
+        ApplicationContextRunner sqlSessionRunner = new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        CrmTxTccParticipantAutoConfiguration.class))
+                .withUserConfiguration(SqlSessionBeans.class)
+                .withPropertyValues("crm.tx.tcc.participant.grpc-port=0");
+
+        sqlSessionRunner.run(context -> {
+            assertThat(context).hasSingleBean(BarrierMapper.class);
+            assertThat(context).hasSingleBean(TccParticipantService.class);
+        });
+    }
+
+    @Test
     void disabledPropertyStopsAutoConfiguration() {
         runner.withPropertyValues("crm.tx.tcc.participant.enabled=false").run(context -> {
             assertThat(context).doesNotHaveBean(TccParticipantService.class);
@@ -52,6 +67,23 @@ class CrmTxTccParticipantAutoConfigurationTest {
         @Bean
         BarrierMapper barrierMapper() {
             return Mockito.mock(BarrierMapper.class);
+        }
+    }
+
+    @Configuration
+    static class SqlSessionBeans {
+
+        @Bean
+        BarrierMapper barrierMapper() {
+            return Mockito.mock(BarrierMapper.class);
+        }
+
+        @Bean
+        SqlSessionTemplate sqlSessionTemplate() {
+            SqlSessionTemplate template = Mockito.mock(SqlSessionTemplate.class);
+            Mockito.when(template.getMapper(BarrierMapper.class))
+                    .thenReturn(Mockito.mock(BarrierMapper.class));
+            return template;
         }
     }
 }
