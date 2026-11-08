@@ -1126,6 +1126,7 @@ Cancel 已 CANCELLED/SUSPENDED -> SUCCESS
 ## 16. 关联文档
 
 ```text
+分布式事务与 TCC 理论：58CRM-分布式事务与TCC.md
 消息服务深入：58CRM-消息服务.md
 TCC 逐段讲解：../07-学习讨论/07-2026-11-08-双RM-TCC逐段讲解.md
 Barrier 三防：../07-学习讨论/11-2026-11-08-Barrier三防.md

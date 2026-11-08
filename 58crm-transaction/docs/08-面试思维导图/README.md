@@ -6,6 +6,7 @@
 
 | 文件 | 内容 |
 |---|---|
+| `58CRM-分布式事务与TCC.md` | 分布式事务理论、2PC/3PC/XA、TCC、SAGA、AT、选型 |
 | `58CRM-TCC.md` | 项目背景、模块、架构、目标流程、状态机、Barrier、故障矩阵、66 问 |
 | `58CRM-消息服务.md` | Outbox、Redis Stream、消费组、PEL、租约、幂等、故障矩阵 |
 
