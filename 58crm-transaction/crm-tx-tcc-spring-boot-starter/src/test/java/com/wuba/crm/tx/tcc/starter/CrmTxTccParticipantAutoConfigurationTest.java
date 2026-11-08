@@ -25,7 +25,9 @@ class CrmTxTccParticipantAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(
                     CrmTxTccParticipantAutoConfiguration.class))
             .withUserConfiguration(TestBeans.class)
-            .withPropertyValues("crm.tx.tcc.participant.grpc-port=0");
+            .withPropertyValues(
+                    "crm.tx.tcc.participant.enabled=true",
+                    "crm.tx.tcc.participant.grpc-port=0");
 
     @Test
     void configuresParticipantInfrastructure() {

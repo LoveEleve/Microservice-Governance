@@ -16,6 +16,7 @@ class CrmTxTccClientAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(
                     CrmTxTccClientAutoConfiguration.class))
             .withPropertyValues(
+                    "crm.tx.tcc.client.enabled=true",
                     "crm.tx.tcc.client.coordinator-address=127.0.0.1:9090");
 
     @Test

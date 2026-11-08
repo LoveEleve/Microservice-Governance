@@ -29,8 +29,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @ConditionalOnProperty(
         prefix = "crm.tx.tcc.participant",
         name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+        havingValue = "true")
 @EnableTransactionManagement(proxyTargetClass = true)
 @Import(CrmTxTccBarrierMapperConfiguration.class)
 public class CrmTxTccParticipantAutoConfiguration {

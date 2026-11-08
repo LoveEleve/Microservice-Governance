@@ -22,8 +22,7 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnProperty(
         prefix = "crm.tx.tcc.client",
         name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+        havingValue = "true")
 public class CrmTxTccClientAutoConfiguration {
 
     /**

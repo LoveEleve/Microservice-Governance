@@ -47,7 +47,7 @@ public class CrmTxTccProperties {
      */
     public static class Client {
 
-        private boolean enabled = true;
+        private boolean enabled;
         private String coordinatorServiceName = "crm-tx-tcc-coordinator";
         private String coordinatorAddress;
         private long deadlineSeconds = 15;
@@ -98,7 +98,7 @@ public class CrmTxTccProperties {
      */
     public static class Participant {
 
-        private boolean enabled = true;
+        private boolean enabled;
         private boolean grpcEnabled = true;
         private int grpcPort = 9091;
         private boolean tryEndpointEnabled = true;
