@@ -159,6 +159,9 @@ D-019 Confirm 无 barrier 拒绝
 D-020 Cancel 无 barrier 插入 SUSPENDED
 D-021 Try 在 CANCELLED/SUSPENDED 后拒绝
 D-022 barrier 与业务、Outbox 同本地事务
+
+说明：Outbox 由业务 TccAction.confirmAction 调用 OutboxPublisher 写入，
+框架只负责提供同一个本地事务，不生成业务事件。
 ```
 
 ## 9. 一句话

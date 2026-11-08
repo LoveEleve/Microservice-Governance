@@ -103,7 +103,9 @@ C-003.3 Commit / Rollback / RM callback
 C-003.4 Participant Barrier
   已完成
 
-C-003.5 Confirm Outbox 同事务
+C-003.5 Confirm 事务契约与 Outbox 示例
+  业务动作在 Confirm 事务内写 Outbox
+  框架不生成事件
   下一步
 ```
 

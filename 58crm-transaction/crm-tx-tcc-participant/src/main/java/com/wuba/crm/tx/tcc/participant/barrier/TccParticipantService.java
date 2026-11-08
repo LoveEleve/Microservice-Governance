@@ -21,6 +21,10 @@ import java.time.ZoneOffset;
  *
  * <p>barrier 状态和业务动作在同一个本地事务内。Try 失败会显式标记
  * rollback-only，确保不会留下一条“TRIED 但业务没预占”的记录。</p>
+ *
+ * <p>Confirm 的 Outbox 不是本类自动生成：业务 {@code TccAction} 在
+ * {@code confirmAction} 内调用 OutboxPublisher，利用当前事务写入；
+ * 本类只负责 barrier 和业务动作的事务边界。</p>
  */
 @Service
 public class TccParticipantService {

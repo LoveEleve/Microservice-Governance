@@ -26,8 +26,9 @@ C-003.4
   空回滚 / 悬挂 / Confirm-Cancel 幂等
 
 C-003.5
-  Confirm 同事务写 Outbox
-  终态消息
+  Confirm 本地事务契约
+  业务 TccAction 在事务内写 Outbox
+  框架不生成业务事件
 
 C-003.6
   Scheduler / lease / retry
@@ -55,7 +56,7 @@ AC2 TC -> RM unary callback，endpoint 来自 branch register
 AC3 TC 不发现 RM，不依赖业务方 serviceName
 AC4 Try/Confirm/Cancel 幂等
 AC5 空回滚/悬挂
-AC6 Confirm 写 Outbox
+AC6 业务 TccAction 在 Confirm 事务内写 Outbox
 AC7 多实例 global owner lease
 AC8 崩溃恢复
 ```

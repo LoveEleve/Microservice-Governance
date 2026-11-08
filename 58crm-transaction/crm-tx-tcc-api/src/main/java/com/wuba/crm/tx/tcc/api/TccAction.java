@@ -5,6 +5,10 @@ package com.wuba.crm.tx.tcc.api;
  *
  * <p>Try 由业务 API 调用；Confirm/Cancel 由 participant SDK 在 barrier
  * 事务中调用。实现方必须保证三个方法自身的业务幂等。</p>
+ *
+ * <p>Confirm 的终态 Outbox 由业务实现自己调用
+ * {@code OutboxPublisher.publish} 写入；框架只提供同一本地事务，
+ * 不生成业务事件。</p>
  */
 public interface TccAction {
 

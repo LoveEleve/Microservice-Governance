@@ -156,10 +156,24 @@ gRPC 结果映射
 server 启动/关闭
 ```
 
-## 10. 未做
+## 10. Confirm 与 Outbox 的边界
 
 ```text
-Confirm 同事务写 Outbox
+框架：
+  提供 Confirm 本地事务
+  更新 barrier
+
+业务 TccAction.confirmAction：
+  写业务终态
+  调用 OutboxPublisher.publish
+```
+
+框架不生成 eventKey/eventType/payload。
+
+## 11. 未做
+
+```text
+业务 Confirm-Outbox 示例/事务测试（C-003.5）
 participant starter 自动装配
 真实 gRPC integration test
 ```

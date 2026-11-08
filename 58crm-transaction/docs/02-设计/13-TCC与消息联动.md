@@ -167,7 +167,7 @@ Cancel:
 ## 5. 本项目决定
 
 ```text
-终态业务事件：Confirm 本地事务写 Outbox
+终态业务事件：业务 TccAction.confirmAction 在 Confirm 本地事务内写 Outbox
 Try：只做资源预占和 barrier
 Cancel：释放资源，不发成功事件
 ```
@@ -223,6 +223,15 @@ TccAction.cancelAction
 写进 Outbox 的消息可靠投递
 消费端幂等
 失败可恢复
+```
+
+框架边界：
+
+```text
+TCC 框架提供 Confirm 本地事务
+业务 TccAction.confirmAction 决定 eventKey/eventType/payload
+业务在 confirmAction 内调用 OutboxPublisher.publish
+框架不自动生成业务事件
 ```
 
 ## 7. 一句话
