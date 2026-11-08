@@ -190,6 +190,10 @@ FROM t_tcc_branch
 WHERE xid = ?
 FOR UPDATE;
 
+-- 先检查 owner：
+-- owner_token 为空或 lease_until < NOW(3) 才能抢占
+-- 否则返回 TCC_BUSY
+
 -- 全部 TRY_SUCCESS
 UPDATE t_tcc_global
 SET status = 'CONFIRMING',
@@ -219,6 +223,10 @@ SELECT status, owner_token, lease_until
 FROM t_tcc_global
 WHERE xid = ?
 FOR UPDATE;
+
+-- 先检查 owner：
+-- owner_token 为空或 lease_until < NOW(3) 才能抢占
+-- 否则返回 TCC_BUSY
 
 UPDATE t_tcc_global
 SET status = 'CANCELLING',
@@ -321,13 +329,16 @@ WHERE b.xid = ?
 ## 11. 失败重试
 
 ```sql
-UPDATE t_tcc_branch
-SET retry_count = retry_count + 1,
-    next_retry_at = ?,
-    updated_at = NOW(3)
-WHERE xid = ?
-  AND branch_id = ?
-  AND status IN ('CONFIRMING','CANCELLING');
+UPDATE t_tcc_branch b
+JOIN t_tcc_global g ON g.xid = b.xid
+SET b.retry_count = b.retry_count + 1,
+    b.next_retry_at = ?,
+    b.updated_at = NOW(3)
+WHERE b.xid = ?
+  AND b.branch_id = ?
+  AND b.status IN ('CONFIRMING','CANCELLING')
+  AND g.owner_token = ?
+  AND g.lease_until > NOW(3);
 ```
 
 退避：
@@ -339,15 +350,23 @@ WHERE xid = ?
 达到上限：
 
 ```sql
-UPDATE t_tcc_branch
-SET status = 'DEAD',
-    updated_at = NOW(3)
-WHERE xid = ? AND branch_id = ? AND status = 'CONFIRMING';
+UPDATE t_tcc_branch b
+JOIN t_tcc_global g ON g.xid = b.xid
+SET b.status = 'DEAD',
+    b.updated_at = NOW(3)
+WHERE b.xid = ?
+  AND b.branch_id = ?
+  AND b.status = 'CONFIRMING'
+  AND g.owner_token = ?
+  AND g.lease_until > NOW(3);
 
 UPDATE t_tcc_global
 SET status = 'FAILED',
     updated_at = NOW(3)
-WHERE xid = ? AND status = 'CONFIRMING';
+WHERE xid = ?
+  AND status = 'CONFIRMING'
+  AND owner_token = ?
+  AND lease_until > NOW(3);
 ```
 
 ## 12. Global 收敛
@@ -361,11 +380,31 @@ FROM t_tcc_branch
 WHERE xid = ?;
 ```
 
+```sql
+UPDATE t_tcc_global
+SET status = 'CONFIRMED',
+    updated_at = NOW(3)
+WHERE xid = ?
+  AND status = 'CONFIRMING'
+  AND owner_token = ?
+  AND lease_until > NOW(3);
+```
+
 ```text
 confirmed = total -> global CONFIRMED
 ```
 
 Cancel 完成：
+
+```sql
+UPDATE t_tcc_global
+SET status = 'CANCELLED',
+    updated_at = NOW(3)
+WHERE xid = ?
+  AND status = 'CANCELLING'
+  AND owner_token = ?
+  AND lease_until > NOW(3);
+```
 
 ```text
 所有 branch 都在 CANCELLED/SUSPENDED
