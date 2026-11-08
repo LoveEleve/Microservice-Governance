@@ -50,6 +50,17 @@ SELECT LAST_INSERT_ID();
 不能把该 SegmentIdGenerator 用于 TCC XID
 ```
 
+## P0：Scheduler 恢复窗口
+
+```text
+Commit/Rollback 必须在同一事务把 branch 推到 CONFIRMING/CANCELLING
+并设置 next_retry_at=NOW(3)
+否则 global 已推进、branch 仍 TRY_SUCCESS
+Scheduler 扫不到，事务永久卡住
+```
+
+已补设计，代码在 C-003.3 必须按此实现并测试。
+
 ## P1：callback 未鉴权
 
 ```text
@@ -72,25 +83,16 @@ SELECT LAST_INSERT_ID();
 
 现有 `JdbcSegmentAllocatorTest` 主要验证单 JdbcTemplate，不能证明 5 个 TC 共享 DB 时号段不重叠。
 
-## 下一步讨论
+## 下一步
 
 ```text
-Coordinator 状态机与表
-  t_tcc_global
-  t_tcc_branch
-```
+C-003.2 Coordinator Server
+  begin / register / report
+  gRPC codegen
+  t_tcc_global / t_tcc_branch persistence
 
-要定：
-
-```text
-字段
-状态值
-状态迁移
-branch_seq
-timeout
-retry/next_retry
-owner_token/lease
-callback endpoint 存储
+前置：
+  修复 JdbcSegmentAllocator 原子领号
 ```
 
 一句话：

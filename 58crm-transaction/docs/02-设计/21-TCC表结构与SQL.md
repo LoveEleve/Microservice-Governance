@@ -195,6 +195,13 @@ FOR UPDATE;
 -- 否则返回 TCC_BUSY
 
 -- 全部 TRY_SUCCESS
+UPDATE t_tcc_branch
+SET status = 'CONFIRMING',
+    next_retry_at = NOW(3),
+    updated_at = NOW(3)
+WHERE xid = ?
+  AND status = 'TRY_SUCCESS';
+
 UPDATE t_tcc_global
 SET status = 'CONFIRMING',
     owner_token = ?,
@@ -206,12 +213,15 @@ WHERE xid = ?
 COMMIT;
 ```
 
+必须和 global 状态在同一个事务里把 branch 推到 `CONFIRMING`，否则 TC 在两者之间崩溃会让 branch 停在 `TRY_SUCCESS`，Scheduler 扫不到。
+
 判定：
 
 ```text
 有 TRYING       -> TCC_NOT_READY
 有 TRY_FAIL     -> TCC_INVALID_STATE
 全部 TRY_SUCCESS -> CONFIRMING
+无 branch       -> TCC_NOT_READY
 ```
 
 ## 8. Rollback
@@ -228,6 +238,13 @@ FOR UPDATE;
 -- owner_token 为空或 lease_until < NOW(3) 才能抢占
 -- 否则返回 TCC_BUSY
 
+UPDATE t_tcc_branch
+SET status = 'CANCELLING',
+    next_retry_at = NOW(3),
+    updated_at = NOW(3)
+WHERE xid = ?
+  AND status IN ('TRYING','TRY_SUCCESS','TRY_FAIL');
+
 UPDATE t_tcc_global
 SET status = 'CANCELLING',
     owner_token = ?,
@@ -238,6 +255,8 @@ WHERE xid = ?
 
 COMMIT;
 ```
+
+必须和 global 状态在同一个事务里把 branch 推到 `CANCELLING`，否则崩溃后 Scheduler 扫不到。
 
 判定：
 
@@ -307,6 +326,7 @@ SET b.status = 'CONFIRMED',
 WHERE b.xid = ?
   AND b.branch_id = ?
   AND b.status = 'CONFIRMING'
+  AND g.status = 'CONFIRMING'
   AND g.owner_token = ?
   AND g.lease_until > NOW(3);
 ```
@@ -337,6 +357,7 @@ SET b.retry_count = b.retry_count + 1,
 WHERE b.xid = ?
   AND b.branch_id = ?
   AND b.status IN ('CONFIRMING','CANCELLING')
+  AND g.status IN ('CONFIRMING','CANCELLING')
   AND g.owner_token = ?
   AND g.lease_until > NOW(3);
 ```
@@ -419,7 +440,37 @@ DEAD：
   -> ERROR 日志
 ```
 
-## 13. Scheduler 扫描
+## 13. 恢复窗口
+
+```text
+Commit:
+  global TRYING -> CONFIRMING
+  branch TRY_SUCCESS -> CONFIRMING
+  同一事务
+
+Rollback:
+  global TRYING -> CANCELLING
+  branch TRYING/TRY_SUCCESS/TRY_FAIL -> CANCELLING
+  同一事务
+```
+
+否则存在窗口：
+
+```text
+global 已 CONFIRMING
+branch 仍 TRY_SUCCESS
+  -> branch 不在 Scheduler 扫描范围
+  -> global 永久卡住
+```
+
+因此 branch 进入 `CONFIRMING/CANCELLING` 时必须同时：
+
+```text
+status = CONFIRMING/CANCELLING
+next_retry_at = NOW(3)
+```
+
+## 14. Scheduler 扫描
 
 二阶段到期：
 
@@ -442,7 +493,7 @@ WHERE status = 'TRYING'
 LIMIT ?;
 ```
 
-## 14. 不加的东西
+## 15. 不加的东西
 
 ```text
 外键
@@ -454,7 +505,7 @@ global.retry_count
 global.next_retry_at
 ```
 
-## 15. 已收口
+## 16. 已收口
 
 ```text
 application_data 上限固定 64KB
@@ -479,8 +530,19 @@ TRYING 分支 Cancel
   -> 调 RM Cancel
   -> barrier 无记录 -> SUSPENDED
   -> 迟到 Try 看到 SUSPENDED 必须拒绝
+
+空分支：
+  commit -> TCC_NOT_READY
+  rollback -> CANCELLED
+  不把无分支事务当成成功业务确认
+
+重复 RegisterBranch：
+  resourceKey 相同但 actionName/callbackEndpoint 不同
+  -> TCC_INVALID_STATE
+  不能静默返回旧 branch
+
 ```
 
-## 16. 一句话
+## 17. 一句话
 
 > **global 管 owner 和总状态，branch 管分支进度和重试，barrier 管业务幂等；所有二阶段写入都必须带 owner fencing。**

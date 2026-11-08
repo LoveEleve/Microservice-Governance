@@ -54,6 +54,18 @@
 | 看 C-002.6 变更范围 | `.harness/changes/C-002.6-consumer-starter/change.md` |
 | 看消费端吞吐压测 | `04-验证/04-ConsumerThroughput.md` |
 | 看 C-001 变更范围 | `.harness/changes/C-001-outbox-redis-list/change.md` |
+| 看 TCC 与消息联动 | `02-设计/13-TCC与消息联动.md` |
+| 看 TCC 框架分析 | `02-设计/14-TCC框架分析.md` |
+| 看 TCC 服务器架构 | `02-设计/15-TCC服务器架构.md` |
+| 看 TCC Barrier | `02-设计/16-TCC-Barrier与三防.md` |
+| 看 TCC 重试与调度 | `02-设计/17-TCC重试与调度.md` |
+| 看 TCC 待办与风险 | `02-设计/18-TCC待办与风险.md` |
+| 看 TCC 时序与状态图 | `02-设计/19-TCC时序与状态图.md` |
+| 看 TCC API 与 Proto | `02-设计/20-TCC-API与Proto.md` |
+| 看 TCC 表结构与 SQL | `02-设计/21-TCC表结构与SQL.md` |
+| 看 TCC 决策日志 | `02-设计/09-讨论决策日志.md` |
+| 看 C-003 变更范围 | `.harness/changes/C-003-tcc-core/change.md` |
+| 看 C-003.1 Review | `04-验证/05-C003.1-Review.md` |
 
 ## 目录结构
 

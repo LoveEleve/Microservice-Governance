@@ -44,7 +44,7 @@ message BeginRequest {
   string request_id = 1;
   string biz_code = 2;
   string biz_id = 3;
-  int64 try_timeout_seconds = 4;
+  int32 try_timeout_seconds = 4;
 }
 
 message BeginResponse {

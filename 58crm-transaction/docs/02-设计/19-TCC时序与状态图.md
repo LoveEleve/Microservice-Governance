@@ -106,12 +106,12 @@ AD. commit 时仍有 branch TRYING
 AE. commit 时 branch TRY_FAIL
 AF. owner lease 生命周期
 AG. commit/rollback 落到非 owner TC
-AH. global FAILED 人工处理
+AH. global FAILED 处理范围
 AI. 重复 commit
 AJ. 重复 rollback
 AK. owner lease 续约失败
 AL. callback 与 owner 切换并发
-AM. DEAD 人工 Confirm/Cancel
+AM. DEAD / FAILED 处理范围
 ```
 
 ## A. 正常成功
@@ -383,7 +383,7 @@ TC              RM2
  |<-- permanent -|
  |-- branch DEAD
  |-- global FAILED
- |-- 告警人工
+ |-- ERROR 日志
 ```
 
 分析：
@@ -392,6 +392,7 @@ TC              RM2
 只有明确的永久失败才 DEAD
 网络超时/临时失败仍走重试
 DEAD 后停止自动 Confirm
+不做告警平台/人工重放
 ```
 
 ## N. TC 崩溃在 CONFIRMING
@@ -661,7 +662,7 @@ retry...
 达到上限:
   branch DEAD
   global FAILED
-  告警人工
+  ERROR 日志
 ```
 
 ## AB. Duplicate Try
@@ -756,7 +757,14 @@ tc-1
 分析：
 
 ```text
-所有 global/branch 状态更新必须带 owner_token + lease 条件
+所有二阶段 global/branch 状态更新必须带 owner_token + lease 条件
+
+例外：
+
+```text
+ReportBranch 只允许 TRYING -> TRY_SUCCESS/TRY_FAIL
+它不是二阶段推进，不加 owner
+```
 旧 owner 恢复后 update 影响行数为 0
 ```
 
@@ -777,14 +785,14 @@ TM -> tc-3 commit
 否则 tc-0/tc-3 可能同时 Confirm
 ```
 
-## AH. global FAILED 人工处理
+## AH. global FAILED 处理范围
 
 ```text
 branch DEAD
   -> global FAILED
   -> 停止自动推进
-  -> 告警
-  -> 人工根据 branch/barrier 处理
+  -> ERROR 日志
+  -> 人工处理不在当前代码范围
 ```
 
 ## AI. 重复 commit
@@ -992,15 +1000,16 @@ lease 到期后新 owner 接管
 重复 rollback
 owner lease 续约失败
 callback 回调与 owner 切换并发
-branch DEAD 后人工 Confirm/Cancel
+DEAD/FAILED 处理范围（只 ERROR 日志）
 ```
 
 ### P1：FAILED 语义
 
 ```text
-FAILED 是人工终态
+FAILED 是失败终态
 不再自动推进
 不代表其他 branch 已全部回滚/确认
+第一版只打 ERROR 日志，不做人工重放
 ```
 
 ## 状态图

@@ -74,7 +74,7 @@ message BeginRequest {
   string request_id = 1;
   string biz_code = 2;
   string biz_id = 3;
-  int64 try_timeout_seconds = 4;
+  int32 try_timeout_seconds = 4;
 }
 
 message BeginResponse {
@@ -310,14 +310,22 @@ allowlist
 Try RPC（Try 由业务 API 发起）
 ```
 
-## 8. 待确认
+## 8. 已确认
 
 ```text
-1. application_data 用 string 还是 bytes
-2. Query 是否返回 callbackEndpoint
-3. Commit/Rollback 是否需要 request_id
-4. ReportBranch 是否需要 error_code
-5. callback 返回 PERMANENT_FAILURE 的判定边界
+application_data 用 string，UTF-8，<=64KB
+Query 不返回 callbackEndpoint
+Commit/Rollback 不带 request_id，xid 本身幂等
+ReportBranch 用 message 即可，不单独 error_code
+PERMANENT_FAILURE 只给明确不可重试的业务失败
+网络超时/连接失败/RM 暂时不可用 -> RETRYABLE
+```
+
+Query 不返回 callbackEndpoint 的原因：
+
+```text
+callbackEndpoint 是 TC 内部路由数据
+不属于业务查询 DTO
 ```
 
 ## 9. 一句话

@@ -219,7 +219,9 @@ WHERE xid=?
 超限：
 
 ```text
-DEAD / 人工队列
+DEAD
+global FAILED
+ERROR 日志
 ```
 
 ## 8. Participant 的连接：TC 不发现 RM
@@ -466,7 +468,7 @@ TRY / CONFIRM / CANCEL
 5. 没有明确 Nacos 只发现 TC、不发现 RM
 6. 没有 scheduler 扫描条件
 7. 没有 server 级幂等键
-8. 没有 server 监控/告警
+8. 没有 server 监控/告警（第一版明确不做）
 9. 没有 server 与 participant 部署边界
 10. 没有多实例协调器测试
 ```
