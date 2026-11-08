@@ -1830,3 +1830,83 @@ PEL pending
   - 设计已写，任务未完整实现。
 - 面试要点
   - 明确“已实现/设计/未实现”。
+
+## 34. 06 文档 60/66 问补全
+
+> 来源：`06-项目文档/58CRM_-_系统分布式事务项目_.md` 的问题清单；实际编号为 1-66，部分排版只显示 60 个标题。
+> 这里补全到消息服务图里，答案按当前仓库/原项目口径标注，不照抄原文。
+
+### 34.1.1 TCC 与项目 1-22
+
+- 1. 整体分几块？→ TCC 协调器、TM 客户端、RM、Outbox、Stream 消费、Starter。
+- 2. 消息从生产到消费？→ 业务事务写 Outbox → Scanner → Buffer → Sender → Stream → Consumer → XACK。
+- 3. MySQL 和 Redis 各放什么？→ MySQL 正本/日志/幂等/barrier；Redis Stream 传输。
+- 4. 为什么两个载体？→ MySQL 保可靠，Redis 保吞吐。
+- 5. 三阶段谁执行？→ TM 发起，RM 执行，TC 回调。
+- 6. 协调器管什么？→ global/branch、lease、超时、重试、回调。
+- 7. 切面算哪层？→ TM 接入层。
+- 8. 切面内部流程？→ 解析 → begin → 业务 Try → commit/rollback。
+- 9. 多业务线怎么隔离？→ bizCode、resourceKey、Stream/消费组。
+- 10. 最终一致性校验在哪？→ Coordinator Scheduler；对账未落地。
+- 11. Try 预留什么？→ quota reserved、coupon LOCKED。
+- 12. Confirm 做什么？→ 转终态 + barrier + Outbox。
+- 13. Cancel 做什么？→ 释放预占。
+- 14. Try 防重？→ barrier 主键 + 状态。
+- 15. Confirm 幂等？→ barrier CONFIRMED 直接成功。
+- 16. XID 怎么生成？→ MySQL 号段。
+- 17. 事务日志记什么？→ global/branch/barrier 状态。
+- 18. 两个 RM 一成功一失败？→ 失败上报 → rollback → Cancel 成功分支。
+- 19. 成功资源怎么办？→ Cancel 释放。
+- 20. 中间态对外？→ 业务状态机控制，不直接暴露。
+- 21. 超时怎么定？→ Try/回调/全局分开。
+- 22. 空回滚？→ 无 barrier 插 SUSPENDED。
+
+### 34.1.2 消息 23-54
+
+- 23. 消息何时产生？→ 业务事实同本地事务写 Outbox。
+- 24. 第一步写哪？→ MySQL `t_local_message`。
+- 25. 怎么绑定？→ 同本地事务。
+- 26. 业务回滚？→ Outbox 一起回滚。
+- 27. 消息字段？→ msgId/eventKey/biz/payload/status。
+- 28. Redis 结构？→ Stream。
+- 29. 为什么不用 List？→ 无消费组/PEL/ACK。
+- 30. 推 Redis 失败？→ 保持 INIT，重扫。
+- 31. 批量推送？→ Sender 批量 XADD。
+- 32. 合并窗口？→ linger 10ms 默认，按吞吐调。
+- 33. 消费方式？→ XREADGROUP。
+- 34. 为什么批量拉？→ 减少 RTT。
+- 35. 一批多少？→ 默认 500，按压测调。
+- 36. 回调前做什么？→ 落消费记录/幂等/租约。
+- 37. 重复消费第一道防线？→ msgId/eventKey + MySQL 唯一约束。
+- 38. 占位多久？→ 按处理时间，当前 MySQL 幂等不做 TTL。
+- 39. 设短问题？→ 重复执行风险。
+- 40. 兜底？→ 唯一约束 + 消费记录。
+- 41. 唯一约束在哪？→ `t_idempotent`。
+- 42. 占位后崩溃？→ PEL/租约恢复。
+- 43. 消费失败去哪？→ 重试/DEAD。
+- 44. 重试几次？→ 默认 3 次。
+- 45. 到头去哪？→ DEAD/失败记录。
+- 46. 多消费者只消费一次？→ 消费组 + PEL + 幂等。
+- 47. 消息正本表？→ `t_local_message`。
+- 48. 索引？→ 状态+重试时间、eventKey 唯一。
+- 49. 表一直涨？→ 归档/清理，当前未做。
+- 50. Redis key？→ 按业务线 Stream。
+- 51. Redis/MySQL 不一致听谁？→ MySQL 正本。
+- 52. Redis 挂了会丢吗？→ Outbox 还在，可重放。
+- 53. 从哪补？→ Scanner 扫 INIT。
+- 54. 幂等为什么两边？→ 原项目 Redis+MySQL；本仓库只 MySQL，Redis 仅传输。
+
+### 34.1.3 接入与性能 55-66
+
+- 55. 注解属性？→ requestId/bizCode/bizId/tryTimeoutSeconds。
+- 56. AOP 找 Confirm/Cancel？→ RM `@TccActionHandler(actionName)`。
+- 57. 方法签名？→ BusinessActionContext + TccTryResult/TccPhaseResult。
+- 58. 接口直接调用场景？→ 动态分支/TccRequest。
+- 59. 两种方式同底层？→ 是，最终走 Coordinator + barrier。
+- 60. 接入写什么？→ `@TccTransactional` + RM TccAction；目标设计下分支由 RM 自注册。
+- 61. 8W 场景？→ 原项目促销/开工季口径。
+- 62. 日常/峰值？→ 原项目 1.5W/8W；本仓库无生产数据。
+- 63. 压测？→ 本仓库本机约 700 msg/s。
+- 64. 瓶颈？→ 本机 DB/Redis/线程模型，无生产结论。
+- 65. 提升吞吐？→ 批量、缓冲、异步、减少 RTT。
+- 66. 积压发现？→ Stream lag、PEL、监控。
