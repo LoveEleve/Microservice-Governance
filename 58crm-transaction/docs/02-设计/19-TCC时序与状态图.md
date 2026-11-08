@@ -1,25 +1,46 @@
 # TCC 时序与状态图
 
-> 读完你能做什么：按图理解 TCC 的正常、失败、超时、崩溃、空回滚、悬挂、重试和 TC 多实例路由。
+> 读完你能做什么：逐个 case 理解 TCC 的正常、失败、超时、注册失败、报告丢失、崩溃、空回滚、悬挂、重试、callback 跨 TC。
 
-## 0. 参与者
+## 0. 先说清楚：branch 不在 TC 执行
+
+TC 不执行 branch 业务。
 
 ```text
-TM   业务发起方/事务模板
-TC   Coordinator Server
-RM1  Order TCC
-RM2  Inventory TCC
+TC：只维护 global/branch 状态，发起 Confirm/Cancel
+RM：真正执行 Try/Confirm/Cancel 和 barrier
 ```
 
-TM 和 RM1 可以是同一个服务。
+所以：
 
-## 1. owner_token / lease 是什么
+```text
+branchRegister 到 tc-0
+commit 到 tc-3
+```
 
-不是业务锁，是 TC 集群内“谁有权推进这个 xid”的租约。
+不会有问题，因为：
+
+```text
+branch 行在 MySQL
+callbackEndpoint 在 branch 行
+tc-3 从 DB 读 endpoint
+tc-3 调 RM
+业务仍在 RM 执行
+```
+
+不需要“把 branch 搬到 tc-3 执行”。
+
+## 1. owner_token / lease
 
 ```text
 t_tcc_global.owner_token
 t_tcc_global.lease_until
+```
+
+它表示：
+
+```text
+当前哪个 TC 实例有权推进这个 xid
 ```
 
 抢租约：
@@ -33,198 +54,194 @@ WHERE xid = ?
   AND (lease_until IS NULL OR lease_until < NOW());
 ```
 
-含义：
-
-```text
-owner_token  本次处理实例的唯一 token
-lease_until  租约到期时间
-```
-
 第一版只放 global：
 
 ```text
 一个 xid 同时只有一个 TC owner
-owner 负责该事务所有 branch 的调度
-branch 不再单独抢 owner
-```
-
-原因：
-
-```text
-避免同一 xid 被多个 TC 并发推进
-branch 数量通常不大
-后续 branch 多时再拆 branch lease
+owner 处理该事务所有 branch
+branch 不单独抢 lease
 ```
 
 owner 崩溃：
 
 ```text
 lease 到期
-其他 TC 重新抢租约
-根据 DB 中的 branch 状态继续
+其他 TC 抢到 owner
+从 DB 恢复 branch 状态继续
 ```
 
-## 2. 先修正参考图的一个顺序
-
-参考图：
+## 2. Case 目录
 
 ```text
-RM Try 本地事务
-  -> fence TRIED
-  -> branchRegister
+A. 正常成功
+B. Try 失败
+C. Try 超时/结果未知
+D. branchRegister 失败
+E. branchRegister 响应丢失
+F. Try 成功但 report 丢失
+G. TM 崩溃在 begin 后
+H. TM 崩溃在部分 Try 后
+I. global 超时
+J. Confirm 全部成功
+K. Confirm 部分失败
+L. Confirm 响应丢失
+M. Confirm 业务永久失败
+N. TC 崩溃在 CONFIRMING
+O. RM 崩溃在 Confirm 后
+P. Confirm 重复
+Q. Cancel 全部成功
+R. Cancel 部分失败
+S. Cancel 响应丢失
+T. Cancel 无 barrier
+U. Try 后到
+V. TC 崩溃在 CANCELLING
+W. RM 崩溃在 Try 前
+X. RM 崩溃在 Try 后
+Y. Try/Cancel 并发
+Z. callback 注册 tc-0、commit tc-3
+AA. callback endpoint 不可达
+AB. Duplicate Try
+AC. Confirm/Cancel 并发
 ```
 
-风险：
+## A. 正常成功
 
 ```text
-Try 已提交
-TC 还没登记 branch
-branchRegister 失败 -> TC 不知道这次预占
-```
-
-本方案：
-
-```text
-registerBranch 在 Try 之前
-TC 先返回 branchId
-再执行 Try
-```
-
-如果业务必须 RM 自己注册，也要求 RM 在本地 Try 事务之前完成 branchRegister，不能让预占先落库。
-
-## 3. 正常成功
-
-```text
-TM(Order)          RM1(Order)             RM2(Inventory)          TC
-   |                   |                        |                 |
-   |-- begin ---------------------------------------------------->|
-   |<----------------------------------------------- xid ---------|
-   |-- registerBranch(RM1) -------------------------------------->|
-   |<------------------------------------------ branchId1 ---------|
-   |-- registerBranch(RM2) -------------------------------------->|
-   |<------------------------------------------ branchId2 ---------|
-   |-- try(branchId1) ->|                        |                 |
-   |                   |-- barrier TRIED         |                 |
-   |                   |-- order: NEW->ASSIGNING |                 |
-   |<-- success --------|                        |                 |
-   |-- report(TRY_SUCCESS, branchId1) ------------------------------>|
-   |-- try(branchId2) -------------------------->|                 |
-   |                   |                        |-- barrier TRIED |
-   |                   |                        |-- reserved +1   |
-   |<-- success ---------------------------------|                 |
-   |-- report(TRY_SUCCESS, branchId2) ------------------------------>|
-   |-- commit ----------------------------------------------------->|
-   |                   |<-- confirm(branchId1) ---------------------|
-   |                   |-- barrier CONFIRMED     |                 |
-   |                   |-- order: ASSIGNED       |                 |
-   |                   |-- outbox INIT           |                 |
-   |                   |-- success ------------->|                 |
-   |                   |                        |<-- confirm(branchId2)
-   |                   |                        |-- barrier CONFIRMED
-   |                   |                        |-- reserved->used
-   |                   |                        |-- outbox INIT
-   |<-------------------------------------------------- committed --|
+TM              RM1             RM2              TC
+ |-- begin ------------------------------------>|
+ |<-------------------------------- xid ---------|
+ |-- registerBranch(RM1) ---------------------->|
+ |<---------------------------- branchId1 -------|
+ |-- registerBranch(RM2) ---------------------->|
+ |<---------------------------- branchId2 -------|
+ |-- try(branch1)->|              |              |
+ |                |-- barrier TRIED              |
+ |                |-- reserve                   |
+ |<-- ok ---------|              |              |
+ |-- report SUCCESS(branch1) ------------------>|
+ |-- try(branch2) -------------->|              |
+ |                |              |-- barrier TRIED
+ |                |              |-- reserve
+ |<-- ok ------------------------|              |
+ |-- report SUCCESS(branch2) ------------------>|
+ |-- commit ----------------------------------->|
+ |                |<-- confirm(branch1) ---------|
+ |                |-- barrier CONFIRMED          |
+ |                |-- final + outbox             |
+ |                |-- ok ----------------------->|
+ |                |              |<-- confirm(branch2)
+ |                |              |-- barrier CONFIRMED
+ |                |              |-- final + outbox
+ |                |              |-- ok -------->|
+ |<-------------------------------- CONFIRMED ---|
 ```
 
 分析：
 
 ```text
-Try 先注册分支，再预占
+register 先于 Try
+Try 只预占
 Confirm 才写终态和 Outbox
-TC 在全部 branch CONFIRMED 后置 global CONFIRMED
+所有 branch CONFIRMED 后 global CONFIRMED
 ```
 
-## 4. Try 失败
+## B. Try 失败
 
 ```text
-TM                  RM1                    RM2                    TC
- |                   |                      |                     |
- |-- try RM1 ------->|                      |                     |
- |<-- success -------|                      |                     |
- |-- report SUCCESS ------------------------------>|
- |-- try RM2 -------------------------------->|                     |
- |<-- fail ----------------------------------|                     |
- |-- report TRY_FAIL -------------------------------------------->|
- |-- rollback --------------------------------------------------->|
- |                   |<-- cancel --------------------------------|
- |                   |-- barrier CANCELLED   |                     |
- |                   |-- release order       |                     |
- |                   |-- success ----------->|                     |
- |                   |                      |<-- cancel ----------|
- |                   |                      |-- no barrier -> SUSPENDED
- |                   |                      |-- success --------->|
- |<----------------------------------------------- CANCELLED -----|
+TM              RM1             RM2              TC
+ |-- try RM1 --->|              |              |
+ |<-- ok --------|              |              |
+ |-- report SUCCESS -------------------------->|
+ |-- try RM2 ------------------>|              |
+ |<-- fail ---------------------|              |
+ |-- report TRY_FAIL ------------------------>|
+ |-- rollback -------------------------------->|
+ |                |<-- cancel -----------------|
+ |                |-- barrier CANCELLED         |
+ |                |-- ok ---------------------->|
+ |                |              |<-- cancel ----|
+ |                |              |-- no barrier -> SUSPENDED
+ |<-------------------------------- CANCELLED --|
 ```
 
 分析：
 
 ```text
-RM2 Try 失败，没有资源
-Cancel 对 RM2 走空回滚 -> SUSPENDED
-RM1 的资源被释放
+RM2 没有预占成功，Cancel 走空回滚
+RM1 已 Try 成功，Cancel 释放
 global CANCELLED
 ```
 
-## 5. Try 超时/结果未知
+## C. Try 超时/结果未知
 
 ```text
-TM                  RM1                    TC
- |                   |                     |
- |-- try ----------->|                     |
- |                   |-- 本地事务已提交    |
- |   超时/网络断      |                     |
- |-- rollback ---------------------------->|
- |                   |<-- cancel ----------|
- |                   |-- barrier TRIED     |
- |                   |-- release           |
- |                   |-- CANCELLED ------->|
+TM              RM1             TC
+ |-- try -------->|              |
+ |                |-- barrier TRIED
+ |   RPC timeout  |              |
+ |-- rollback ----------------->|
+ |                |<-- cancel ---|
+ |                |-- barrier TRIED -> CANCELLED
  |<-------------------------------- CANCELLED
 ```
 
 分析：
 
 ```text
-TM 不知道 Try 是否成功
-必须走 rollback
-Cancel 看到 barrier TRIED 就释放
-不能因为 RPC 超时直接判定 Try 没发生
+超时不能判定 Try 未发生
+必须 rollback
+barrier TRIED 则释放
+barrier 无记录则 SUSPENDED
 ```
 
-## 6. branchRegister 失败
+## D. branchRegister 失败
 
 ```text
-TM                  RM1                    TC
- |                   |                     |
- |-- registerBranch -------------------->|
- |<-- error ------------------------------|
- |-- 不执行 Try     |                     |
+TM              RM1             TC
+ |-- registerBranch ---------->|
+ |<-- error -------------------|
+ |-- 不调用 Try  |              |
 ```
 
 分析：
 
 ```text
-register 失败 -> 不产生资源
+TC 未登记成功
+没有资源
 不需要 Cancel
-如果 register 响应丢失但 TC 已写入
-TM 重试同一个 resourceKey
-UNIQUE(xid, resource_key) 返回已有 branch
+TM 直接失败
 ```
 
-## 7. Try 成功但 report 失败
+## E. branchRegister 响应丢失
 
 ```text
-TM                  RM1                    TC
- |                   |                     |
- |-- try ----------->|                     |
- |                   |-- barrier TRIED     |
- |                   |-- 预占成功          |
- |-- report SUCCESS --------------------->|
- |                   |                  DB 未写入/响应丢失
- |-- rollback --------------------------->|
- |                   |<-- cancel ----------|
- |                   |-- barrier TRIED     |
- |                   |-- release           |
- |                   |-- CANCELLED ------->|
+TM              TC
+ |-- registerBranch ---------->|
+ |                    DB 已写入，响应丢失
+ |-- registerBranch(retry) --->|
+ |<-- 返回已有 branchId -------|
+```
+
+分析：
+
+```text
+UNIQUE(xid, resource_key)
+重复 register 幂等
+不能创建第二个分支
+```
+
+## F. Try 成功但 report 丢失
+
+```text
+TM              RM1             TC
+ |-- try -------->|              |
+ |                |-- barrier TRIED
+ |                |-- 预占成功
+ |-- report SUCCESS ----------->|
+ |                |        DB 未写入/响应丢失
+ |-- rollback ----------------->|
+ |                |<-- cancel ---|
+ |                |-- barrier TRIED -> CANCELLED
 ```
 
 分析：
@@ -233,301 +250,336 @@ TM                  RM1                    TC
 TC branch 仍是 TRYING
 不能进入 CONFIRMING
 只能超时 CANCELLING
-Cancel 通过 barrier 释放已成功预占
 ```
 
-## 8. Confirm 部分失败/重试
+## G. TM 崩溃在 begin 后
 
 ```text
-TM                  RM1                    RM2                    TC
- |                   |                      |                     |
- |-- commit ---------------------------------------------------->|
- |                   |<-- confirm ----------|                     |
- |                   |-- CONFIRMED          |                     |
- |                   |-- success ---------->|                     |
- |                   |                      |<-- confirm ---------|
- |                   |                      |-- 失败/超时         |
- |                   |                      |-- 保持 CONFIRMING   |
- |                   |                      |-- next_retry_at     |
- |                   |                      |                     |
- |                   |                      |<-- confirm 重试 ----|
- |                   |                      |-- CONFIRMED         |
- |<-------------------------------------------------- CONFIRMED ---|
+TM              TC
+ |-- begin ----->|
+ |  TM crash     |
+ |               |-- timeout_at 到期
+ |               |-- CANCELLING
+ |               |-- 无 branch
+ |               |-- CANCELLED
 ```
 
 分析：
 
 ```text
-只能重试失败分支
-RM1 已 CONFIRMED 不重复执行业务
-RM2 barrier 幂等
-global 在全部 CONFIRMED 前保持 CONFIRMING
+没有任何资源
+global 仍要收敛
 ```
 
-## 9. Confirm 响应丢失
+## H. TM 崩溃在部分 Try 后
 
 ```text
-TC -> RM Confirm
-RM 本地事务已提交 CONFIRMED
+TM              RM1             RM2             TC
+ |-- try RM1 --->|              |              |
+ |<-- ok ---------|              |              |
+ |-- report SUCCESS -------------------------->|
+ |-- try RM2 ------------------>|              |
+ |  TM crash     |              |              |
+ |               |              |-- barrier TRIED
+ |               |              |-- reserve
+ |               |              |              |
+ |               |              |<-- timeout cancel
+ |               |<-- cancel ----|              |
+ |               |-- release     |              |
+ |               |              |-- release / SUSPENDED
+ |<-------------------------------- CANCELLED --|
+```
+
+分析：
+
+```text
+TM 崩了不会 commit
+TC 超时后取消
+RM2 的 Try 即使成功也会被 Cancel
+```
+
+## I. global 超时
+
+```text
+TM              TC
+ |-- begin/partial try
+ |  no commit    |
+ |               |-- timeout_at 到期
+ |               |-- CANCELLING
+ |               |-- 逐 branch Cancel
+ |<-------------------------------- CANCELLED
+```
+
+## J. Confirm 全部成功
+
+```text
+TC              RM1             RM2
+ |-- confirm --->|              |
+ |               |-- CONFIRMED  |
+ |<-- ok ---------|              |
+ |-- confirm ------------------>|
+ |               |              |-- CONFIRMED
+ |<-- ok -----------------------|
+ |-- global CONFIRMED
+```
+
+## K. Confirm 部分失败
+
+```text
+TC              RM1             RM2
+ |-- confirm --->|              |
+ |<-- ok ---------|              |
+ |-- confirm ------------------>|
+ |<-- fail ---------------------|
+ |-- 保持 CONFIRMING
+ |-- retry RM2
+ |-- ok ------------------------>|
+ |-- global CONFIRMED
+```
+
+分析：
+
+```text
+只重试 RM2
+RM1 不重复执行
+global 不提前 CONFIRMED
+```
+
+## L. Confirm 响应丢失
+
+```text
+TC -> RM confirm
+RM 本地事务已 CONFIRMED
 响应丢失
-TC 重试 Confirm
-RM barrier 看到 CONFIRMED
+TC 重试 confirm
+RM barrier CONFIRMED
 -> 直接返回成功
 ```
 
 分析：
 
 ```text
-Confirm 必须幂等
-Outbox 用稳定 eventKey
-eventKey 唯一键防重复事件
+Confirm 幂等
+Outbox eventKey 幂等
 ```
 
-## 10. Cancel 部分失败/重试
+## M. Confirm 业务永久失败
 
 ```text
-TC -> RM1 cancel
-RM1 -> CANCELLED
-TC -> RM2 cancel
-RM2 失败
-TC 保持 CANCELLING
-重试 RM2
-RM2 -> CANCELLED
-global -> CANCELLED
+TC -> RM confirm
+RM 返回明确业务失败
+TC retry 达上限
+branch DEAD
+global FAILED
+告警人工
 ```
 
-分析：
+## N. TC 崩溃在 CONFIRMING
 
 ```text
-已取消分支不重复释放
-失败分支继续重试
-超过上限 -> DEAD / global FAILED
+old TC 崩溃
+lease 到期
+new TC 抢 owner
+扫描 CONFIRMING branch
+重试 Confirm
 ```
 
-## 11. Cancel 先到（空回滚）
+## O. RM 崩溃在 Confirm 后
+
+```text
+RM barrier CONFIRMED
+响应丢失
+TC 重试
+RM 重启
+barrier CONFIRMED -> 幂等
+```
+
+## P. Confirm 重复
+
+```text
+TC 重发 Confirm
+RM barrier CONFIRMED
+直接返回成功
+不执行业务
+```
+
+## Q. Cancel 全部成功
+
+```text
+TC -> RM1 cancel -> CANCELLED
+TC -> RM2 cancel -> CANCELLED
+global CANCELLED
+```
+
+## R. Cancel 部分失败
+
+```text
+RM1 CANCELLED
+RM2 失败 -> CANCELLING -> retry
+RM2 CANCELLED
+global CANCELLED
+```
+
+## S. Cancel 响应丢失
+
+```text
+RM barrier CANCELLED
+响应丢失
+TC 重试
+RM 幂等成功
+```
+
+## T. Cancel 无 barrier
 
 ```text
 TC -> RM cancel
 RM barrier 无记录
-RM INSERT SUSPENDED
-RM 返回成功
+INSERT SUSPENDED
+返回成功
 ```
 
-分析：
+## U. Try 后到
 
 ```text
-不能释放不存在的资源
-必须留下持久 SUSPENDED
+TC -> RM cancel -> SUSPENDED
+late Try -> RM
+RM barrier SUSPENDED
+拒绝 Try
 ```
 
-## 12. Try 后到（悬挂）
+## V. TC 崩溃在 CANCELLING
 
 ```text
-TC -> RM cancel
-RM -> SUSPENDED
-之后 Try 到达
-RM 查 barrier = SUSPENDED
-RM 拒绝 Try
+old TC 崩溃
+lease 到期
+new TC 抢 owner
+继续 Cancel
 ```
 
-分析：
-
-```text
-如果不拒绝，资源会被预占但没有事务管理
-```
-
-## 13. TC 崩溃
-
-### TRYING 崩溃
-
-```text
-global TRYING
-TM 已断开
-timeout_at 到期
-新 TC 抢 lease
--> CANCELLING
--> 调 Cancel
-```
-
-### CONFIRMING 崩溃
-
-```text
-global CONFIRMING
-branch 状态已落库
-新 TC 抢 lease
--> 扫描 CONFIRMING branch
--> 重试 Confirm
-```
-
-### CANCELLING 崩溃
-
-```text
-global CANCELLING
-新 TC 继续 Cancel
-```
-
-分析：
-
-```text
-TC 无本地状态
-全部依赖 t_tcc_global / t_tcc_branch
-lease 过期后接管
-```
-
-## 14. RM 崩溃
-
-### Try 前崩溃
+## W. RM 崩溃在 Try 前
 
 ```text
 barrier 无记录
-TC branch TRYING
-超时 -> Cancel
+TC timeout -> Cancel
 Cancel -> SUSPENDED
 ```
 
-### Try 本地事务后崩溃
+## X. RM 崩溃在 Try 后
 
 ```text
 barrier TRIED
-TC branch TRYING
-超时 -> Cancel
+TC timeout -> Cancel
 Cancel -> CANCELLED
 ```
 
-### Confirm 后崩溃
+## Y. Try/Cancel 并发
 
 ```text
-barrier CONFIRMED
-TC 未收到响应
-重试 Confirm
--> 幂等成功
+Try 先插入 TRIED -> Cancel 释放 -> CANCELLED
+Cancel 先插入 SUSPENDED -> Try 拒绝
 ```
 
-### Cancel 后崩溃
+## Z. callback 注册 tc-0、commit tc-3
 
 ```text
-barrier CANCELLED
-重试 Cancel
--> 幂等成功
-```
-
-## 15. 全局超时
-
-```text
-TM begin
-已注册部分 branch
-TM 崩溃/未 commit
-timeout_at 到期
-TC -> CANCELLING
-逐 branch Cancel
--> CANCELLED
-```
-
-## 16. 多 TC 回调路由
-
-```text
-tc-0 registerBranch:
-  callbackEndpoint -> t_tcc_branch
-
-tc-3 commit:
-  SELECT callbackEndpoint FROM t_tcc_branch
-  -> 调 RM
+TM -> tc-0 registerBranch
+       INSERT callbackEndpoint
+TM -> tc-3 commit
+       SELECT callbackEndpoint
+       tc-3 -> RM confirm
 ```
 
 分析：
 
 ```text
-callback endpoint 存 DB
-不存 TC 内存
-任意 TC 都能回调
+branch 业务不在 TC 执行
+tc-3 只读 DB 和回调 RM
 不需要 sticky
 ```
 
-## 17. 状态图
-
-### 全局
+## AA. callback endpoint 不可达
 
 ```text
-TRYING
-  | all Try success + commit
-  v
-CONFIRMING
-  | all branches CONFIRMED
-  v
-CONFIRMED
+tc-3 -> RM callback
+连接失败/超时
+branch 保持 CONFIRMING
+retry_count + 1
+next_retry_at
+超限 -> DEAD / global FAILED
+```
 
-TRYING
-  | any Try fail/timeout
-  v
-CANCELLING
-  | all branches CANCELLED/SUSPENDED
-  v
-CANCELLED
+## AB. Duplicate Try
 
-CONFIRMING/CANCELLING
-  | retry exhausted
-  v
+```text
+RM barrier TRIED
+重复 Try
+返回成功
+不重复预占
+```
+
+## AC. Confirm/Cancel 并发
+
+```text
+Confirm 先拿到 barrier 行锁
+  -> CONFIRMED
+Cancel 后到
+  -> 看到 CONFIRMED，拒绝
+```
+
+反向：
+
+```text
+Cancel 先拿到行锁
+  -> CANCELLED
+Confirm 后到
+  -> 看到 CANCELLED，拒绝
+```
+
+## 状态图
+
+### global
+
+```text
+TRYING -> CONFIRMING -> CONFIRMED
+   |          |
+   v          v
+CANCELLING -> CANCELLED
+   |
+   v
 FAILED
 ```
 
-### 分支
+### branch
 
 ```text
-TRYING
-  | Try success
-  v
-TRY_SUCCESS
-  | commit
-  v
-CONFIRMING
-  | Confirm success
-  v
-CONFIRMED
-
-TRYING
-  | Try fail
-  v
-TRY_FAIL
-  | rollback
-  v
-CANCELLING
-  | Cancel success
-  v
-CANCELLED
-
-CANCELLING
-  | no barrier
-  v
-SUSPENDED
-
-CONFIRMING/CANCELLING
-  | retry exhausted
-  v
-DEAD
+TRYING -> TRY_SUCCESS -> CONFIRMING -> CONFIRMED
+   |          |               |
+   |          |               v
+   |          |             DEAD
+   |          v
+   |       CANCELLING -> CANCELLED
+   |               |
+   |               v
+   |             SUSPENDED
+   v
+TRY_FAIL -> CANCELLING
 ```
 
-### Barrier
+### barrier
 
 ```text
-[TRIED] --Confirm--> [CONFIRMED]
-   |
-   +--Cancel--> [CANCELLED]
-
-无记录 --Cancel--> [SUSPENDED]
-[TRIED/CONFIRMED] --Cancel--> 拒绝
-[SUSPENDED/CANCELLED] --Try--> 拒绝
+no row --Cancel--> SUSPENDED
+TRIED --Confirm--> CONFIRMED
+TRIED --Cancel--> CANCELLED
+CONFIRMED --Cancel--> reject
+SUSPENDED/CANCELLED --Try--> reject
 ```
 
-## 18. 关键决策
+## 结论
 
 ```text
-1. registerBranch 在 Try 前
-2. branch_id 由 TC 的 branch_seq 生成
-3. barrier 与业务、Outbox 同本地事务
-4. Confirm/Cancel 失败不回退状态
-5. DEAD -> global FAILED
-6. owner_token/lease 只在 global
-7. callbackEndpoint 落 branch
-8. 任意 TC 都能按 endpoint 回调
-9. 状态更新全部 CAS
+28 个独立 case
+每个 case 独立时序 + 分析
+branch 不在 TC 执行
+跨 TC 只影响状态读写和 endpoint 路由
 ```
