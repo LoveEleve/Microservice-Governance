@@ -1,1299 +1,683 @@
 # 58CRM 消息服务面试思维导图
 
-> 基线：`crm-tx-outbox` + `crm-tx-consumer` 当前仓库实现。
-> 范围：Outbox 生产、Redis Stream、消费组、PEL、租约/时间轮、幂等、故障恢复、参数与面试题。
-> 用法：标题层级即节点层级，可直接导入支持 Markdown 的思维导图工具。
-> 口径：MySQL 是正本，Redis Stream 是传送带；本机压测约 700 msg/s，不宣称生产 8W QPS。
+> 基线：`crm-tx-outbox` + `crm-tx-consumer` 当前实现。
+> 范围：Outbox、Redis Stream、消费组、PEL、租约、时间轮、幂等、故障恢复、参数、面试题。
+> 用法：标题层级即节点层级；每个节点按“核心结论、核心原理、关键机制、面试要点”展开。
 
-## 0. 30 秒总览
+## 0. 消息服务总览
 
 ### 0.1.1 消息服务解决什么问题？
 
-- 核心结论：解决“业务已经成功，但下游事件没有可靠送达”的问题。
+- 核心结论：解决业务已成功、但下游事件没有可靠送达的问题。
 - 核心原理
-  - 业务表更新和消息记录写在同一个 MySQL 本地事务。
-  - 后台 relay 把消息投递到 Redis Stream。
-  - 消费者用消费组 + PEL + 幂等消费，失败可恢复。
+  - 业务表和消息表写在同一个 MySQL 本地事务。
+  - 后台 relay 异步投递到 Redis Stream。
+  - 消费端用消费组、PEL、幂等恢复。
 - 关键机制
-  - `OutboxPublisher` 只写 MySQL，不直接写 Redis。
-  - `OutboxScanner/Sender` 异步投递。
-  - `XREADGROUP + XACK + PEL` 保证至少一次消费。
+  - MySQL 是正本，Redis 是传送带。
+  - 发送失败可重扫，消费崩溃可认领。
 - 面试要点
-  - 一句话：先可靠落库，再异步搬运；Redis 丢了可以从 MySQL 重放。
+  - 一句话：先可靠落库，再异步搬运。
 
-### 0.1.2 三条红线
+### 0.1.2 三条红线是什么？
 
-```text
-1. MySQL 决定消息是否存在、是否要重试
-2. Redis 只决定现在传得快不快
-3. 一条事件只进一个业务线 Stream，只被一个消费组消费
-```
+- 核心结论：MySQL 决定消息是否存在；Redis 只决定传得快不快；一条事件只进一个业务线 Stream。
+- 核心原理
+  - 消息正本不能只放 Redis。
+  - 不做多消费组 fan-out。
+- 关键机制
+  - 一条业务线一个 Stream、一个消费组。
+- 面试要点
+  - 不要把 Redis 当最终消息存储。
 
-### 0.1.3 当前可验证事实
+### 0.1.3 当前可验证事实是什么？
 
-```text
-生产端：OutboxPublisher + Scanner + Buffer + Sender
-消费端：Puller + Persister + Worker + AckBatcher
-恢复：PEL + XPENDING/XCLAIM + 租约 + 时间轮
-本机压测约 700 msg/s
-单测/集成测试全绿
-```
-
-### 0.1.4 明确不宣称
-
-```text
-不宣称生产 8W QPS
-不宣称 Redis Cluster 多分片实测
-不宣称消费端完全 exactly-once
-不做多下游 fan-out
-不做跨机房容灾
-```
+- 核心结论：生产、投递、消费、PEL 恢复、租约、幂等链路都已实现。
+- 核心原理
+  - 本机压测约 700 msg/s。
+  - 单测/集成测试全绿。
+- 关键机制
+  - 没有生产 8W QPS 验证。
+- 面试要点
+  - 区分“本仓库验证”和“原项目口径”。
 
 ## 1. 背景与边界
 
-### 1.1.1 为什么不用“业务提交后直接发 MQ”？
+### 1.1.1 为什么不能业务提交后直接发 MQ？
 
 - 核心结论：业务提交和 MQ 发送是两次独立操作，无法原子。
 - 核心原理
-  - 业务提交成功，MQ 发送失败 -> 消息丢。
-  - MQ 发送成功，业务回滚 -> 幽灵消息。
+  - 业务成功、发送失败 → 消息丢。
+  - 发送成功、业务回滚 → 幽灵消息。
 - 关键机制
-  - Outbox 把“业务事实”和“消息记录”放进同一个本地事务。
-  - 发送失败只是延迟，不是丢失。
+  - Outbox 把业务事实和消息记录放进同一个本地事务。
 - 面试要点
-  - 不是 MQ 不可靠，而是“业务提交 + 发送”不可原子。
+  - 不是 MQ 不可靠，是业务提交和发送不可原子。
 
-### 1.1.2 Outbox 与 TCC 的关系
+### 1.1.2 Outbox 和 TCC 是什么关系？
 
-```text
-TCC：跨服务资源预留/确认/取消
-Outbox：业务事实发生后的可靠通知
-```
+- 核心结论：TCC 管跨服务资源，Outbox 管业务事实后的可靠通知。
+- 核心原理
+  - TCC Confirm 写业务终态 + Outbox。
+  - Outbox 不参与 Try/Confirm/Cancel 决策。
+- 关键机制
+  - Confirm 的本地事务包含业务表、barrier、Outbox。
+- 面试要点
+  - 两者是配合，不是替代。
 
-关系：
+### 1.1.3 消息服务不做什么？
 
-```text
-TCC Confirm 里写业务终态 + Outbox
-Outbox 不参与 Try/Confirm/Cancel 决策
-```
-
-### 1.1.3 消息服务的非目标
-
-```text
-不做通用 MQ
-不做多消费组 fan-out
-不做全局顺序
-不做跨业务线事务
-不做消费端 RPC 调用链
-```
+- 核心结论：不做通用 MQ、不做多消费组 fan-out、不做全局顺序。
+- 核心原理
+  - 只服务当前框架的可靠事件。
+  - 一条事件只被一个业务线消费组消费。
+- 关键机制
+  - 跨业务线用不同 Stream。
+- 面试要点
+  - 边界越清楚，设计越稳。
 
 ## 2. 模块地图
 
-### 2.1.1 生产端模块
+### 2.1.1 生产端有哪些模块？
 
-```text
-crm-tx-outbox
-  api
-    BusinessEvent
-    OutboxPublisher
-  config
-    BizCodeConfig
-    BizCodeRegistry
-  persistence
-    LocalMessage
-    LocalMessageMapper
-    MybatisOutboxPublisher
-  producer
-    OutboxScanner
-    OutboxBuffer
-    OutboxSender
-    OutboxProducer
-    SenderAssignment
-  pipeline
-    interceptor
-    route
-    serializer
-    stream
-```
-
-### 2.1.2 消费端模块
-
-```text
-crm-tx-consumer
-  pull
-    StreamPuller
-    BoundedStreamQueue
-    RedisStreamSource
-  persist
-    ConsumePersister
-  worker
-    ConsumerWorker
-    HandlerRegistry
-    MessageHandler
-  ack
-    AckBatcher
-    RedisStreamAcknowledger
-  lease
-    LeaseManager
-    NettyLeaseWheel
-    RepositoryLeaseRenewer
-  recovery
-    PendingRecovery
-  persistence
-    t_consume_record
-    t_idempotent
-```
-
-### 2.1.3 Starter 模块
-
-```text
-crm-tx-spring-boot-starter
-  OutboxProducer 自动装配
-  ConsumerBootstrap 自动装配
-  BizCode/Stream/Redis 配置
-```
-
-## 3. 架构总览
-
-### 3.1.1 生产链路
-
-```text
-业务服务
-  |
-  | 同一个本地事务
-  v
-+-------------------+       +----------------------+
-| 业务表            |       | t_local_message      |
-| quota/coupon      |       | status=INIT          |
-+---------+---------+       +----------+-----------+
-          |                            |
-          +-------------+--------------+
-                        |
-                     COMMIT
-                        |
-                        v
-              OutboxScanner（扫 INIT）
-                        |
-                        v
-              OutboxBuffer（有界队列）
-                        |
-                        v
-              OutboxSender（批量发送）
-                        |
-                        v
-              Redis Stream tx:stream:{bizCode}
-                        |
-                        v
-              t_local_message.status=SENT
-```
-
-### 3.1.2 消费链路
-
-```text
-Redis Stream
-  |
-  | XREADGROUP
-  v
-StreamPuller
-  |
-  v
-BoundedStreamQueue
-  |
-  v
-ConsumePersister
-  | 批量 INSERT t_consume_record(READY)
-  v
-ConsumerWorker
-  | claim READY -> PROCESSING
-  | 业务表 + t_consume_record(CONSUMED) + t_idempotent
-  v
-AckBatcher
-  | 批量 XACK
-  v
-PEL 删除
-```
-
-### 3.1.3 存储边界
-
-```text
-MySQL：
-  消息正本、消费记录、幂等、租约、重试状态
-
-Redis Stream：
-  消息传输、消费组游标、PEL
-  （当前仓库不用 Redis 做幂等占位）
-
-业务库：
-  业务事实
-```
-
-### 3.1.4 为什么一条业务线一个 Stream？
-
-- 核心结论：隔离业务线，避免一个业务线的积压/故障影响其他线。
+- 核心结论：api、config、persistence、producer、pipeline。
 - 核心原理
-  - Stream key 由 bizCode 决定。
-  - 消费组也按业务线隔离。
+  - api：BusinessEvent、OutboxPublisher。
+  - producer：Scanner、Buffer、Sender、Producer。
+  - pipeline：拦截器、路由、序列化、Stream 发布。
 - 关键机制
-  - `tx:stream:lead`、`tx:stream:quota`、`tx:stream:order`。
-  - 不做多下游 fan-out。
+  - OutboxPublisher 只写 MySQL，不直接写 Redis。
 - 面试要点
-  - 这是“业务线隔离”，不是“消息广播”。
+  - 能说清 Scanner 和 Sender 的职责分离。
 
-## 4. Outbox 生产端
+### 2.1.2 消费端有哪些模块？
 
-### 4.1.1 BusinessEvent 有哪些字段？
-
-```java
-public record BusinessEvent(
-        String eventKey,
-        String bizCode,
-        String bizId,
-        String eventType,
-        String payload) {
-}
-```
-
-含义：
-
-```text
-eventKey   业务事件唯一键，消费幂等优先用它
-bizCode    业务线，决定 Stream key
-bizId      业务单号，分片/定位
-eventType  事件类型，决定 handler
-payload    事件正文
-```
-
-### 4.1.2 OutboxPublisher 为什么只写 MySQL？
-
-- 核心结论：写入必须和业务表在同一个本地事务里。
+- 核心结论：pull、persist、worker、ack、lease、recovery。
 - 核心原理
-  - 写 Redis 不能加入 MySQL 事务。
-  - 先写 MySQL，失败可重扫。
+  - Puller 拉取，Persister 落库，Worker 处理，AckBatcher 确认。
+  - Lease 管理租约，PendingRecovery 恢复 PEL。
 - 关键机制
-  - `publish` 返回 msgId。
-  - `t_local_message.status=INIT`。
-  - 不直接调用 Redis。
+  - 每个模块线程/职责独立。
 - 面试要点
-  - 业务方只需要依赖 `OutboxPublisher.publish`。
+  - 消费端不是一个大循环。
 
-### 4.1.3 业务事务没提交，消息会怎样？
+### 2.1.3 Starter 负责什么？
 
-```text
-业务表 INSERT/UPDATE
-+ t_local_message INSERT
-同一个事务
-```
-
-如果事务回滚：
-
-```text
-业务表和 t_local_message 一起回滚
-消息不存在
-```
-
-### 4.1.4 BizCodeRegistry 做什么？
-
-- 核心结论：生产端白名单 + Stream key 推导。
+- 核心结论：自动装配 OutboxProducer 和 ConsumerBootstrap。
 - 核心原理
-  - 只允许注册过的 bizCode 发布。
-  - 未知 bizCode 直接抛异常。
+  - 绑定 bizCode、Stream、group、Redis、DB。
+  - 按配置启动多个业务线消费者。
 - 关键机制
-  - `streamKey(prefix, bizCode) = prefix + bizCode`。
-  - 拒绝重复 bizCode。
+  - 不在 Starter 里扫描业务 Mapper。
 - 面试要点
-  - 防止业务方拼错 bizCode 写错 Stream。
+  - 自动装配边界要清楚。
 
-### 4.1.5 消息表状态怎么流转？
+## 3. 生产链路
 
-```text
-INIT
-  -> SENT
-```
+### 3.1.1 OutboxPublisher 做什么？
 
-说明：
-
-```text
-INIT：业务事务已提交，等待 relay
-SENT：已经 XADD 到 Redis Stream
-```
-
-失败：
-
-```text
-发送失败 -> 保持 INIT -> Scanner 重扫
-```
-
-### 4.1.6 OutboxScanner 怎么扫？
-
-```text
-按 status=INIT
-按 created_at/next_retry_at 排序
-批量领取
-```
-
-关键点：
-
-```text
-不能全表扫
-必须有索引
-多实例要避免重复领取
-```
-
-### 4.1.7 OutboxBuffer 为什么存在？
-
-- 核心结论：把“扫描”和“发送”解耦，削峰填谷。
+- 核心结论：在当前本地事务里写一条 INIT 消息，返回 msgId。
 - 核心原理
-  - Scanner 只负责找消息。
-  - Buffer 有界，防止内存无限增长。
+  - 不写 Redis。
+  - 业务事务回滚，消息一起回滚。
 - 关键机制
-  - 队列满时反压 Scanner。
-  - 批量交给 Sender。
+  - 业务方只依赖这个接口。
 - 面试要点
-  - 不是所有环节都直接访问 Redis。
+  - 发布接口必须和业务事务绑定。
 
-### 4.1.8 OutboxSender 怎么发？
+### 3.1.2 BusinessEvent 有哪些字段？
 
-```text
-取一批 OutboxRecord
-按 bizCode 分组
-按 Stream 批量 XADD
-更新 t_local_message.status=SENT
-记录 stream_entry_id
-```
-
-注意：
-
-```text
-XADD 成功、状态回写失败
-  -> 消息可能重复发送
-  -> 消费端幂等兜底
-```
-
-### 4.1.9 发送失败怎么办？
-
-```text
-Redis 不可用
-  -> 本批不标记 SENT
-  -> 退避后重扫
-  -> 消息仍在 MySQL
-```
-
-不会：
-
-```text
-把消息从 MySQL 删除
-只发 Redis 不留正本
-```
-
-### 4.1.10 为什么需要 SenderAssignment？
-
-- 核心结论：多实例下按 bizCode/Stream 分配发送责任，减少竞争。
+- 核心结论：eventKey、bizCode、bizId、eventType、payload。
 - 核心原理
-  - 一个 Stream 尽量由一个 sender 负责。
-  - 避免多实例重复抢同一批。
+  - eventKey 是业务事件唯一键。
+  - bizCode 决定 Stream。
 - 关键机制
-  - 分配表/内存映射。
-  - 失败后重新分配。
+  - 消费幂等优先用 eventKey。
 - 面试要点
-  - 不是所有实例都扫所有业务线。
+  - 不要把 bizId 当事件唯一键。
 
-## 5. Redis Stream 核心模型
+### 3.1.3 Scanner 怎么扫？
 
-### 5.1.1 Stream entry 是什么？
-
-```text
-XADD tx:stream:lead * msgId m-1 ...
-```
-
-返回：
-
-```text
-1793967010576-0
-```
-
-含义：
-
-```text
-Stream 是一个只追加日志
-entry ID = 时间戳-序号
-消息读取后不会自动删除
-```
-
-### 5.1.2 consumer group 是什么？
-
-```text
-tx:stream:lead
-  └── group tx-group-lead
-        ├── consumer-1
-        ├── consumer-2
-        └── consumer-3
-```
-
-作用：
-
-```text
-多个消费者竞争同一条消息
-组维护 last-delivered-id
-组维护 PEL
-```
-
-### 5.1.3 PEL 是什么？
-
-```text
-Pending Entries List
-已投递但未 XACK 的消息
-```
-
-作用：
-
-```text
-消费者崩溃后，消息还在 PEL
-其他消费者可以 XCLAIM；XAUTOCLAIM 是 Redis 提供的高级封装，当前代码用 XPENDING + XCLAIM
-```
-
-### 5.1.4 XACK 做了什么？
-
-```text
-XACK stream group entryId
-  -> 从 PEL 删除
-  -> Stream entry 仍然存在
-```
-
-注意：
-
-```text
-XACK 不是删除消息
-只是确认消费组已经处理
-```
-
-### 5.1.5 XPENDING/XCLAIM 解决什么？
-
-- 核心结论：扫描 PEL 中空闲太久的消息，转移给活着的消费者。
+- 核心结论：按业务线公平扫描 INIT 消息，放入有界 buffer。
 - 核心原理
-  - 原消费者崩溃/卡死。
-  - 消息不能永远挂在 PEL。
+  - 每个业务线每轮至少一个名额。
+  - cursor 每轮移动，避免头部饥饿。
 - 关键机制
-  - `PendingRecovery` 先用 XPENDING 扫 pending。
-  - 已有记录且 lease 过期 -> 标记 READY。
-  - 没有消费记录 -> XCLAIM 后插入 READY。
-  - XAUTOCLAIM 是 Redis 的高级封装，当前代码没有用它。
+  - inFlight 去重，避免重复入队。
 - 面试要点
-  - 恢复不是“重启消费者”，而是“转移 pending”。
+  - Scanner 不发送、不改状态。
 
-### 5.1.6 为什么不用 Redis List？
+### 3.1.4 Buffer 为什么有双重容量？
 
-| 能力 | List | Stream |
-|---|---|---|
-| 消费组 | 无 | 有 |
-| PEL | 无 | 有 |
-| 未 ACK 重投 | 自己做 | 原生 |
-| 崩溃恢复 | 弱 | 强 |
-| 历史回溯 | 难 | 按 ID |
-
-结论：
-
-```text
-本仓库用 Stream
-原项目历史文档里的 List 是旧口径
-```
-
-## 6. 消费端流水线
-
-### 6.1.1 Puller 怎么拉？
-
-```text
-XREADGROUP GROUP tx-group-lead consumer-1
-  COUNT 500
-  BLOCK 1000
-  STREAMS tx:stream:lead '>'
-```
-
-拉取后：
-
-```text
-消息进入 consumer-1 的 PEL
-last-delivered-id 前进
-尚未 XACK
-```
-
-### 6.1.2 为什么先放 BoundedStreamQueue？
-
-- 核心结论：拉取和落库解耦，控制内存。
+- 核心结论：同时限制条数和字节数，防止小消息撑爆条数、大消息撑爆内存。
 - 核心原理
-  - Redis 拉取速度快，DB 落库慢。
-  - 有界队列防止 OOM。
+  - 全局容量 + 单业务线容量。
+  - 队列满时 Scanner 跳过该业务线。
 - 关键机制
-  - 队列满反压 Puller。
-  - Persister 批量消费。
+  - 形成背压，不无限堆积。
 - 面试要点
-  - 不能无限把消息堆在 JVM 内存。
+  - 只限条数不够。
 
-### 6.1.3 Persister 做什么？
+### 3.1.5 Sender 怎么批量发送？
 
-```text
-takeBatch
--> 批量 INSERT t_consume_record(status=READY)
--> 不 XACK
-```
+- 核心结论：先取第一条，在 linger 窗口内聚合，最多 batchSize 条。
+- 核心原理
+  - 减少 XADD RTT。
+  - 按 Stream 分组发送。
+- 关键机制
+  - linger 默认 10ms，batch 默认 256。
+- 面试要点
+  - 批量是吞吐和延迟的折中。
 
-为什么不 XACK：
+### 3.1.6 一条坏消息会拖死整批吗？
 
-```text
-XACK 必须等业务真正处理成功
-否则崩溃就丢消息
-```
+- 核心结论：不会，整批失败会二分拆分，直到定位单条。
+- 核心原理
+  - 二分后好消息继续发送。
+  - 单条失败标记失败/DEAD。
+- 关键机制
+  - poison 消息隔离。
+- 面试要点
+  - 这是生产端的重要容错。
 
-### 6.1.4 Worker 怎么处理？
+### 3.1.7 XADD 成功但状态回写失败怎么办？
 
-```text
-claim READY -> PROCESSING
-  owner_token = UUID
-  lease_until = now + lease
-  owner_epoch = N
+- 核心结论：保持 INIT，下一轮重投，消费端幂等兜底。
+- 核心原理
+  - Stream 已有消息，MySQL 还是 INIT。
+- 关键机制
+  - 消息可能重复，不能保证 exactly-once。
+- 面试要点
+  - 至少一次 + 幂等是现实解。
 
-执行业务 handler
+### 3.1.8 Sender shard 怎么分？
 
-业务表更新
-+ t_consume_record(CONSUMED)
-+ t_idempotent 插入
-COMMIT
+- 核心结论：按 bizCode 排序后轮询分配到 shard。
+- 核心原理
+  - shard 数不超过 bizCode 数。
+  - 每个 sender 只处理自己的业务线。
+- 关键机制
+  - 避免多线程抢同一队列。
+- 面试要点
+  - 分区是为了局部性和减少竞争。
 
-提交 ACK
-```
+## 4. Redis Stream
 
-### 6.1.5 为什么不能先 XACK 再处理？
+### 4.1.1 Stream entry 是什么？
 
-```text
-XACK 后 PEL 删除
-消费者崩溃
-消息无法恢复
-```
+- 核心结论：只追加日志，每条消息有唯一 ID。
+- 核心原理
+  - XADD 返回 `时间戳-序号`。
+  - 读取后 entry 不会自动删除。
+- 关键机制
+  - Stream 和消费组游标分离。
+- 面试要点
+  - entry 是消息本体。
 
-正确顺序：
+### 4.1.2 消费组是什么？
 
-```text
-业务事务提交成功 -> XACK
-```
+- 核心结论：一组消费者竞争消费同一个 Stream。
+- 核心原理
+  - 组维护 last-delivered-id。
+  - 组维护 PEL。
+- 关键机制
+  - 一个业务线一个组。
+- 面试要点
+  - 消费组不是多下游广播。
 
-### 6.1.6 XACK 失败怎么办？
+### 4.1.3 PEL 是什么？
 
-```text
-业务已经 CONSUMED
-PEL 还在
-其他消费者重新领取
-  -> 幂等检查发现 CONSUMED
-  -> 跳过业务
-  -> 补 XACK
-```
+- 核心结论：已投递但未 XACK 的消息列表。
+- 核心原理
+  - 消费者崩溃后消息还在 PEL。
+  - 可以被其他消费者认领。
+- 关键机制
+  - 每个消费组各自维护 PEL。
+- 面试要点
+  - PEL 是恢复的核心。
 
-### 6.1.7 AckBatcher 为什么批量？
+### 4.1.4 XACK 做了什么？
 
-```text
-每 100ms 或 200 条
-按 Stream 分组
-一次 XACK entryId...
-```
+- 核心结论：从 PEL 删除，不删除 Stream entry。
+- 核心原理
+  - 表示消费组已确认处理。
+- 关键机制
+  - XACK 必须在业务提交成功后。
+- 面试要点
+  - 先 XACK 再处理会丢消息。
 
-好处：
+### 4.1.5 为什么不用 List？
 
-```text
-减少 Redis RTT
-提高吞吐
-```
+- 核心结论：List 没有消费组、PEL、XACK，崩溃恢复弱。
+- 核心原理
+  - List 弹出即离开队列。
+  - Stream 有 pending 和认领。
+- 关键机制
+  - 本仓库用 Stream；原项目历史用 List。
+- 面试要点
+  - 不要把历史口径说成当前实现。
 
-## 7. 租约、时间轮与 Fencing
+## 5. 消费链路
 
-### 7.1.1 为什么需要租约？
+### 5.1.1 Puller 怎么拉？
 
-```text
-worker-1 领取 m-1
-worker-1 卡住 60s
-lease 过期
-worker-2 领取 m-1
-worker-1 又恢复
-```
+- 核心结论：XREADGROUP 批量拉取，放入有界队列。
+- 核心原理
+  - 默认 count 500，block 1s。
+  - 拉取后消息进入 PEL。
+- 关键机制
+  - Puller 不写 DB、不 XACK。
+- 面试要点
+  - 拉取和处理解耦。
 
-如果没有 fencing：
+### 5.1.2 Persister 做什么？
 
-```text
-两个 worker 同时执行业务
-```
+- 核心结论：批量 INSERT `t_consume_record(READY)`。
+- 核心原理
+  - 落库后 Worker 才能领取。
+  - 落库前崩溃靠 PEL 重拉。
+- 关键机制
+  - Persister 也不 XACK。
+- 面试要点
+  - 消费记录是本地恢复依据。
 
-### 7.1.2 租约字段
+### 5.1.3 Worker 怎么处理？
 
-```text
-status=PROCESSING
-owner_token=UUID
-owner_epoch=N
-lease_until
-max_deadline
-```
+- 核心结论：claim READY → PROCESSING → 执行业务 → CONSUMED → ACK。
+- 核心原理
+  - 业务表、消费记录、幂等表同事务提交。
+  - 提交成功后才 ACK。
+- 关键机制
+  - 失败 markRetry，超限 DEAD。
+- 面试要点
+  - 业务提交和 XACK 顺序不能反。
 
-### 7.1.3 续约怎么做？
+### 5.1.4 为什么先落 READY 再处理？
 
-```text
-LeaseRenewer 后台扫描 in-flight
-批量 UPDATE lease_until
-WHERE msg_id IN (...)
-  AND status='PROCESSING'
-  AND owner_token=?
-  AND owner_epoch=?
-```
+- 核心结论：把“拉到内存”变成“本地可恢复状态”。
+- 核心原理
+  - 内存队列崩溃会丢。
+  - READY 记录可以本地恢复。
+- 关键机制
+  - PEL 也能兜底。
+- 面试要点
+  - 双重恢复：本地记录 + PEL。
 
-不能：
+### 5.1.5 ACK 为什么批量？
 
-```text
-每条消息一个 Timer
-每条消息一个 UPDATE
-```
+- 核心结论：减少 Redis RTT，提高吞吐。
+- 核心原理
+  - 每 100ms 或 200 条批量 XACK。
+  - 按 Stream/group 分组。
+- 关键机制
+  - 队列满会丢弃 ACK，消息留 PEL。
+- 面试要点
+  - 批量提吞吐，但故障时 PEL 停留更久。
 
-### 7.1.4 时间轮解决什么？
+## 6. 租约与时间轮
 
-```text
-10W QPS 不能每任务一个线程/定时器
-用分桶时间轮批量调度续约/超时
-```
+### 6.1.1 为什么需要租约？
 
-参数示例：
+- 核心结论：防止两个 worker 同时处理同一条消息。
+- 核心原理
+  - 领取时设置 ownerToken、ownerEpoch、leaseUntil。
+  - 过期后其他 worker 可以接管。
+- 关键机制
+  - 续约证明 worker 还活着。
+- 面试要点
+  - 只有租约不够，还要 fencing。
 
-```text
-tick=1s
-wheelSize=512
-lease=60s
-renewAfter=20s
-maxProcessing=5min
-```
+### 6.1.2 为什么需要 fencing？
 
-### 7.1.5 Fencing 怎么阻止旧 worker 提交？
+- 核心结论：旧 worker 可能恢复后提交，必须阻止。
+- 核心原理
+  - `markConsumed` 带 ownerToken/ownerEpoch。
+  - 影响行数为 0 表示任务已被接管。
+- 关键机制
+  - 旧事务回滚，不能 ACK。
+- 面试要点
+  - 租约 + fencing 才完整。
 
-```sql
-UPDATE t_consume_record
-SET status='CONSUMED'
-WHERE msg_id=?
-  AND status='PROCESSING'
-  AND owner_token=?
-  AND owner_epoch=?
-  AND lease_until > NOW()
-```
+### 6.1.3 时间轮解决什么？
 
-影响行数 0：
+- 核心结论：避免每个任务一个 Timer/线程，批量调度续约和超时。
+- 核心原理
+  - Netty HashedWheelTimer。
+  - tick 1s，wheel size 512。
+- 关键机制
+  - 到期任务进续约队列，批量 UPDATE。
+- 面试要点
+  - 高并发下不能一条消息一个定时器。
 
-```text
-任务已被接管
-旧 worker 不能提交
-```
+### 6.1.4 续约失败会怎样？
 
-### 7.1.6 Worker 卡死不响应中断怎么办？
+- 核心结论：任务从 in-flight 移除，lease 到期后其他 worker 接管。
+- 核心原理
+  - 续约批量失败触发 leaseLost。
+- 关键机制
+  - 旧 worker 提交被 fencing。
+- 面试要点
+  - 不能无限续约卡死任务。
 
-```text
-停止续约
-标记 LOST
-Future.cancel(true)
-告警
-lease 到期后其他 worker 接管
-```
+### 6.1.5 Worker 卡死不响应中断怎么办？
 
-注意：
+- 核心结论：停止续约、标记 LOST、告警，lease 到期后接管。
+- 核心原理
+  - 不能安全 Thread.stop。
+  - 外部副作用必须幂等。
+- 关键机制
+  - 旧 worker 无法提交。
+- 面试要点
+  - 隔离 + 告警 + fencing。
 
-```text
-不能安全 Thread.stop
-外部副作用必须幂等
-```
+## 7. 幂等设计
 
-## 8. 幂等设计
+### 7.1.1 当前仓库的幂等怎么做？
 
-### 8.1.1 当前仓库的幂等防线是什么？
+- 核心结论：MySQL `t_idempotent` 唯一约束。
+- 核心原理
+  - `insert ignore`，插入成功才执行业务。
+  - 重复消息直接跳过业务。
+- 关键机制
+  - msgId 主键，biz_key 唯一。
+- 面试要点
+  - 当前没有 Redis 幂等占位。
 
-```text
-msgId / eventKey 幂等
-MySQL t_idempotent 唯一约束
-```
+### 7.1.2 幂等键怎么选？
 
-### 8.1.2 为什么不是 Redis 占位？
+- 核心结论：优先 eventKey，为空回退 msgId。
+- 核心原理
+  - eventKey 表达业务事件唯一性。
+  - msgId 表达消息唯一性。
+- 关键机制
+  - 业务 handler 仍需幂等。
+- 面试要点
+  - 不要只用数据库自增 ID。
 
-```text
-当前仓库只在 MySQL 做幂等：
-  insert ignore t_idempotent
-  UNIQUE(msg_id) / UNIQUE(biz_key)
-Redis 只做 Stream 传输，不承担幂等正本
-```
+### 7.1.3 原项目为什么 Redis + MySQL？
 
-### 8.1.3 原项目为什么 Redis + MySQL 两边放？
+- 核心结论：原项目用 Redis 快速挡重复，MySQL 唯一约束兜底。
+- 核心原理
+  - Redis 降低 DB 压力。
+  - MySQL 防 Redis 丢/过期。
+- 关键机制
+  - 本仓库只落地 MySQL，面试要区分口径。
+- 面试要点
+  - 不要把原项目方案说成本仓库实现。
 
-```text
-原项目口径：
-  Redis 快速挡重复，降低 DB 压力
-  MySQL 唯一约束做最终兜底
-本仓库没有落地 Redis 占位，面试时要区分两个口径
-```
+### 7.1.4 外部副作用怎么幂等？
 
-### 8.1.4 幂等键怎么选？
+- 核心结论：发短信、调第三方、写搜索必须带业务幂等键。
+- 核心原理
+  - 数据库能回滚，外部副作用不能。
+- 关键机制
+  - 通过 Outbox/补偿，不裸调。
+- 面试要点
+  - 消费幂等不等于外部副作用幂等。
 
-```text
-优先 eventKey（业务事件键）
-eventKey 为空回退 msgId
-```
+## 8. PEL 恢复
 
-### 8.1.5 外部副作用怎么办？
+### 8.1.1 消费者崩溃后消息在哪？
 
-```text
-发短信/调第三方/写搜索
-必须带业务幂等键
-或通过 Outbox/补偿，不要裸调
-```
+- 核心结论：在 PEL 里。
+- 核心原理
+  - XREADGROUP 已投递，但未 XACK。
+- 关键机制
+  - PendingRecovery 扫 XPENDING。
+- 面试要点
+  - 消息不会因为进程崩溃自动消失。
+
+### 8.1.2 当前恢复流程是什么？
+
+- 核心结论：XPENDING 扫描 → 查消费记录 → 过期标记 READY → 缺记录 XCLAIM。
+- 核心原理
+  - CONSUMED/DEAD 直接补 XACK。
+  - READY 跳过。
+  - lease 未过期跳过。
+- 关键机制
+  - 当前不用 XAUTOCLAIM。
+- 面试要点
+  - 恢复是“转移 pending”，不是重启消费者。
+
+### 8.1.3 XACK 失败怎么办？
+
+- 核心结论：消息留 PEL，重新投递后幂等跳过，再补 XACK。
+- 核心原理
+  - 业务已 CONSUMED。
+  - 消费记录能判断。
+- 关键机制
+  - 幂等表兜底。
+- 面试要点
+  - ACK 失败不等于业务失败。
 
 ## 9. 故障矩阵
 
-| 故障 | 消息在哪 | 谁恢复 | 结果 |
-|---|---|---|---|
-| 业务事务回滚 | 无消息 | 无 | 不发送 |
-| 业务提交后 relay 崩溃 | MySQL INIT | Scanner | 重发 |
-| Redis 不可用 | MySQL INIT/SENT | Scanner/Sender | 退避重试 |
-| Puller 拉取后崩溃 | PEL | XPENDING/XCLAIM | 重新投递 |
-| Persister 前崩溃 | 内存队列丢 | PEL | 重新拉取 |
-| Persister 后崩溃 | t_consume_record READY | 本地恢复 | 重新处理 |
-| Worker 崩溃 | PROCESSING + lease | 租约过期 | 其他 worker 接管 |
-| XACK 失败 | PEL | 重投 + 幂等 | 补 XACK |
-| handler 永久失败 | PROCESSING | 重试/DEAD | 人工/告警 |
+### 9.1.1 业务回滚消息会怎样？
+
+- 核心结论：消息和业务一起回滚。
+- 核心原理
+  - 同一个本地事务。
+- 关键机制
+  - 不存在幽灵消息。
+- 面试要点
+  - Outbox 的第一价值。
+
+### 9.1.2 relay 崩溃怎么办？
+
+- 核心结论：消息还在 MySQL INIT，Scanner 重扫。
+- 核心原理
+  - 消息正本未丢。
+- 关键机制
+  - 进程重启继续。
+- 面试要点
+  - 发送失败只是延迟。
+
+### 9.1.3 Redis 挂了会丢消息吗？
+
+- 核心结论：不会丢正本，Outbox 可重放。
+- 核心原理
+  - MySQL 是正本。
+- 关键机制
+  - Redis 恢复后重投。
+- 面试要点
+  - 前提是消息已写 MySQL。
+
+### 9.1.4 Puller/Persister/Worker 崩溃分别怎么办？
+
+- 核心结论：Puller 崩溃靠 PEL；Persister 前崩溃靠 PEL；Persister 后崩溃靠 READY；Worker 崩溃靠 lease。
+- 核心原理
+  - 每层都有恢复依据。
+- 关键机制
+  - 本地记录 + PEL 双保险。
+- 面试要点
+  - 能按阶段说出恢复来源。
+
+### 9.1.5 ACK 队列满会怎样？
+
+- 核心结论：ACK 被丢弃，消息留 PEL，恢复任务补 ACK。
+- 核心原理
+  - 队列有界，offer 失败只告警。
+- 关键机制
+  - PEL 停留、重复投递、延迟上升。
+- 面试要点
+  - 生产要监控 ack 队列满日志。
 
 ## 10. 参数与容量
 
-### 10.1.1 关键参数
+### 10.1.1 Outbox 默认参数是什么？
 
-```yaml
-consumer:
-  pull:
-    count: 500
-    block: 1000
-  queue:
-    capacity: 10000
-  lease:
-    duration: 60s
-    renew-after: 20s
-    max-processing: 5min
-  ack:
-    batch-size: 200
-    interval: 100ms
-```
+- 核心结论：linger 10ms、batch 256、buffer 5 万条/64MB、scan 1000/10ms。
+- 核心原理
+  - 延迟换吞吐。
+  - 条数和字节双重限制。
+- 关键机制
+  - senderThreads 默认 8。
+- 面试要点
+  - 参数是生产起点，不是魔法值。
 
-### 10.1.2 批量大小怎么定？
+### 10.1.2 Consumer 默认参数是什么？
 
-```text
-太小：RTT 多、吞吐低
-太大：单批延迟高、内存压力大
-```
+- 核心结论：queue 1 万、persist 500、worker 200/8、lease 60s、renew 20s。
+- 核心原理
+  - 批量提高吞吐。
+  - lease 兼顾恢复速度与续约压力。
+- 关键机制
+  - retry 30s、maxRetries 3。
+- 面试要点
+  - 参数要按业务 RT/容量调。
 
-本仓库本机压测约 700 msg/s，参数按批量和 DB/Redis 能力调。
+### 10.1.3 为什么 batch 不是越大越好？
 
-### 10.1.3 为什么不做 fan-out？
+- 核心结论：批量大吞吐高，但单批延迟和内存压力大。
+- 核心原理
+  - 失败重试成本也更大。
+- 关键机制
+  - 按压测和下游能力定。
+- 面试要点
+  - 吞吐、延迟、内存三角。
 
-```text
-一个业务线一个消费组
-不同下游用不同业务线/Stream
-避免“一条消息被多个组重复消费”的复杂度
-```
+### 10.1.4 消息服务吞吐是多少？
 
-### 10.1.4 积压怎么发现？
-
-```text
-XINFO GROUPS 的 lag
-PEL pending 数
-消费者处理延迟
-```
-
-### 10.1.5 本仓库没有做什么？
-
-```text
-没有生产 8W QPS
-没有 Redis Cluster 分片实测
-没有自动扩容
-没有管理台重放
-```
+- 核心结论：本仓库本机约 700 msg/s。
+- 核心原理
+  - 不是生产容量结论。
+- 关键机制
+  - 原项目 8W 是面试口径。
+- 面试要点
+  - 不夸大数据。
 
 ## 11. 表结构
 
-### 11.1.1 t_local_message
+### 11.1.1 `t_local_message` 怎么设计？
 
-```text
-msg_id PK
-event_key UK
-biz_code / biz_id / event_type
-payload / payload_ref
-status
-retry_count / next_retry_at
-stream_entry_id
-created_at / updated_at
-```
+- 核心结论：消息正本，msg_id 主键，event_key 唯一。
+- 核心原理
+  - 状态、重试、Stream entry ID 都持久化。
+- 关键机制
+  - 扫描按状态和重试时间。
+- 面试要点
+  - 正本表不能省。
 
-### 11.1.2 t_consume_record
+### 11.1.2 `t_consume_record` 怎么设计？
 
-```text
-msg_id PK
-event_key
-biz_code / biz_id / event_type
-stream_entry_id
-consumer_id
-status
-owner_token / owner_epoch
-claim_count
-lease_until
-retry_count / next_retry_at
-payload / payload_ref
-```
+- 核心结论：消费记录 + 租约 + 状态。
+- 核心原理
+  - READY/PROCESSING/CONSUMED/DEAD。
+  - owner_token/owner_epoch/lease_until。
+- 关键机制
+  - 索引覆盖 claim/recovery。
+- 面试要点
+  - 这是本地恢复的核心表。
 
-索引：
+### 11.1.3 `t_idempotent` 怎么设计？
 
-```text
-(status, lease_until)
-(biz_code, status, next_retry_at, created_at)
-(owner_token, status)
-(stream_entry_id)
-```
-
-### 11.1.3 t_idempotent
-
-```text
-msg_id PK
-biz_key UK
-status
-created_at
-```
+- 核心结论：msg_id 主键，biz_key 唯一。
+- 核心原理
+  - 插入成功才执行业务。
+- 关键机制
+  - 重复消息直接跳过。
+- 面试要点
+  - 唯一约束是最后防线。
 
 ## 12. 设计取舍
 
 ### 12.1.1 为什么 MySQL 是正本？
 
-```text
-可事务、可恢复、可审计
-Redis 是缓存/传输，不是事实源
-```
+- 核心结论：可事务、可恢复、可审计。
+- 核心原理
+  - Redis 是缓存/传输。
+- 关键机制
+  - 发送失败可重扫。
+- 面试要点
+  - 不要本末倒置。
 
-### 12.1.2 为什么 Redis Stream 不是 MQ？
+### 12.1.2 为什么至少一次而不是 exactly-once？
 
-```text
-Stream 没有完整 MQ 的消费组管理/死信/事务消息生态
-本项目只用它的传输和 PEL
-```
+- 核心结论：网络/进程崩溃无法完全消除重复。
+- 核心原理
+  - 用幂等收敛成业务一次。
+- 关键机制
+  - 唯一约束 + 状态机。
+- 面试要点
+  - 不要承诺端到端 exactly-once。
 
-### 12.1.3 为什么至少一次而不是 exactly-once？
+## 13. 消息专项面试题
 
-```text
-网络/进程崩溃无法完全消除重复
-用幂等把“至少一次”收敛成业务上的“一次”
-```
+### 13.1.1 为什么先写 MySQL？
 
-### 12.1.4 为什么消息体不直接放 Redis？
+- 核心结论：业务表和消息表必须同事务。
+- 核心原理：Redis 不能参与 MySQL 事务。
+- 关键机制：Outbox 正本。
+- 面试要点：可靠优先。
 
-```text
-Redis 丢消息不能恢复
-MySQL 正本可重放
-```
+### 13.1.2 Outbox relay 失败会丢吗？
 
-## 13. 面试题（消息专项）
+- 核心结论：不会，INIT 可重扫。
+- 核心原理：消息在 MySQL。
+- 关键机制：Sender 重试。
+- 面试要点：失败只是延迟。
 
-### 13.1.1 消息为什么先写 MySQL？
+### 13.1.3 Stream 和 List 区别？
 
-因为业务表和消息表必须同一个本地事务；写 Redis 无法参与 MySQL 事务。
+- 核心结论：Stream 有消费组/PEL/ACK。
+- 核心原理：List 弹出即丢。
+- 关键机制：XPENDING/XCLAIM。
+- 面试要点：别混历史口径。
 
-### 13.1.2 Outbox 的 relay 失败会丢消息吗？
+### 13.1.4 消费者崩溃消息在哪？
 
-不会。消息还是 INIT/SENT 状态，Scanner/Sender 可以重扫。
+- 核心结论：PEL。
+- 核心原理：未 XACK。
+- 关键机制：PendingRecovery。
+- 面试要点：XPENDING/XCLAIM。
 
-### 13.1.3 Stream 和 List 的区别？
+### 13.1.5 为什么先提交再 XACK？
 
-Stream 有消费组、PEL、XACK、XPENDING/XCLAIM；List 弹出即丢，恢复弱。
-
-### 13.1.4 消费者崩溃后消息在哪？
-
-在 PEL 里，PendingRecovery 扫 XPENDING，租约过期后标记 READY，缺记录时 XCLAIM。
-
-### 13.1.5 为什么先业务提交再 XACK？
-
-先 XACK 会删除 PEL；业务崩溃后消息无法恢复。业务提交成功后再 XACK 才安全。
+- 核心结论：先 XACK 会丢 PEL。
+- 核心原理：业务崩溃无法恢复。
+- 关键机制：业务提交成功后 ACK。
+- 面试要点：顺序不能反。
 
 ### 13.1.6 XACK 失败怎么办？
 
-消息仍在 PEL；重新投递后靠幂等表发现已消费，补 XACK。
+- 核心结论：PEL 重投，幂等跳过，补 ACK。
+- 核心原理：消费记录已 CONSUMED。
+- 关键机制：幂等表。
+- 面试要点：ACK 失败不是业务失败。
 
 ### 13.1.7 重复消费怎么挡？
 
-当前仓库用 MySQL `t_idempotent` 唯一约束；原项目口径是 Redis 快速占位 + MySQL 兜底。业务 handler 仍要幂等。
+- 核心结论：msgId/eventKey + MySQL 唯一约束。
+- 核心原理：insert ignore。
+- 关键机制：业务 handler 也要幂等。
+- 面试要点：当前没有 Redis 占位。
 
 ### 13.1.8 为什么有租约还要 fencing？
 
-租约只防并发领取；旧 worker 可能恢复后提交，必须用 owner_token/epoch 让旧提交影响 0 行。
+- 核心结论：租约防并发领取，fencing 防旧 worker 提交。
+- 核心原理：ownerToken/epoch CAS。
+- 关键机制：更新影响 0 行。
+- 面试要点：两者缺一不可。
 
 ### 13.1.9 时间轮解决什么？
 
-避免每任务一个 Timer/线程；批量续约和超时检查，适合高并发。
+- 核心结论：批量调度租约，避免每任务一个 Timer。
+- 核心原理：分桶时间轮。
+- 关键机制：到期进续约队列。
+- 面试要点：高并发必备。
 
 ### 13.1.10 消费失败重试几次？
 
-配置上限 + 退避；超限 DEAD/失败记录，本仓库没有管理台。
-
-## 14. 一分钟介绍
-
-```text
-消息服务是 MySQL Outbox + Redis Stream。
-业务在本地事务里写业务表和 t_local_message(INIT)，
-Scanner/Buffer/Sender 异步把消息 XADD 到按业务线划分的 Stream，
-成功后标记 SENT。
-消费端用 consumer group + PEL 拉取，先落 t_consume_record(READY)，
-Worker 领取后执行业务，业务表、消费记录、幂等表同事务提交，再批量 XACK。
-失败靠 PEL/XPENDING/XCLAIM、租约时间轮、owner fencing 和 MySQL 幂等恢复。
-本机压测约 700 msg/s，不宣称生产 8W。
-```
-
-## 15. 一句话
-
-> **Outbox 保证“业务成功消息一定在 MySQL”，Stream 保证“消息能高效搬运”，PEL + 租约 + 幂等保证“消费者崩了还能收敛”。**
-
-
-## 16. 代码级参数与默认值
-
-### 16.1.1 OutboxConfig defaults
-
-```text
-streamPrefix       tx:stream:
-linger             10ms
-batchSize          256
-bufferCapacity     50,000 条
-bufferCapacityBytes 64MB
-scanBatch          1,000
-scanInterval       10ms
-retryAfter         30s
-maxRetries         5
-senderThreads      8
-perBizCapacity     10,000 条
-perBizCapacityBytes 16MB
-```
-
-怎么理解：
-
-```text
-linger 10ms：牺牲一点延迟换批量
-batch 256：单次 XADD 的消息数
-buffer 50k/64MB：双重容量限制
-scan 1k/10ms：找消息频率
-senderThreads 8：按 bizCode 分 shard，shard 数不超过 bizCode 数
-```
-
-### 16.1.2 ConsumerRuntimeConfig defaults
-
-```text
-queueCapacity        10,000
-persistBatchSize     500
-persistPollTimeout   100ms
-workerBatchSize      200
-workerThreads        8
-leaseDuration        60s
-maxProcessing        5min
-retryAfter           30s
-maxRetries           3
-leaseRenewAfter      20s
-ackBatchSize         200
-ackQueueCapacity     100,000
-ackFlushInterval     100ms
-recoveryBatchSize    100
-recoveryScanInterval 30s
-pullCount            500
-pullBlock            1s
-```
-
-### 16.1.3 参数怎么定
-
-```text
-Pull count 大：吞吐高，单批延迟/内存大
-Lease 短：恢复快，但续约压力大
-RenewAfter 必须显著小于 Lease
-MaxProcessing 是硬上限，防止无限续约
-Ack batch 大：Redis RTT 少，但故障时 PEL 停留更久
-Retry max 大：更耐故障，但更久占用资源
-```
-
-## 17. 生产端代码细节
-
-### 17.1.1 Scanner 为什么按 bizCode 公平扫描？
-
-`OutboxScanner`：
-
-```text
-每个业务线每轮至少一个名额
-perBizLimit = max(1, ceil(scanBatch / bizCount))
-cursor 每轮移动
-```
-
-解决：
-
-```text
-lead 消息很多时不能把 quota/order 饿死
-```
-
-### 17.1.2 inFlight 去重
-
-```text
-消息进入 buffer 前先 inFlight.add(msgId)
-已经在 buffer/发送中 -> 下一轮跳过
-发送结束/失败 finally inFlight.remove
-```
-
-没有它：
-
-```text
-Scanner 每轮重复把同一条消息放进 buffer
-```
-
-### 17.1.3 Buffer 的双重容量
-
-```text
-总条数上限
-总字节上限
-单 bizCode 条数上限
-单 bizCode 字节上限
-```
-
-背压：
-
-```text
-Scanner 用 tryPut
-某个业务线满 -> 跳过，不阻塞其他业务线
-```
-
-### 17.1.4 Sender 的 linger + batch
-
-```text
-先取第一条
-在 linger 窗口内继续聚合
-最多 batchSize 条
-按 Stream 分组
-```
-
-为什么：
-
-```text
-单条 XADD RTT 太高
-批量太大延迟高
-linger 是吞吐/延迟的折中
-```
-
-### 17.1.5 二分拆分 poison 消息
-
-`publishOrSplit`：
-
-```text
-整批 XADD 失败
--> 二分
--> 直到单条
--> 单条失败标记该消息 failed
-```
-
-好处：
-
-```text
-一条坏消息不会拖死整批好消息
-```
-
-### 17.1.6 XADD 成功但状态回写失败
-
-```text
-Stream 已写入
-t_local_message 仍 INIT
-下一轮重投
-```
-
-结果：
-
-```text
-消息可能重复
-消费端幂等兜底
-```
-
-这是“至少一次”的必然代价。
-
-### 17.1.7 Sender shard 怎么分？
-
-`SenderAssignment`：
-
-```text
-bizCode 排序
-轮询分配到 shard
-shard 数 = min(senderThreads, bizCodeCount)
-```
-
-好处：
-
-```text
-不会出现 8 个线程抢 2 个队列
-每个 sender 只处理自己的 bizCode
-```
-
-## 18. 消费端代码细节
-
-### 18.1.1 XPENDING 恢复流程
-
-`PendingRecovery.recoverOnce`：
-
-```text
-XPENDING stream group - + batchSize
-for each pending:
-  findByStreamEntryId
-  CONSUMED/DEAD -> XACK
-  READY -> 跳过
-  PROCESSING 且 lease 未过期 -> 跳过
-  PROCESSING 且 lease 过期 -> markExpiredProcessingReady
-  没有记录 -> XCLAIM -> insertReadyBatch
-```
-
-注意：
-
-```text
-当前代码不用 XAUTOCLAIM
-XPENDING + XCLAIM 更可控
-```
-
-### 18.1.2 Worker claim 死锁重试
-
-`claimReadyBatch`：
-
-```text
-DeadlockLoserDataAccessException
--> 最多 3 次
--> 2ms/4ms 退避
-```
-
-为什么：
-
-```text
-多 worker 同时 claim 同一业务线
-数据库可能选错锁顺序
-```
-
-### 18.1.3 Worker 处理事务
-
-```text
-transactions.executeWithoutResult:
-  idempotent.tryAcquire(msgId, idempotencyKey)
-  if firstDelivery:
-     handler.handle
-  repository.markConsumed(ownerToken, ownerEpoch)
-  updated != 1 -> LeaseLostException
-```
-
-关键：
-
-```text
-幂等插入、业务 handler、消费记录更新在同一个事务
-```
-
-### 18.1.4 AckBatcher 队列满的风险
-
-```java
-boolean accepted = queue.offer(command);
-if (!accepted) {
-    log.warn("ack queue full, drop ack command...");
-}
-```
-
-含义：
-
-```text
-ACK 命令丢弃
-消息仍在 PEL
-PendingRecovery 会再处理/补 ACK
-```
-
-代价：
-
-```text
-PEL 停留、重复投递、延迟上升
-```
-
-生产上应监控 ack 队列满日志。
-
-### 18.1.5 Worker 失败怎么重试？
-
-```text
-handler 抛异常
--> markRetry(nextRetryAt=now+retryAfter, maxRetries)
--> retryCount+1
--> 超限 markDead
-```
-
-当前默认：
-
-```text
-retryAfter=30s
-maxRetries=3
-```
-
-### 18.1.6 MessageHandlingException / LeaseLostException
-
-```text
-MessageHandlingException
-  业务 handler 失败，重试
-
-LeaseLostException
-  ownerToken/ownerEpoch 不匹配，任务被接管
-  旧 worker 不提交，不 ACK
-```
-
-### 18.1.7 为什么 ACK 不放在业务事务里？
-
-```text
-XACK 是 Redis 操作
-不能加入 MySQL 本地事务
-所以先提交 MySQL，再批量 ACK
-```
-
-## 19. 面试追问
-
-### 19.1.1 Outbox 能不能保证不重复？
-
-不能。至少一次投递必然可能重复；业务幂等负责收敛。
-
-### 19.1.2 为什么 XADD 成功但 DB 状态回写失败时不删消息？
-
-因为删了就无法重投；保留 INIT，让下一轮重复投递，用幂等兜底。
-
-### 19.1.3 为什么 Scanner 不直接发送？
-
-扫描和发送解耦：
-
-```text
-扫描慢不拖发送
-发送慢不阻塞扫描
-buffer 削峰
-```
-
-### 19.1.4 为什么 Sender 要按 bizCode 分 shard？
-
-避免多线程争抢同一个队列，同时保证单业务线内批量局部性。
-
-### 19.1.5 消费者为什么不直接处理 PEL？
-
-Puller 只负责拉取/入队；Persister 落库；Worker 处理；职责分开，故障可定位。
-
-### 19.1.6 租约续约失败会怎样？
-
-```text
-任务从 in-flight 移除
-lease 到期后其他 worker 接管
-旧 worker 的 markConsumed 因 ownerToken/epoch 不匹配失败
-```
-
-### 19.1.7 消费端能不能做到 exactly-once？
-
-不能对任意外部副作用保证；数据库内靠事务+幂等表可以做到业务效果一次。
-
-### 19.1.8 消息服务最大的风险是什么？
-
-```text
-ACK 队列满/丢失 -> PEL 滞留
-Scanner/Sender 单点/背压
-Redis 故障时的降级
-消费 handler 外部副作用不幂等
-```
-
-## 20. 一句话总结
-
-> **生产端用 MySQL 正本 + Outbox relay 解决“不丢”，消费端用 Stream/PEL + 租约 + 幂等解决“可恢复、可重放、重复可控”。**
+- 核心结论：默认 3 次，退避 30s。
+- 核心原理：超限 DEAD。
+- 关键机制：配置化。
+- 面试要点：要有上限。
+
+## 14. 一句话
+
+### 14.1.1 用一句话总结消息服务
+
+- 核心结论：Outbox 保证业务成功消息一定在 MySQL，Stream 保证高效搬运，PEL + 租约 + 幂等保证崩溃后可收敛。
+- 核心原理：正本、传输、恢复三层分工。
+- 关键机制：MySQL、Stream、barrier/幂等。
+- 面试要点：先可靠，再吞吐，最后谈 exactly-once。
