@@ -61,6 +61,52 @@ Scheduler 扫不到，事务永久卡住
 
 已补设计，代码在 C-003.3 必须按此实现并测试。
 
+## P1：TM 耦合 RM callbackEndpoint
+
+```text
+当前 @TccBranch 必须由 TM 写 callbackEndpoint
+TC 从 t_tcc_branch.callback_endpoint 读取
+TM 因此知道了 RM 的部署地址
+```
+
+目标形态：
+
+```text
+RM 启动时注册 serviceName / callback endpoint 到 TC 或注册中心
+TM 只声明 actionName + resourceKey
+TC 根据 actionName/resourceKey 解析 endpoint
+```
+
+兼容迁移：
+
+```text
+注解保留 callbackEndpoint 作为显式覆盖
+没有显式值时走 RM 注册表
+```
+
+## P1：注解 AOP 的代理策略
+
+```text
+LeadAssignService 依赖 @TccTransactional 代理
+quotaGateway/couponGateway 依赖 @TccBranch 代理
+当前由 TccAnnotationAutoConfiguration 上的
+@EnableAspectJAutoProxy(proxyTargetClass=true) 开启
+```
+
+风险：
+
+```text
+业务应用代码里看不到 @EnableAspectJAutoProxy，接入不直观
+强制 CGLIB 可能覆盖用户自己的 AOP 配置
+```
+
+待评估：
+
+```text
+依赖 Spring Boot AopAutoConfiguration 默认行为
+或暴露 crm.tx.tcc.annotation.proxy-target-class 配置
+```
+
 ## P1：callback 未鉴权
 
 ```text
