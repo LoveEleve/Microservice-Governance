@@ -101,7 +101,9 @@ C-003.3 Commit / Rollback / RM callback
   已完成
 
 C-003.4 Participant Barrier
-  Outbox 同事务
+  已完成
+
+C-003.5 Confirm Outbox 同事务
   下一步
 ```
 

@@ -73,6 +73,8 @@
 | 看 C-003.2.2 Review | `04-验证/07-C003.2.2-Review.md` |
 | 看 TCC 二阶段与 Callback | `02-设计/25-TCC二阶段与Callback.md` |
 | 看 C-003.3 Review | `04-验证/08-C003.3-Review.md` |
+| 看 TCC Participant Barrier | `02-设计/26-TCC-Participant-Barrier.md` |
+| 看 C-003.4 Review | `04-验证/09-C003.4-Review.md` |
 
 ## 目录结构
 

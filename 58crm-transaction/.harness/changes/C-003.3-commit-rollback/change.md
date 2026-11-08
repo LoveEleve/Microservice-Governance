@@ -70,5 +70,5 @@ branch 预推进
 
 ```text
 mvn -q test
-tests=172 failures=0 errors=0 skipped=1
+tests=190 failures=0 errors=0 skipped=1
 ```
