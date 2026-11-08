@@ -852,7 +852,9 @@ Sentinel / Prometheus
 
 ### 11.1.2 06 文档 66 问（按本项目口径）
 
-> 06 文档的原始项目是 Redis List + 8W QPS 口径；本仓库是 Redis Stream + 本机验证实现。涉及数字的题目标注“原项目口径”。
+> 题目来源：`xhs-demo/docs/Java Core Interview/分布式事务/06-项目文档/58CRM_-_系统分布式事务项目_.md` 开头的问题清单（1-66）。
+> 答案口径：不是原文答案照抄；按当前 `58crm-transaction` 仓库实现重写，原项目数字/Redis List 口径会单独标注。
+> 之前讨论过的设计点见第 17 节，不强行塞进这 66 个题号里。
 
 1. 整体分几块？
    - TCC 协调器、TM 客户端、RM 参与方、Outbox、Redis Stream 消费者、Starter。
@@ -1129,3 +1131,179 @@ TCC 逐段讲解：../07-学习讨论/07-2026-11-08-双RM-TCC逐段讲解.md
 Barrier 三防：../07-学习讨论/11-2026-11-08-Barrier三防.md
 分支注册职责：../07-学习讨论/09-2026-11-08-分支注册职责讨论.md
 ```
+
+
+## 17. 之前讨论过的设计点
+
+> 这些不是 06 文档原题，而是本项目学习和 review 中单独讨论出来的点。
+
+### 17.1.1 分支注册职责：TM 还是 RM？
+
+```text
+目标：RM 在 Try 入口 registerBranch
+当前：TM 的 @TccBranch 先 registerBranch
+```
+
+结论：
+
+```text
+RM 最清楚自己的 actionName/resourceKey/callbackEndpoint
+TM 不应该配置 RM 部署细节
+```
+
+文档：`docs/07-学习讨论/09-2026-11-08-分支注册职责讨论.md`
+
+### 17.1.2 TM 配置 RM callbackEndpoint
+
+```text
+当前 @TccBranch 上写 callbackEndpoint
+TC 从 branch 行读取
+TM 知道 RM 地址
+```
+
+结论：
+
+```text
+过渡方案，目标由 RM 自注册
+```
+
+文档：`docs/02-设计/18-TCC待办与风险.md`
+
+### 17.1.3 @EnableAspectJAutoProxy 藏在 Starter
+
+```text
+TccAnnotationAutoConfiguration 上强制 @EnableAspectJAutoProxy(proxyTargetClass=true)
+业务应用代码看不到
+```
+
+结论：
+
+```text
+代理能工作，但入口不直观，强制 CGLIB 可能覆盖用户配置
+```
+
+### 17.1.4 嵌套 TCC 与 TM 兼 RM
+
+```text
+同线程再开 @TccTransactional -> 抛 nested TCC transaction is not supported
+RM 的 Try/Confirm/Cancel 不走 TccTransactionManager，不冲突
+```
+
+结论：
+
+```text
+TM 兼 RM 可以；嵌套全局 TCC 不支持
+```
+
+文档：`docs/07-学习讨论/08-2026-11-08-切面begin与上下文讨论.md`
+
+### 17.1.5 TccContext 的 branchId 会覆盖
+
+```text
+quota Try 时 context=(xid,1)
+coupon Try 时 context=(xid,2)
+第一个 branchId 在 ThreadLocal 里被覆盖
+```
+
+结论：
+
+```text
+branchId 已存 t_tcc_branch，Confirm/Cancel 从表里读
+TccContext 只表示当前分支
+不支持并行/异步分支
+```
+
+### 17.1.6 begin 没有自动重试
+
+```text
+TccTransactionManager.begin 一次 gRPC
+失败直接抛，assign 不执行
+```
+
+结论：
+
+```text
+requestId 让 begin 可安全重试，但当前没实现
+```
+
+### 17.1.7 branchId 的作用域
+
+```text
+branchId 只在 xid 内唯一
+主键是 (xid, branchId)
+日志必须打 xid:branchId
+```
+
+文档：`docs/07-学习讨论/10-2026-11-08-branchId作用域讨论.md`
+
+### 17.1.8 多分支、循环分支、重复 key
+
+```text
+支持多个不同 @TccBranch
+循环分支要求 resourceKey 唯一
+重复 resourceKey 直接失败并回滚
+```
+
+文档：`docs/04-验证/28-C006-Multi-Branch-Spel-Review.md`
+
+### 17.1.9 SpEL 的 # 转义
+
+```text
+#{...} 是表达式边界
+表达式外 # 原样保留
+"order:#123" 不解析
+旧写法 "#userId"、"'quota:' + #userId" 兼容
+```
+
+文档：`docs/04-验证/28-C006-Multi-Branch-Spel-Review.md`
+
+### 17.1.10 Barrier 三防
+
+```text
+空回滚：Cancel 无 barrier -> SUSPENDED
+悬挂：迟到 Try 看到 SUSPENDED/CANCELLED -> FAILURE
+幂等：重复 Try/Confirm/Cancel 按状态返回
+```
+
+文档：`docs/07-学习讨论/11-2026-11-08-Barrier三防.md`
+
+### 17.1.11 Confirm 与 Outbox 同事务
+
+```text
+业务终态 + barrier + Outbox
+同一个 RM 本地事务
+```
+
+结论：
+
+```text
+业务成功消息一定在
+Refund/通知等外部动作仍要幂等
+```
+
+### 17.1.12 双 RM E2E
+
+```text
+成功：quota assigned=1，coupon USED
+失败：quota Try 成功后 Cancel，coupon SUSPENDED
+```
+
+结论：
+
+```text
+证明“A 成功、B 失败、撤销 A”
+```
+
+### 17.1.13 当前边界
+
+```text
+没有 callback 鉴权
+没有分库分表
+没有 Sentinel/Prometheus
+没有多 TC 故障注入
+消息吞吐是本机约 700 msg/s，不是生产 8W
+```
+
+### 17.1.14 一句话
+
+> **66 问是外部问题清单；第 17 节才是这个项目自己讨论出来的设计点，两者不混。**
