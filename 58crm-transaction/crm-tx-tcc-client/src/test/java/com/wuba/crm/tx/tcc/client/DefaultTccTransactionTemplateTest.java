@@ -134,6 +134,21 @@ class DefaultTccTransactionTemplateTest {
     }
 
     @Test
+    void request_rejectsDuplicateResourceKeys() {
+        TccBranch first = branch("quota:1", () -> TccTryResult.SUCCESS);
+        TccBranch second = branch("quota:1", () -> TccTryResult.SUCCESS);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> TccRequest.builder()
+                        .requestId("req-1")
+                        .bizCode("lead")
+                        .bizId("1")
+                        .branch(first)
+                        .branch(second)
+                        .build());
+    }
+
+    @Test
     void request_rejectsEmptyBranches() {
         assertThrows(IllegalArgumentException.class,
                 () -> TccRequest.builder()

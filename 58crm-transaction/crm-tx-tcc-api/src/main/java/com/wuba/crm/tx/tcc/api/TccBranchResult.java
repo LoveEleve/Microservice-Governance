@@ -5,7 +5,7 @@ package com.wuba.crm.tx.tcc.api;
  *
  * @param resourceKey 分支幂等键
  * @param branchId    分支号
- * @param status      分支最终观察到的状态
+ * @param status      Try 阶段观察到的分支状态（不是 Confirm 后的最终状态）
  */
 public record TccBranchResult(
         String resourceKey,

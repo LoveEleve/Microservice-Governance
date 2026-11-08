@@ -40,6 +40,6 @@ README quickstart 可复制运行
 ## 当前状态
 
 ```text
-C-004.1 已完成：公共模型 + DefaultTccTransactionTemplate
+C-004.1 已完成：公共模型 + DefaultTccTransactionTemplate + 重复 branch 校验
 C-004.2 未开始：protocol/client gRPC
 ```

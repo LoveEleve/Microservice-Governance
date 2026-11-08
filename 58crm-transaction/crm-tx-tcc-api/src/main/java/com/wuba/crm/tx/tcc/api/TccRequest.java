@@ -32,6 +32,13 @@ public record TccRequest(
         if (branches.isEmpty()) {
             throw new IllegalArgumentException("branches must not be empty");
         }
+        java.util.Set<String> resourceKeys = new java.util.HashSet<>();
+        for (TccBranch branch : branches) {
+            if (!resourceKeys.add(branch.resourceKey())) {
+                throw new IllegalArgumentException(
+                        "duplicate resourceKey: " + branch.resourceKey());
+            }
+        }
     }
 
     /**
