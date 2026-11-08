@@ -279,7 +279,6 @@ branch 保存：
 
 ```text
 callbackEndpoint
-callbackToken（可选，鉴权）
 actionName
 resourceKey
 applicationData
@@ -322,8 +321,7 @@ endpoint 要求：
 ```text
 稳定服务地址（K8s Service / 内网 LB）
 不要用 Pod IP
-按 participantGroup 配置 allowlist
-callback 带 token/mTLS
+第一版按内网可信，不做鉴权
 ```
 
 branch register 幂等：
@@ -415,7 +413,6 @@ branch 保存：
 
 ```text
 callbackEndpoint
-callbackToken
 actionName
 resourceKey
 ```
@@ -435,8 +432,7 @@ RM callback endpoint 要求：
 稳定服务地址：K8s Service / 内网 LB
 不使用 Pod IP
 内网可达
-token/mTLS 鉴权
-participantGroup allowlist
+第一版不做鉴权
 ```
 
 不选：
@@ -530,7 +526,7 @@ C-003.6
   Scheduler + lease + retry
   Nacos 接入
   多实例测试
-  callback endpoint 注册/鉴权
+  callback endpoint 注册（第一版不做鉴权）
 ```
 
 ## 12. 一句话

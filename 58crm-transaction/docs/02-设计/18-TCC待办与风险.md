@@ -50,6 +50,14 @@ SELECT LAST_INSERT_ID();
 不能把该 SegmentIdGenerator 用于 TCC XID
 ```
 
+## P1：callback 未鉴权
+
+```text
+第一版内网可信
+无 token/mTLS/allowlist
+生产化前必须补
+```
+
 ## P1：多 DB / secondary 未落地
 
 文档 `10-tinyid-optimizations-and-migration.md` 讨论过多 DB，但代码只有单 DataSource。
