@@ -41,6 +41,7 @@ YYYY-MM-DD-主题.md
 | `04-2026-11-08-业务方如何使用.md` | 历史接入说明，最终 API 见 QUICKSTART |
 | `05-TCC吃透计划.md` | 从 lead 入口到面试的学习路线 |
 | `06-简历项目描述-TCC与消息.md` | TCC + 消息组件的简历素材 |
+| `07-2026-11-08-双RM-TCC逐段讲解.md` | 双 RM（quota/coupon）逐段代码讲解 |
 
 ## 3. 学习入口
 
@@ -50,11 +51,11 @@ YYYY-MM-DD-主题.md
 
 真实调用链：
   LeadController
-  -> LeadAssignService
-  -> TccCoordinatorClient
-  -> QuotaFeignClient
-  -> QuotaController
-  -> TccParticipantService
+  -> LeadAssignService（TM）
+  -> QuotaBranchGateway / CouponBranchGateway
+  -> OpenFeign /tcc/try
+  -> QuotaTccAction / CouponTccAction（RM）
+  -> TccParticipantService（barrier + Confirm/Cancel）
 ```
 
 ## 4. 当前结论
