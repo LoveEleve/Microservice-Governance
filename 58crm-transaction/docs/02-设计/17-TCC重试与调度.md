@@ -19,9 +19,8 @@
 ### 持久化恢复
 
 ```text
-t_tcc_global.next_retry_at
 t_tcc_branch.next_retry_at
-retry_count
+t_tcc_branch.retry_count
 ```
 
 Scheduler 扫描到期记录，重新调用 Confirm/Cancel。
@@ -54,12 +53,17 @@ Spring @Scheduled(fixedDelay = 1s)
 多 TC 实例同时扫描也安全：
 
 ```text
-UPDATE t_tcc_branch
-SET owner_token=?, lease_until=?
-WHERE status='CONFIRMING'
-  AND next_retry_at <= NOW()
-  AND lease_until < NOW()
-LIMIT ?
+先按 branch 扫描到期 xid
+  -> 抢 t_tcc_global owner_token/lease_until
+  -> 只有 owner 推进 branch
+```
+
+```sql
+UPDATE t_tcc_global
+SET owner_token = ?, lease_until = DATE_ADD(NOW(3), INTERVAL ? SECOND)
+WHERE xid = ?
+  AND status IN ('TRYING','CONFIRMING','CANCELLING')
+  AND (owner_token IS NULL OR lease_until < NOW(3));
 ```
 
 ## 4. 退避
@@ -74,7 +78,8 @@ LIMIT ?
 
 ```text
 网络超时/连接拒绝/RM 暂时不可用 -> 重试
-参数非法/状态非法/业务明确拒绝 -> DEAD/人工
+参数非法/状态非法/业务明确拒绝 -> DEAD
+DEAD -> global FAILED -> ERROR 日志
 ```
 
 ## 6. 计数
@@ -93,7 +98,7 @@ XXL-JOB
 JobRunr
 ```
 
-只有需要 cron 管理/任务历史/Dashboard 时再引入。
+只有需要 cron 管理/任务历史/Dashboard 时再引入。第一版 DEAD/FAILED 只打 ERROR 日志。
 
 ## 8. 一句话
 

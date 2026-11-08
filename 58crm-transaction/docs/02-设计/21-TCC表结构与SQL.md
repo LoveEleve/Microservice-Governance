@@ -454,14 +454,31 @@ global.retry_count
 global.next_retry_at
 ```
 
-## 15. 待确认
+## 15. 已收口
 
 ```text
-1. applicationData 上限是否固定 64KB
-2. timeout_at 是否只用于 TRYING
-3. retry_count 上限按分支还是按 global
-4. DEAD 是否允许人工改状态
-5. TRYING 分支 Cancel 是否一律先 CANCELLING
+application_data 上限固定 64KB
+  -> service 层校验 UTF-8 字节数
+  -> 超限拒绝 register/callback
+
+timeout_at 只用于 TRYING
+  -> CONFIRMING/CANCELLING 不设整体超时
+  -> 靠 branch retry/DEAD 收敛
+
+retry_count 按 branch
+  -> global 不存 retry_count
+  -> 每个 RM 独立退避
+
+DEAD 不允许人工改状态
+  -> global FAILED
+  -> ERROR 日志
+  -> 第一版不提供管理台/重放
+
+TRYING 分支 Cancel
+  -> branch 先转 CANCELLING
+  -> 调 RM Cancel
+  -> barrier 无记录 -> SUSPENDED
+  -> 迟到 Try 看到 SUSPENDED 必须拒绝
 ```
 
 ## 16. 一句话

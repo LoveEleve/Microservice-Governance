@@ -38,10 +38,8 @@ TCC 协调器是服务器，不是业务应用内的本地组件。
 ## 2. 本项目的模块边界
 
 ```text
-crm-tx-common
-  TccStatus / 错误码 / 公共模型
-
 crm-tx-tcc-api
+  TccStatus / 错误码 / 公共模型
   TccAction / BusinessActionContext / TccRequest / TccResult
   TccTransactionTemplate 接口
   Coordinator 与 Participant 的 DTO
@@ -123,71 +121,49 @@ Coordinator 不跨库写参与方业务表
 Coordinator 对外：
 
 ```text
-POST /tcc/begin
-POST /tcc/branch/register
-POST /tcc/branch/report
-POST /tcc/commit
-POST /tcc/rollback
-GET  /tcc/{xid}
+TccCoordinator.Begin
+TccCoordinator.RegisterBranch
+TccCoordinator.ReportBranch
+TccCoordinator.Commit
+TccCoordinator.Rollback
+TccCoordinator.Query
 ```
 
 Participant 回调：
 
 ```text
-POST /tcc/branch/confirm
-POST /tcc/branch/cancel
+TccParticipantCallback.Confirm
+TccParticipantCallback.Cancel
 ```
+
+全部为 gRPC unary；proto 见 `20-TCC-API与Proto.md`。
 
 endpoint 由 RM 在 branch register 时提供，不是 TC 配置。
 
-Try 由业务方通过 SDK/分支代理调用，不强制由 Coordinator 发起。
+Try 由业务方通过业务 API 调用，不由 Coordinator 发起。
 
 ## 5. 数据库表
 
-### Coordinator
+最终字段、索引和 SQL 见 `21-TCC表结构与SQL.md`。
 
 ```text
 t_tcc_global
-  xid PK
-  request_id UK
-  biz_code
-  biz_id
-  status
-  timeout_at
-  retry_count
-  next_retry_at
-  owner_token
-  lease_until
-  version
-  created_at
-  updated_at
+  xid / request_id / biz_code / biz_id
+  status / timeout_at / branch_seq
+  owner_token / lease_until
+  created_at / updated_at
 
 t_tcc_branch
-  xid + branch_id PK
-  UNIQUE(xid, resource_key)
-  action_name
-  endpoint
-  resource_key
-  status
-  retry_count
-  next_retry_at
-  owner_token
-  lease_until
-  version
+  xid + branch_id
+  resource_key / action_name / callback_endpoint
+  status / retry_count / next_retry_at
   application_data
-  created_at
-  updated_at
-```
+  created_at / updated_at
 
-### Participant
-
-```text
 t_branch_barrier
-  xid + branch_id PK
-  action_name
-  status
-  created_at
-  updated_at
+  xid + branch_id
+  action_name / status
+  created_at / updated_at
 ```
 
 ## 6. Coordinator 状态机
@@ -196,13 +172,13 @@ t_branch_barrier
 全局：
   TRYING -> CONFIRMING -> CONFIRMED
          -> CANCELLING -> CANCELLED
-         -> FAILED（人工）
+         -> FAILED（ERROR 日志，不人工改状态）
 
 分支：
   TRYING -> TRY_SUCCESS -> CONFIRMING -> CONFIRMED
          -> TRY_FAIL
-         -> CANCELLING -> CANCELLED
-         -> SUSPENDED
+         -> CANCELLING -> CANCELLED/SUSPENDED
+         -> DEAD
 ```
 
 状态更新必须：
@@ -219,19 +195,20 @@ Scheduler 扫描：
 
 ```text
 TRYING 超时
-TRY_SUCCESS 长时间未 Confirm
-CONFIRMING / CANCELLING 停滞
+CONFIRMING / CANCELLING 的 branch.next_retry_at 到期
 ```
 
-拿租约：
+拿 global 租约：
 
 ```text
 UPDATE t_tcc_global
 SET owner_token=?, lease_until=?
-WHERE xid=? AND status=? AND lease_until < now()
+WHERE xid=?
+  AND status IN ('TRYING','CONFIRMING','CANCELLING')
+  AND (owner_token IS NULL OR lease_until < NOW(3))
 ```
 
-只有拿到租约的实例可以推进/重试。
+只有拿到租约的实例可以推进/重试；branch 不单独存 owner。
 
 退避：
 

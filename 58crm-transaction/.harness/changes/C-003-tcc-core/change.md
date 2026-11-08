@@ -40,6 +40,8 @@ C-003.6
 ```text
 TC 发现 RM
 TC 配置业务方 serviceName
+callback token/mTLS/allowlist（第一版）
+管理台/告警平台（第一版）
 把 TRY 写进 t_local_message
 Try 阶段发终态事件
 把 TCC 状态放 Redis
@@ -49,12 +51,12 @@ Try 阶段发终态事件
 
 ```text
 AC1 TM -> TC unary
-AC2 RM -> TC bidi control stream
-AC3 TC 不依赖 RM 地址
+AC2 TC -> RM unary callback，endpoint 来自 branch register
+AC3 TC 不发现 RM，不依赖业务方 serviceName
 AC4 Try/Confirm/Cancel 幂等
 AC5 空回滚/悬挂
 AC6 Confirm 写 Outbox
-AC7 多实例 lease
+AC7 多实例 global owner lease
 AC8 崩溃恢复
 ```
 
