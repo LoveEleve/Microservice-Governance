@@ -67,3 +67,31 @@ AC8 崩溃恢复
 集成：MySQL + gRPC + 控制流
 故障：断连、RM 重启、重复 Confirm/Cancel
 ```
+
+
+## C-003.1 完成记录
+
+```text
+crm-tx-tcc-api 模块
+GlobalStatus / BranchStatus / BarrierStatus
+TccResultCode / TccPhaseResult / TccTryResult
+TccException
+BusinessActionContext / TccAction / TccTransactionTemplate
+Coordinator DTO
+Participant callback DTO
+src/main/proto/crm/tx/tcc/v1/tcc.proto
+```
+
+验证：
+
+```text
+mvn -q test
+tests=119 failures=0 errors=0 skipped=1
+```
+
+说明：
+
+```text
+proto 源文件已建立
+gRPC codegen 和 Server 放到 C-003.2
+```

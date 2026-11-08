@@ -14,6 +14,7 @@
 
     <modules>
         <module>crm-tx-common</module>
+        <module>crm-tx-tcc-api</module>
         <module>crm-tx-outbox</module>
         <module>crm-tx-consumer</module>
         <module>crm-tx-spring-boot-starter</module>

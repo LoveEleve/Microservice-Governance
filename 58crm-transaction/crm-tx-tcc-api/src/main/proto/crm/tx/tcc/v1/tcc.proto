@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package crm.tx.tcc.v1;
+
+option java_package = "com.wuba.crm.tx.tcc.api.grpc";
+option java_multiple_files = true;
+
+enum GlobalStatus {
+  GLOBAL_STATUS_UNSPECIFIED = 0;
+  TRYING = 1;
+  CONFIRMING = 2;
+  CONFIRMED = 3;
+  CANCELLING = 4;
+  CANCELLED = 5;
+  FAILED = 6;
+}
+
+enum BranchStatus {
+  BRANCH_STATUS_UNSPECIFIED = 0;
+  BRANCH_TRYING = 1;
+  BRANCH_TRY_SUCCESS = 2;
+  BRANCH_TRY_FAIL = 3;
+  BRANCH_CONFIRMING = 4;
+  BRANCH_CONFIRMED = 5;
+  BRANCH_CANCELLING = 6;
+  BRANCH_CANCELLED = 7;
+  BRANCH_SUSPENDED = 8;
+  BRANCH_DEAD = 9;
+}
+
+enum ResultCode {
+  RESULT_CODE_UNSPECIFIED = 0;
+  OK = 1;
+  TCC_NOT_READY = 2;
+  TCC_INVALID_STATE = 3;
+  TCC_BUSY = 4;
+  TCC_NOT_FOUND = 5;
+  TCC_DUPLICATE = 6;
+  TCC_RETRY_EXHAUSTED = 7;
+  TCC_CALLBACK_FAILED = 8;
+}
+
+message BeginRequest {
+  string request_id = 1;
+  string biz_code = 2;
+  string biz_id = 3;
+  int64 try_timeout_seconds = 4;
+}
+
+message BeginResponse {
+  ResultCode code = 1;
+  string message = 2;
+  int64 xid = 3;
+  GlobalStatus status = 4;
+}
+
+message RegisterBranchRequest {
+  int64 xid = 1;
+  string resource_key = 2;
+  string action_name = 3;
+  string callback_endpoint = 4;
+  string application_data = 5;
+}
+
+message RegisterBranchResponse {
+  ResultCode code = 1;
+  string message = 2;
+  int64 branch_id = 3;
+  BranchStatus status = 4;
+}
+
+message ReportBranchRequest {
+  int64 xid = 1;
+  int64 branch_id = 2;
+  BranchStatus status = 3;
+  string message = 4;
+}
+
+message ReportBranchResponse {
+  ResultCode code = 1;
+  string message = 2;
+}
+
+message CommitRequest {
+  int64 xid = 1;
+}
+
+message CommitResponse {
+  ResultCode code = 1;
+  string message = 2;
+  GlobalStatus status = 3;
+}
+
+message RollbackRequest {
+  int64 xid = 1;
+}
+
+message RollbackResponse {
+  ResultCode code = 1;
+  string message = 2;
+  GlobalStatus status = 3;
+}
+
+message QueryRequest {
+  int64 xid = 1;
+}
+
+message BranchInfo {
+  int64 branch_id = 1;
+  string resource_key = 2;
+  string action_name = 3;
+  BranchStatus status = 4;
+  int32 retry_count = 5;
+}
+
+message QueryResponse {
+  ResultCode code = 1;
+  string message = 2;
+  GlobalStatus status = 3;
+  repeated BranchInfo branches = 4;
+}
+
+service TccCoordinator {
+  rpc Begin(BeginRequest) returns (BeginResponse);
+  rpc RegisterBranch(RegisterBranchRequest) returns (RegisterBranchResponse);
+  rpc ReportBranch(ReportBranchRequest) returns (ReportBranchResponse);
+  rpc Commit(CommitRequest) returns (CommitResponse);
+  rpc Rollback(RollbackRequest) returns (RollbackResponse);
+  rpc Query(QueryRequest) returns (QueryResponse);
+}
+
+enum PhaseResult {
+  PHASE_RESULT_UNSPECIFIED = 0;
+  PHASE_SUCCESS = 1;
+  PHASE_RETRYABLE = 2;
+  PHASE_PERMANENT_FAILURE = 3;
+}
+
+message ConfirmRequest {
+  int64 xid = 1;
+  int64 branch_id = 2;
+  string action_name = 3;
+  string application_data = 4;
+}
+
+message ConfirmResponse {
+  PhaseResult result = 1;
+  string message = 2;
+}
+
+message CancelRequest {
+  int64 xid = 1;
+  int64 branch_id = 2;
+  string action_name = 3;
+  string application_data = 4;
+}
+
+message CancelResponse {
+  PhaseResult result = 1;
+  string message = 2;
+}
+
+service TccParticipantCallback {
+  rpc Confirm(ConfirmRequest) returns (ConfirmResponse);
+  rpc Cancel(CancelRequest) returns (CancelResponse);
+}
