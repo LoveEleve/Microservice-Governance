@@ -1,0 +1,44 @@
+# C-004：TCC 公开 SDK 重构
+
+## 用户故事
+
+作为业务方，我希望只定义 TccAction 和一次 tcc.execute，而不是理解 Coordinator 协议。
+
+## 范围
+
+```text
+TccRequest/TccBranch/TccResult
+DefaultTccTransactionTemplate
+proto 移出 api
+CoordinatorGrpcClient 移入 client
+@TccAction 自动注册
+通用 /tcc/try
+TCC Starter
+examples 分离
+```
+
+## 不做
+
+```text
+Sentinel
+Prometheus/Grafana/告警
+多 TC 故障注入
+并行 Try
+```
+
+## 验收
+
+```text
+业务方不 import proto
+业务方不手写 begin/register/report/commit
+业务方不手写 Try controller
+TM 业务代码 <= 10 行
+Participant 只实现 TccAction
+README quickstart 可复制运行
+```
+
+## 当前状态
+
+```text
+规划完成，未开始代码重构
+```
