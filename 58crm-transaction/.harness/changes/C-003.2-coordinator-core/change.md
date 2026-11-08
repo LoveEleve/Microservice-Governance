@@ -67,7 +67,7 @@ Begin / RegisterBranch / ReportBranch
 
 ```text
 mvn -q test
-tests=149 failures=0 errors=0 skipped=1
+tests=156 failures=0 errors=0 skipped=1
 ```
 
 C-003.2.2 继续：

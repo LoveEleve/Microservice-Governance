@@ -69,6 +69,8 @@
 | 看 C-003 变更范围 | `.harness/changes/C-003-tcc-core/change.md` |
 | 看 C-003.1 Review | `04-验证/05-C003.1-Review.md` |
 | 看 C-003.2.1 Review | `04-验证/06-C003.2.1-Review.md` |
+| 看 TCC gRPC 与启动 | `02-设计/24-TCC-gRPC与启动.md` |
+| 看 C-003.2.2 Review | `04-验证/07-C003.2.2-Review.md` |
 
 ## 目录结构
 

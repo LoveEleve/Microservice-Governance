@@ -95,6 +95,9 @@ C-003.2.2 Coordinator gRPC Server
   proto codegen
   service adapter
   error mapping
+  已完成
+
+C-003.3 Commit / Rollback / RM callback
   下一步
 ```
 

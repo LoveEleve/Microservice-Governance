@@ -55,7 +55,8 @@ C-002：Redis Stream 消费者（已完成）
 C-003.1：TCC API / 状态 / DTO / proto（已完成）
 C-003.1.1：TCC 号段 ID（已完成）
 C-003.2.1：Coordinator 核心 Begin/Register/Report（已完成）
-C-003.2.2：Coordinator gRPC Server（下一步）
+C-003.2.2：Coordinator gRPC Server（已完成）
+C-003.3：Commit / Rollback / RM callback（下一步）
 ```
 
 TCC 协调器、参与方 barrier、业务示例在后续变更中实现。
