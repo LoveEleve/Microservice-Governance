@@ -9,8 +9,12 @@ import com.wuba.crm.tx.tcc.api.TccBeginResult;
 import com.wuba.crm.tx.tcc.api.TccBranchRegisterRequest;
 import com.wuba.crm.tx.tcc.api.TccBranchRegisterResult;
 import com.wuba.crm.tx.tcc.api.TccBranchReportRequest;
+import com.wuba.crm.tx.tcc.api.TccCommitResult;
 import com.wuba.crm.tx.tcc.api.TccException;
+import com.wuba.crm.tx.tcc.api.TccQueryResult;
 import com.wuba.crm.tx.tcc.api.TccResultCode;
+import com.wuba.crm.tx.tcc.api.TccRollbackResult;
+import com.wuba.crm.tx.tcc.coordinator.callback.TccParticipantClient;
 import com.wuba.crm.tx.tcc.coordinator.persistence.MybatisTccBranchRepository;
 import com.wuba.crm.tx.tcc.coordinator.persistence.MybatisTccGlobalRepository;
 import com.wuba.crm.tx.tcc.coordinator.persistence.TccBranchMapper;
@@ -46,6 +50,9 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * 验证 Begin、RegisterBranch、ReportBranch 的持久化和幂等语义。
@@ -56,12 +63,16 @@ class TccCoordinatorServiceTest {
 
     private AnnotationConfigApplicationContext context;
     private TccCoordinatorService service;
+    private TccPhase2Coordinator phase2;
+    private TccParticipantClient participantClient;
     private JdbcTemplate jdbc;
 
     @BeforeEach
     void setUp() {
         context = new AnnotationConfigApplicationContext(TestConfig.class);
         service = context.getBean(TccCoordinatorService.class);
+        phase2 = context.getBean(TccPhase2Coordinator.class);
+        participantClient = context.getBean(TccParticipantClient.class);
         jdbc = context.getBean(JdbcTemplate.class);
         jdbc.execute("DROP TABLE IF EXISTS t_tcc_branch");
         jdbc.execute("DROP TABLE IF EXISTS t_tcc_global");
@@ -330,6 +341,104 @@ class TccCoordinatorServiceTest {
     }
 
     @Test
+    void commit_allBranchesConfirm_commitsGlobal() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long first = service.registerBranch(branch(xid, "lead:1")).branchId();
+        long second = service.registerBranch(branch(xid, "quota:1")).branchId();
+        reportSuccess(xid, first);
+        reportSuccess(xid, second);
+        when(participantClient.confirm(any())).thenReturn(
+                com.wuba.crm.tx.tcc.api.TccCallbackResult.success());
+
+        TccCommitResult result = phase2.commit(xid);
+
+        assertEquals(GlobalStatus.CONFIRMED, result.status());
+        assertEquals("CONFIRMED", jdbc.queryForObject(
+                "SELECT status FROM t_tcc_global WHERE xid = ?", String.class, xid));
+        assertEquals(2, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM t_tcc_branch WHERE xid = ? AND status = 'CONFIRMED'",
+                Integer.class, xid));
+    }
+
+    @Test
+    void commit_retryableBranch_staysConfirming() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
+        reportSuccess(xid, branchId);
+        when(participantClient.confirm(any())).thenReturn(
+                com.wuba.crm.tx.tcc.api.TccCallbackResult.retryable("temporary"));
+
+        TccCommitResult result = phase2.commit(xid);
+
+        assertEquals(GlobalStatus.CONFIRMING, result.status());
+        assertEquals("CONFIRMING", jdbc.queryForObject(
+                "SELECT status FROM t_tcc_branch WHERE xid = ?", String.class, xid));
+    }
+
+    @Test
+    void commit_permanentFailure_marksBranchDeadAndGlobalFailed() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
+        reportSuccess(xid, branchId);
+        when(participantClient.confirm(any())).thenReturn(
+                com.wuba.crm.tx.tcc.api.TccCallbackResult.permanentFailure("business rejected"));
+
+        TccCommitResult result = phase2.commit(xid);
+
+        assertEquals(GlobalStatus.FAILED, result.status());
+        assertEquals("DEAD", jdbc.queryForObject(
+                "SELECT status FROM t_tcc_branch WHERE xid = ?", String.class, xid));
+        assertEquals("FAILED", jdbc.queryForObject(
+                "SELECT status FROM t_tcc_global WHERE xid = ?", String.class, xid));
+    }
+
+    @Test
+    void rollback_allBranchesCancel_cancelsGlobal() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long first = service.registerBranch(branch(xid, "lead:1")).branchId();
+        long second = service.registerBranch(branch(xid, "quota:1")).branchId();
+        reportSuccess(xid, first);
+        reportSuccess(xid, second);
+        when(participantClient.cancel(any())).thenReturn(
+                com.wuba.crm.tx.tcc.api.TccCallbackResult.success());
+
+        TccRollbackResult result = phase2.rollback(xid);
+
+        assertEquals(GlobalStatus.CANCELLED, result.status());
+        assertEquals(2, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM t_tcc_branch WHERE xid = ? AND status = 'CANCELLED'",
+                Integer.class, xid));
+    }
+
+    @Test
+    void query_mapsGlobalAndBranches() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
+        reportSuccess(xid, branchId);
+
+        TccQueryResult result = phase2.query(xid);
+
+        assertEquals(GlobalStatus.TRYING, result.status());
+        assertEquals(1, result.branches().size());
+        assertEquals(branchId, result.branches().get(0).branchId());
+    }
+
+    @Test
+    void commit_whileBranchTrying_isNotReady() {
+        long xid = service.begin(begin("req-1", "lead-1")).xid();
+        service.registerBranch(branch(xid, "lead:1"));
+
+        TccException failure = assertThrows(TccException.class, () -> phase2.commit(xid));
+
+        assertEquals(TccResultCode.TCC_NOT_READY, failure.getCode());
+    }
+
+    private void reportSuccess(long xid, long branchId) {
+        service.reportBranch(new TccBranchReportRequest(
+                xid, branchId, BranchStatus.TRY_SUCCESS, null));
+    }
+
+    @Test
     void reportBranch_unknownBranch_isNotFound() {
         long xid = service.begin(begin("req-1", "lead-1")).xid();
 
@@ -432,6 +541,22 @@ class TccCoordinatorServiceTest {
                 TccXidGenerator xidGenerator,
                 Clock clock) {
             return new TccCoordinatorService(globals, branches, xidGenerator, clock);
+        }
+
+        @Bean
+        TccParticipantClient tccParticipantClient() {
+            return mock(TccParticipantClient.class);
+        }
+
+        @Bean
+        TccPhase2Coordinator tccPhase2Coordinator(
+                TccGlobalRepository globals,
+                TccBranchRepository branches,
+                TccParticipantClient participantClient,
+                PlatformTransactionManager transactionManager,
+                Clock clock) {
+            return new TccPhase2Coordinator(
+                    globals, branches, participantClient, transactionManager, clock);
         }
     }
 }

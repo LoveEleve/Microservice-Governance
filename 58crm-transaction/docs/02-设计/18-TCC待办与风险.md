@@ -98,6 +98,10 @@ C-003.2.2 Coordinator gRPC Server
   已完成
 
 C-003.3 Commit / Rollback / RM callback
+  已完成
+
+C-003.4 Participant Barrier
+  Outbox 同事务
   下一步
 ```
 

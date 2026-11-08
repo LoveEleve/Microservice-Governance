@@ -4,16 +4,27 @@ import com.wuba.crm.tx.tcc.api.BranchStatus;
 import com.wuba.crm.tx.tcc.api.GlobalStatus;
 import com.wuba.crm.tx.tcc.api.TccBeginResult;
 import com.wuba.crm.tx.tcc.api.TccBranchRegisterResult;
+import com.wuba.crm.tx.tcc.api.TccBranchInfo;
+import com.wuba.crm.tx.tcc.api.TccCommitResult;
 import com.wuba.crm.tx.tcc.api.TccException;
 import com.wuba.crm.tx.tcc.api.TccResultCode;
 import com.wuba.crm.tx.tcc.api.grpc.BeginRequest;
 import com.wuba.crm.tx.tcc.api.grpc.BeginResponse;
+import com.wuba.crm.tx.tcc.api.grpc.CommitRequest;
+import com.wuba.crm.tx.tcc.api.grpc.CommitResponse;
+import com.wuba.crm.tx.tcc.api.grpc.QueryRequest;
+import com.wuba.crm.tx.tcc.api.grpc.QueryResponse;
 import com.wuba.crm.tx.tcc.api.grpc.RegisterBranchRequest;
 import com.wuba.crm.tx.tcc.api.grpc.RegisterBranchResponse;
 import com.wuba.crm.tx.tcc.api.grpc.ReportBranchRequest;
 import com.wuba.crm.tx.tcc.api.grpc.ReportBranchResponse;
 import com.wuba.crm.tx.tcc.api.grpc.ResultCode;
+import com.wuba.crm.tx.tcc.api.grpc.RollbackRequest;
+import com.wuba.crm.tx.tcc.api.grpc.RollbackResponse;
+import com.wuba.crm.tx.tcc.api.TccQueryResult;
+import com.wuba.crm.tx.tcc.api.TccRollbackResult;
 import com.wuba.crm.tx.tcc.coordinator.service.TccCoordinatorService;
+import com.wuba.crm.tx.tcc.coordinator.service.TccPhase2Coordinator;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,12 +44,14 @@ import static org.mockito.Mockito.when;
 class TccCoordinatorGrpcServiceTest {
 
     private TccCoordinatorService service;
+    private TccPhase2Coordinator phase2Coordinator;
     private TccCoordinatorGrpcService adapter;
 
     @BeforeEach
     void setUp() {
         service = mock(TccCoordinatorService.class);
-        adapter = new TccCoordinatorGrpcService(service);
+        phase2Coordinator = mock(TccPhase2Coordinator.class);
+        adapter = new TccCoordinatorGrpcService(service, phase2Coordinator);
     }
 
     @Test
@@ -122,6 +135,47 @@ class TccCoordinatorGrpcServiceTest {
                 .build(), observer);
 
         assertEquals(ResultCode.OK, observer.values.get(0).getCode());
+    }
+
+    @Test
+    void commit_mapsSuccessResponse() {
+        when(phase2Coordinator.commit(7L)).thenReturn(
+                new TccCommitResult(GlobalStatus.CONFIRMED));
+        RecordingObserver<CommitResponse> observer = new RecordingObserver<>();
+
+        adapter.commit(CommitRequest.newBuilder().setXid(7L).build(), observer);
+
+        assertEquals(ResultCode.OK, observer.values.get(0).getCode());
+        assertEquals(com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.CONFIRMED,
+                observer.values.get(0).getStatus());
+    }
+
+    @Test
+    void rollback_mapsSuccessResponse() {
+        when(phase2Coordinator.rollback(7L)).thenReturn(
+                new TccRollbackResult(GlobalStatus.CANCELLED));
+        RecordingObserver<RollbackResponse> observer = new RecordingObserver<>();
+
+        adapter.rollback(RollbackRequest.newBuilder().setXid(7L).build(), observer);
+
+        assertEquals(ResultCode.OK, observer.values.get(0).getCode());
+        assertEquals(com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.CANCELLED,
+                observer.values.get(0).getStatus());
+    }
+
+    @Test
+    void query_mapsBranches() {
+        when(phase2Coordinator.query(7L)).thenReturn(new TccQueryResult(
+                GlobalStatus.CONFIRMING,
+                List.of(new TccBranchInfo(3L, "lead:1", "assignLead",
+                        BranchStatus.CONFIRMING, 0))));
+        RecordingObserver<QueryResponse> observer = new RecordingObserver<>();
+
+        adapter.query(QueryRequest.newBuilder().setXid(7L).build(), observer);
+
+        assertEquals(ResultCode.OK, observer.values.get(0).getCode());
+        assertEquals(1, observer.values.get(0).getBranchesCount());
+        assertEquals(3L, observer.values.get(0).getBranches(0).getBranchId());
     }
 
     @Test

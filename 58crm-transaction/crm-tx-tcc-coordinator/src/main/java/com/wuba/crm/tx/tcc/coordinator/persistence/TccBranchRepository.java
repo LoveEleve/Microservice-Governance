@@ -26,6 +26,69 @@ public interface TccBranchRepository {
     TccBranchEntity findByBranchId(long xid, long branchId);
 
     /**
+     * 查询全局事务下所有分支。
+     *
+     * @param xid 全局事务号
+     * @return 分支列表
+     */
+    java.util.List<TccBranchEntity> findByXid(long xid);
+
+    /**
+     * TRY_SUCCESS -> CONFIRMING。
+     *
+     * @param xid       全局事务号
+     * @param nextRetry 下次重试时间
+     * @param updatedAt 更新时间
+     * @return 影响行数
+     */
+    int updateToConfirming(long xid, java.time.LocalDateTime nextRetry,
+                           java.time.LocalDateTime updatedAt);
+
+    /**
+     * 可取消分支 -> CANCELLING。
+     *
+     * @param xid       全局事务号
+     * @param nextRetry 下次重试时间
+     * @param updatedAt 更新时间
+     * @return 影响行数
+     */
+    int updateToCancelling(long xid, java.time.LocalDateTime nextRetry,
+                           java.time.LocalDateTime updatedAt);
+
+    /**
+     * 标记 Confirm 成功。
+     *
+     * @param xid      全局事务号
+     * @param branchId 分支号
+     * @param owner    owner token
+     * @param now      当前时间
+     * @return 影响行数
+     */
+    int markConfirmed(long xid, long branchId, String owner, java.time.LocalDateTime now);
+
+    /**
+     * 标记 Cancel 成功。
+     *
+     * @param xid      全局事务号
+     * @param branchId 分支号
+     * @param owner    owner token
+     * @param now      当前时间
+     * @return 影响行数
+     */
+    int markCancelled(long xid, long branchId, String owner, java.time.LocalDateTime now);
+
+    /**
+     * 标记永久失败。
+     *
+     * @param xid      全局事务号
+     * @param branchId 分支号
+     * @param owner    owner token
+     * @param now      当前时间
+     * @return 影响行数
+     */
+    int markDead(long xid, long branchId, String owner, java.time.LocalDateTime now);
+
+    /**
      * 插入分支。
      *
      * @param entity 分支实体

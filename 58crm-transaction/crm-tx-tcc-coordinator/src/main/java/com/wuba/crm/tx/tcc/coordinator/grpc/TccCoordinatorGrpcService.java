@@ -7,17 +7,29 @@ import com.wuba.crm.tx.tcc.api.TccBeginResult;
 import com.wuba.crm.tx.tcc.api.TccBranchRegisterRequest;
 import com.wuba.crm.tx.tcc.api.TccBranchRegisterResult;
 import com.wuba.crm.tx.tcc.api.TccBranchReportRequest;
+import com.wuba.crm.tx.tcc.api.TccCommitResult;
 import com.wuba.crm.tx.tcc.api.TccException;
+import com.wuba.crm.tx.tcc.api.TccQueryResult;
 import com.wuba.crm.tx.tcc.api.TccResultCode;
+import com.wuba.crm.tx.tcc.api.TccRollbackResult;
+import com.wuba.crm.tx.tcc.api.TccBranchInfo;
 import com.wuba.crm.tx.tcc.api.grpc.BeginRequest;
 import com.wuba.crm.tx.tcc.api.grpc.BeginResponse;
 import com.wuba.crm.tx.tcc.api.grpc.RegisterBranchRequest;
 import com.wuba.crm.tx.tcc.api.grpc.RegisterBranchResponse;
+import com.wuba.crm.tx.tcc.api.grpc.BranchInfo;
+import com.wuba.crm.tx.tcc.api.grpc.CommitRequest;
+import com.wuba.crm.tx.tcc.api.grpc.CommitResponse;
+import com.wuba.crm.tx.tcc.api.grpc.QueryRequest;
+import com.wuba.crm.tx.tcc.api.grpc.QueryResponse;
 import com.wuba.crm.tx.tcc.api.grpc.ReportBranchRequest;
 import com.wuba.crm.tx.tcc.api.grpc.ReportBranchResponse;
 import com.wuba.crm.tx.tcc.api.grpc.ResultCode;
+import com.wuba.crm.tx.tcc.api.grpc.RollbackRequest;
+import com.wuba.crm.tx.tcc.api.grpc.RollbackResponse;
 import com.wuba.crm.tx.tcc.api.grpc.TccCoordinatorGrpc;
 import com.wuba.crm.tx.tcc.coordinator.service.TccCoordinatorService;
+import com.wuba.crm.tx.tcc.coordinator.service.TccPhase2Coordinator;
 import io.grpc.stub.StreamObserver;
 import org.springframework.stereotype.Component;
 
@@ -36,17 +48,22 @@ public class TccCoordinatorGrpcService extends TccCoordinatorGrpc.TccCoordinator
     private static final Logger log = Logger.getLogger(TccCoordinatorGrpcService.class.getName());
 
     private final TccCoordinatorService service;
+    private final TccPhase2Coordinator phase2Coordinator;
 
     /**
      * 创建 adapter。
      *
-     * @param service Coordinator 核心服务
+     * @param service         第一阶段 Coordinator 服务
+     * @param phase2Coordinator 二阶段 Coordinator 服务
      */
-    public TccCoordinatorGrpcService(TccCoordinatorService service) {
-        if (service == null) {
-            throw new IllegalArgumentException("service must not be null");
+    public TccCoordinatorGrpcService(
+            TccCoordinatorService service,
+            TccPhase2Coordinator phase2Coordinator) {
+        if (service == null || phase2Coordinator == null) {
+            throw new IllegalArgumentException("coordinator services must not be null");
         }
         this.service = service;
+        this.phase2Coordinator = phase2Coordinator;
     }
 
     /**
@@ -144,6 +161,93 @@ public class TccCoordinatorGrpcService extends TccCoordinatorGrpc.TccCoordinator
         }
     }
 
+    /**
+     * 提交全局事务。
+     *
+     * @param request  proto 请求
+     * @param observer 响应回调
+     */
+    @Override
+    public void commit(CommitRequest request, StreamObserver<CommitResponse> observer) {
+        try {
+            TccCommitResult result = phase2Coordinator.commit(request.getXid());
+            observer.onNext(CommitResponse.newBuilder()
+                    .setCode(ResultCode.OK)
+                    .setMessage("")
+                    .setStatus(toProto(result.status()))
+                    .build());
+            observer.onCompleted();
+        } catch (TccException failure) {
+            respondCommit(observer, failure.getCode(), failure.getMessage());
+        } catch (IllegalArgumentException invalid) {
+            respondCommit(observer, TccResultCode.TCC_INVALID_ARGUMENT, invalid.getMessage());
+        } catch (RuntimeException unexpected) {
+            log.log(Level.SEVERE, "TCC commit failed", unexpected);
+            respondCommit(observer, TccResultCode.TCC_INTERNAL_ERROR, "internal error");
+        }
+    }
+
+    /**
+     * 回滚全局事务。
+     *
+     * @param request  proto 请求
+     * @param observer 响应回调
+     */
+    @Override
+    public void rollback(RollbackRequest request, StreamObserver<RollbackResponse> observer) {
+        try {
+            TccRollbackResult result = phase2Coordinator.rollback(request.getXid());
+            observer.onNext(RollbackResponse.newBuilder()
+                    .setCode(ResultCode.OK)
+                    .setMessage("")
+                    .setStatus(toProto(result.status()))
+                    .build());
+            observer.onCompleted();
+        } catch (TccException failure) {
+            respondRollback(observer, failure.getCode(), failure.getMessage());
+        } catch (IllegalArgumentException invalid) {
+            respondRollback(observer, TccResultCode.TCC_INVALID_ARGUMENT, invalid.getMessage());
+        } catch (RuntimeException unexpected) {
+            log.log(Level.SEVERE, "TCC rollback failed", unexpected);
+            respondRollback(observer, TccResultCode.TCC_INTERNAL_ERROR, "internal error");
+        }
+    }
+
+    /**
+     * 查询全局事务。
+     *
+     * @param request  proto 请求
+     * @param observer 响应回调
+     */
+    @Override
+    public void query(QueryRequest request, StreamObserver<QueryResponse> observer) {
+        try {
+            TccQueryResult result = phase2Coordinator.query(request.getXid());
+            QueryResponse.Builder response = QueryResponse.newBuilder()
+                    .setCode(ResultCode.OK)
+                    .setMessage("")
+                    .setStatus(toProto(result.status()));
+            for (TccBranchInfo branch : result.branches()) {
+                response.addBranches(BranchInfo.newBuilder()
+                        .setBranchId(branch.branchId())
+                        .setResourceKey(branch.resourceKey())
+                        .setActionName(branch.actionName())
+                        .setStatus(toProto(branch.status()))
+                        .setRetryCount(branch.retryCount())
+                        .build());
+            }
+            observer.onNext(response.build());
+            observer.onCompleted();
+        } catch (TccException failure) {
+            respondQuery(observer, failure.getCode(), failure.getMessage());
+        } catch (IllegalArgumentException invalid) {
+            respondQuery(observer, TccResultCode.TCC_INVALID_ARGUMENT, invalid.getMessage());
+        } catch (RuntimeException unexpected) {
+            log.log(Level.SEVERE, "TCC query failed", unexpected);
+            respondQuery(observer, TccResultCode.TCC_INTERNAL_ERROR, "internal error");
+        }
+    }
+
     private void respondBegin(
             StreamObserver<BeginResponse> observer, TccResultCode code, String message) {
         observer.onNext(BeginResponse.newBuilder()
@@ -165,6 +269,33 @@ public class TccCoordinatorGrpcService extends TccCoordinatorGrpc.TccCoordinator
     private void respondReport(
             StreamObserver<ReportBranchResponse> observer, TccResultCode code, String message) {
         observer.onNext(ReportBranchResponse.newBuilder()
+                .setCode(toProto(code))
+                .setMessage(safe(message))
+                .build());
+        observer.onCompleted();
+    }
+
+    private void respondCommit(
+            StreamObserver<CommitResponse> observer, TccResultCode code, String message) {
+        observer.onNext(CommitResponse.newBuilder()
+                .setCode(toProto(code))
+                .setMessage(safe(message))
+                .build());
+        observer.onCompleted();
+    }
+
+    private void respondRollback(
+            StreamObserver<RollbackResponse> observer, TccResultCode code, String message) {
+        observer.onNext(RollbackResponse.newBuilder()
+                .setCode(toProto(code))
+                .setMessage(safe(message))
+                .build());
+        observer.onCompleted();
+    }
+
+    private void respondQuery(
+            StreamObserver<QueryResponse> observer, TccResultCode code, String message) {
+        observer.onNext(QueryResponse.newBuilder()
                 .setCode(toProto(code))
                 .setMessage(safe(message))
                 .build());

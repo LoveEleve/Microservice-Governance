@@ -172,11 +172,11 @@ TccCoordinatorGrpcServerTest
 ## 9. 未实现
 
 ```text
-Commit / Rollback / Query RPC
-  -> C-003.3
-
 TccParticipantCallback gRPC server
   -> participant SDK
+
+Scheduler 自动重试
+  -> C-003.6
 
 TLS
 鉴权

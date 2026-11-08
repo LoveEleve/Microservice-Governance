@@ -44,6 +44,24 @@ public class MybatisTccGlobalRepository implements TccGlobalRepository {
 
     /** {@inheritDoc} */
     @Override
+    public TccGlobalEntity findByXid(long xid) {
+        return mapper.findByXid(xid);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int claimOwner(long xid, String owner, LocalDateTime leaseUntil, LocalDateTime now) {
+        return mapper.claimOwner(xid, owner, leaseUntil, now);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int renewOwner(long xid, String owner, LocalDateTime leaseUntil, LocalDateTime now) {
+        return mapper.renewOwner(xid, owner, leaseUntil, now);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public int insert(TccGlobalEntity entity) {
         return mapper.insert(entity);
     }
@@ -52,5 +70,19 @@ public class MybatisTccGlobalRepository implements TccGlobalRepository {
     @Override
     public int updateBranchSeq(long xid, long branchSeq, LocalDateTime updatedAt) {
         return mapper.updateBranchSeq(xid, branchSeq, updatedAt);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int transitionWithOwner(long xid, String expected, String target, String owner,
+                                   LocalDateTime leaseUntil, LocalDateTime now) {
+        return mapper.transitionWithOwner(xid, expected, target, owner, leaseUntil, now);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int transitionOwned(long xid, String expected, String target, String owner,
+                               LocalDateTime now) {
+        return mapper.transitionOwned(xid, expected, target, owner, now);
     }
 }

@@ -38,6 +38,42 @@ public class MybatisTccBranchRepository implements TccBranchRepository {
 
     /** {@inheritDoc} */
     @Override
+    public java.util.List<TccBranchEntity> findByXid(long xid) {
+        return mapper.findByXid(xid);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int updateToConfirming(long xid, LocalDateTime nextRetry, LocalDateTime updatedAt) {
+        return mapper.updateToConfirming(xid, nextRetry, updatedAt);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int updateToCancelling(long xid, LocalDateTime nextRetry, LocalDateTime updatedAt) {
+        return mapper.updateToCancelling(xid, nextRetry, updatedAt);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int markConfirmed(long xid, long branchId, String owner, LocalDateTime now) {
+        return mapper.markConfirmed(xid, branchId, owner, now);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int markCancelled(long xid, long branchId, String owner, LocalDateTime now) {
+        return mapper.markCancelled(xid, branchId, owner, now);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int markDead(long xid, long branchId, String owner, LocalDateTime now) {
+        return mapper.markDead(xid, branchId, owner, now);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public int insert(TccBranchEntity entity) {
         return mapper.insert(entity);
     }

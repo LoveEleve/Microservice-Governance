@@ -12,8 +12,9 @@ class TccCoordinatorGrpcServerTest {
 
     @Test
     void serverStartsAndStopsOnEphemeralPort() throws Exception {
-        TccCoordinatorGrpcService service =
-                new TccCoordinatorGrpcService(mock(TccCoordinatorService.class));
+        TccCoordinatorGrpcService service = new TccCoordinatorGrpcService(
+                mock(TccCoordinatorService.class),
+                mock(com.wuba.crm.tx.tcc.coordinator.service.TccPhase2Coordinator.class));
         TccCoordinatorGrpcServer server = new TccCoordinatorGrpcServer(service, 0);
 
         server.afterPropertiesSet();
