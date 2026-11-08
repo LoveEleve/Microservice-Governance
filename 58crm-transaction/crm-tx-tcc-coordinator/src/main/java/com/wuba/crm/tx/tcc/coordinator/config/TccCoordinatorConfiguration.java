@@ -4,6 +4,7 @@ import com.wuba.crm.tx.tcc.id.IdSegmentMapper;
 import com.wuba.crm.tx.tcc.id.MybatisSegmentAllocator;
 import com.wuba.crm.tx.tcc.id.SegmentIdGenerator;
 import com.wuba.crm.tx.tcc.id.TccXidGenerator;
+import org.apache.ibatis.annotations.Mapper;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,10 +21,13 @@ import java.time.Duration;
  */
 @Configuration
 @EnableTransactionManagement(proxyTargetClass = true)
-@MapperScan({
-        "com.wuba.crm.tx.tcc.coordinator.persistence",
-        "com.wuba.crm.tx.tcc.id"
-})
+@MapperScan(
+        basePackages = {
+                "com.wuba.crm.tx.tcc.coordinator.persistence",
+                "com.wuba.crm.tx.tcc.id"
+        },
+        annotationClass = Mapper.class
+)
 public class TccCoordinatorConfiguration {
 
     /**

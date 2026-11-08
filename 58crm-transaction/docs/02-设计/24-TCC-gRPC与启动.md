@@ -122,7 +122,11 @@ com.wuba.crm.tx.tcc.coordinator.TccCoordinatorApplication
 配置：
 
 ```text
-@MapperScan 扫描 coordinator.persistence + tcc.id
+@MapperScan(
+  basePackages = coordinator.persistence + tcc.id,
+  annotationClass = Mapper.class
+)
+只扫描显式 @Mapper，避免把 Repository 接口注册成 Mapper
 Clock UTC
 MybatisSegmentAllocator
 SegmentIdGenerator
