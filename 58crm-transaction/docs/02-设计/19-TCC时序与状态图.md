@@ -102,6 +102,10 @@ Z. callback 注册 tc-0、commit tc-3
 AA. callback endpoint 不可达
 AB. Duplicate Try
 AC. Confirm/Cancel 并发
+AD. commit 时仍有 branch TRYING
+AE. commit 时 branch TRY_FAIL
+AF. owner lease 生命周期
+AG. global FAILED 人工处理
 ```
 
 ## A. 正常成功
@@ -366,134 +370,273 @@ Outbox eventKey 幂等
 ## M. Confirm 业务永久失败
 
 ```text
-TC -> RM confirm
-RM 返回明确业务失败
-TC retry 达上限
-branch DEAD
-global FAILED
-告警人工
+TC              RM2
+ |-- confirm --->|
+ |               |-- barrier TRIED
+ |               |-- 业务返回 PERMANENT_FAILURE
+ |<-- permanent -|
+ |-- branch DEAD
+ |-- global FAILED
+ |-- 告警人工
+```
+
+分析：
+
+```text
+只有明确的永久失败才 DEAD
+网络超时/临时失败仍走重试
+DEAD 后停止自动 Confirm
 ```
 
 ## N. TC 崩溃在 CONFIRMING
 
 ```text
-old TC 崩溃
-lease 到期
-new TC 抢 owner
-扫描 CONFIRMING branch
-重试 Confirm
+tc-0           MySQL              tc-1
+ |-- owner lease
+ |-- confirm RM1 -> CONFIRMED
+ |-- confirm RM2 -> 处理中
+ |  crash
+ |                               |-- lease 到期
+ |                               |-- 抢 owner
+ |                               |-- 读 global=CONFIRMING
+ |                               |-- 读 branch2=CONFIRMING
+ |                               |-- 重试 Confirm
+ |                               |-- global CONFIRMED
+```
+
+分析：
+
+```text
+新 TC 不重做 RM1
+只处理未终态 branch
+owner lease 防止 tc-0/tc-1 同时推进
 ```
 
 ## O. RM 崩溃在 Confirm 后
 
 ```text
-RM barrier CONFIRMED
-响应丢失
-TC 重试
-RM 重启
-barrier CONFIRMED -> 幂等
+TC              RM2
+ |-- confirm --->|
+ |               |-- BEGIN
+ |               |-- barrier TRIED -> CONFIRMED
+ |               |-- 业务终态 + Outbox
+ |               |-- COMMIT
+ |               |  crash before response
+ |<-- timeout ---|
+ |-- retry
+ |               |-- RM 重启
+ |<-- CONFIRMED -|
+ |-- global CONFIRMED
+```
+
+分析：
+
+```text
+Confirm 已提交，响应丢失
+重试通过 barrier 幂等
+Outbox eventKey 防重复
 ```
 
 ## P. Confirm 重复
 
 ```text
-TC 重发 Confirm
-RM barrier CONFIRMED
-直接返回成功
-不执行业务
+TC              RM2
+ |-- confirm --->|
+ |               |-- barrier CONFIRMED
+ |               |-- 不执行业务
+ |<-- success ---|
+```
+
+分析：
+
+```text
+Confirm 重发直接成功
+不能再次更新业务/Outbox
 ```
 
 ## Q. Cancel 全部成功
 
 ```text
-TC -> RM1 cancel -> CANCELLED
-TC -> RM2 cancel -> CANCELLED
-global CANCELLED
+TC              RM1             RM2
+ |-- cancel ---->|              |
+ |               |-- barrier CANCELLED
+ |<-- ok ---------|              |
+ |-- cancel ------------------->|
+ |               |              |-- barrier CANCELLED
+ |<-- ok -----------------------|
+ |-- global CANCELLED
 ```
 
 ## R. Cancel 部分失败
 
 ```text
-RM1 CANCELLED
-RM2 失败 -> CANCELLING -> retry
-RM2 CANCELLED
-global CANCELLED
+TC              RM1             RM2
+ |-- cancel ---->|              |
+ |<-- ok ---------|              |
+ |-- cancel ------------------->|
+ |<-- fail ---------------------|
+ |-- 保持 CANCELLING
+ |-- retry RM2
+ |<-- ok -----------------------|
+ |-- global CANCELLED
+```
+
+分析：
+
+```text
+RM1 不重复释放
+RM2 继续重试
+超限 -> branch DEAD/global FAILED
 ```
 
 ## S. Cancel 响应丢失
 
 ```text
-RM barrier CANCELLED
-响应丢失
-TC 重试
-RM 幂等成功
+TC              RM2
+ |-- cancel ---->|
+ |               |-- barrier CANCELLED
+ |               |  response lost
+ |<-- timeout ---|
+ |-- retry
+ |<-- success ---|
 ```
 
 ## T. Cancel 无 barrier
 
 ```text
-TC -> RM cancel
-RM barrier 无记录
-INSERT SUSPENDED
-返回成功
+TC              RM2
+ |-- cancel ---->|
+ |               |-- BEGIN
+ |               |-- 无 barrier
+ |               |-- INSERT SUSPENDED
+ |               |-- COMMIT
+ |<-- success ---|
+```
+
+分析：
+
+```text
+空回滚
+不释放不存在的资源
+持久 SUSPENDED 防迟到 Try
 ```
 
 ## U. Try 后到
 
 ```text
-TC -> RM cancel -> SUSPENDED
-late Try -> RM
-RM barrier SUSPENDED
-拒绝 Try
+TC              RM2
+ |-- cancel ---->|
+ |               |-- SUSPENDED
+ |<-- success ---|
+ |               |
+ |-- late try --->|
+ |               |-- barrier SUSPENDED
+ |               |-- 拒绝 Try
+ |<-- rejected --|
+```
+
+分析：
+
+```text
+悬挂防护
+迟到的 Try 不能重新预占
 ```
 
 ## V. TC 崩溃在 CANCELLING
 
 ```text
-old TC 崩溃
-lease 到期
-new TC 抢 owner
-继续 Cancel
+tc-0           MySQL              tc-1
+ |-- owner lease
+ |-- cancel RM1 -> CANCELLED
+ |-- cancel RM2 -> 处理中
+ |  crash
+ |                               |-- lease 到期
+ |                               |-- 抢 owner
+ |                               |-- 读 global=CANCELLING
+ |                               |-- 重试 Cancel RM2
+ |                               |-- global CANCELLED
 ```
 
 ## W. RM 崩溃在 Try 前
 
 ```text
-barrier 无记录
-TC timeout -> Cancel
-Cancel -> SUSPENDED
+TM              RM2             TC
+ |-- try ---------------------->|
+ |  RM2 未执行
+ |  crash
+ |-- report timeout ----------->|
+ |-- rollback ----------------->|
+ |               |<-- cancel ----|
+ |               |-- 无 barrier
+ |               |-- SUSPENDED
+ |<-------------------------------- CANCELLED
 ```
 
 ## X. RM 崩溃在 Try 后
 
 ```text
-barrier TRIED
-TC timeout -> Cancel
-Cancel -> CANCELLED
+TM              RM2             TC
+ |-- try ---------------------->|
+ |               |-- barrier TRIED
+ |               |-- 预占
+ |               |  crash before report
+ |-- report timeout ----------->|
+ |-- rollback ----------------->|
+ |               |<-- cancel ----|
+ |               |-- barrier TRIED
+ |               |-- CANCELLED
+ |<-------------------------------- CANCELLED
 ```
 
 ## Y. Try/Cancel 并发
 
+### Y1 Try 先拿到 barrier
+
 ```text
-Try 先插入 TRIED -> Cancel 释放 -> CANCELLED
-Cancel 先插入 SUSPENDED -> Try 拒绝
+TC              RM2
+ |-- cancel ---->|
+ |-- try ------->|
+ |               |-- INSERT TRIED 成功
+ |               |-- 预占
+ |               |-- Cancel 等待行锁
+ |               |-- TRIED -> CANCELLED
+ |               |-- 释放
+ |<-- cancelled -|
+```
+
+### Y2 Cancel 先拿到 barrier
+
+```text
+TC              RM2
+ |-- try -------->|
+ |-- cancel ----->|
+ |               |-- INSERT SUSPENDED 成功
+ |               |-- Try 插入冲突
+ |               |-- 看到 SUSPENDED
+ |               |-- 拒绝 Try
+ |<-- rejected ---|
+ |<-- success ----|
 ```
 
 ## Z. callback 注册 tc-0、commit tc-3
 
 ```text
 TM -> tc-0 registerBranch
-       INSERT callbackEndpoint
+       INSERT t_tcc_branch(callbackEndpoint)
+       return branchId
+
 TM -> tc-3 commit
-       SELECT callbackEndpoint
+       SELECT branch FROM MySQL
+       read callbackEndpoint
        tc-3 -> RM confirm
+       RM -> tc-3 result
 ```
 
 分析：
 
 ```text
 branch 业务不在 TC 执行
-tc-3 只读 DB 和回调 RM
+tc-3 只读 DB + 回调 RM
 不需要 sticky
 ```
 
@@ -501,38 +644,115 @@ tc-3 只读 DB 和回调 RM
 
 ```text
 tc-3 -> RM callback
-连接失败/超时
-branch 保持 CONFIRMING
+       connect timeout
+branch CONFIRMING
 retry_count + 1
-next_retry_at
-超限 -> DEAD / global FAILED
+next_retry_at = now + backoff
+
+retry...
+达到上限:
+  branch DEAD
+  global FAILED
+  告警人工
 ```
 
 ## AB. Duplicate Try
 
 ```text
-RM barrier TRIED
-重复 Try
-返回成功
-不重复预占
+TM              RM2
+ |-- try ------->|
+ |               |-- barrier TRIED
+ |               |-- 预占
+ |<-- ok ---------|
+ |-- try(retry) ->|
+ |               |-- barrier TRIED
+ |               |-- 不重复预占
+ |<-- ok ---------|
 ```
 
 ## AC. Confirm/Cancel 并发
 
+### AC1 Confirm 先拿行锁
+
 ```text
-Confirm 先拿到 barrier 行锁
-  -> CONFIRMED
-Cancel 后到
-  -> 看到 CONFIRMED，拒绝
+TC              RM2
+ |-- confirm --->|
+ |               |-- SELECT ... FOR UPDATE
+ |               |-- TRIED -> CONFIRMED
+ |<-- success ----|
+ |-- cancel ----->|
+ |               |-- 看到 CONFIRMED
+ |               |-- 拒绝 Cancel
+ |<-- rejected ---|
 ```
 
-反向：
+### AC2 Cancel 先拿行锁
 
 ```text
-Cancel 先拿到行锁
-  -> CANCELLED
-Confirm 后到
-  -> 看到 CANCELLED，拒绝
+TC              RM2
+ |-- cancel ---->|
+ |               |-- SELECT ... FOR UPDATE
+ |               |-- TRIED -> CANCELLED
+ |<-- success ----|
+ |-- confirm ---->|
+ |               |-- 看到 CANCELLED
+ |               |-- 拒绝 Confirm
+ |<-- rejected ---|
+```
+
+## AD. commit 时仍有 branch TRYING
+
+```text
+TM              TC
+ |-- commit ---->|
+ |               |-- 发现 branch TRYING
+ |<-- TCC_NOT_READY
+ |-- 等待 report / rollback
+```
+
+分析：
+
+```text
+不能进入 CONFIRMING
+TM 不能跳过未完成的 Try
+```
+
+## AE. commit 时 branch TRY_FAIL
+
+```text
+TM              TC
+ |-- commit ---->|
+ |               |-- 发现 TRY_FAIL
+ |               |-- global CANCELLING
+ |               |-- Cancel 其他分支
+ |<-------------------------------- CANCELLED
+```
+
+## AF. owner lease 生命周期
+
+```text
+tc-0            MySQL
+ |-- UPDATE owner_token/lease_until
+ |-- 抢到 owner
+ |-- 处理 branch
+ |-- 续约 lease
+ |-- 完成释放
+ |  crash
+ |               |-- lease 到期
+tc-1
+ |-- UPDATE owner_token/lease_until
+ |-- 抢到 owner
+ |-- 从 DB 恢复
+```
+
+## AG. global FAILED 人工处理
+
+```text
+branch DEAD
+  -> global FAILED
+  -> 停止自动推进
+  -> 告警
+  -> 人工根据 branch/barrier 处理
 ```
 
 ## 状态图
@@ -623,118 +843,14 @@ CONFIRMED --Cancel--> reject
 SUSPENDED/CANCELLED --Try--> reject
 ```
 
-## Review 修正记录
-
-### P0：状态图原先漏了迁移
+## 结论
 
 ```text
-CONFIRMING -> FAILED
-CANCELLING -> FAILED
+当前完整时序图：A~AG 共 33 个 case
+每个 case 独立图 + 分析
+branch 不在 TC 执行
+跨 TC 只影响状态读写和 callback 路由
+状态图已补 CONFIRMING/CANCELLING -> FAILED
 CANCELLING -> DEAD
 TRYING -> CANCELLING
-```
-
-已补。
-
-### P0：新增 Commit 前置条件
-
-#### AD. commit 时仍有 branch TRYING
-
-```text
-TM              TC
- |-- commit ---->|
- |<-- TCC_NOT_READY
- |-- 等待 report / rollback
-```
-
-分析：
-
-```text
-不能把未完成 Try 的事务推进到 CONFIRMING
-```
-
-#### AE. commit 时 branch TRY_FAIL
-
-```text
-TM              TC
- |-- commit ---->|
- |               |-- 发现 TRY_FAIL
- |               |-- CANCELLING
- |<-------------------------------- CANCELLED
-```
-
-分析：
-
-```text
-commit 请求不能覆盖 Try_FAIL
-TC 必须走 Cancel
-```
-
-### P0：新增 owner lease 生命周期
-
-```text
-tc-0 scheduler
-  -> UPDATE global owner_token/lease_until
-  -> 成功才处理
-  -> 处理中续约
-  -> 完成释放 owner
-
-tc-0 crash
-  -> lease 到期
-  -> tc-3 抢 owner
-  -> 从 DB 恢复
-```
-
-### P0：新增 callback 跨 TC 图
-
-```text
-TM -> tc-0 registerBranch
-       INSERT t_tcc_branch(callbackEndpoint)
-TM -> tc-3 commit
-       SELECT callbackEndpoint
-tc-3 -> RM confirm/cancel
-RM -> tc-3 result
-```
-
-分析：
-
-```text
-branch 业务不在 TC 执行
-tc-3 只读 DB + 回调 RM
-不需要 sticky
-```
-
-### P1：仍待改成独立时序图的 case
-
-```text
-N / O / P / Q / R / S / T / U / V / W / X / Y / AA / AB / AC
-```
-
-当前这些只有文字描述，不是完整时序图。下一轮必须补成：
-
-```text
-参与者列
-请求/响应箭头
-本地事务边界
-状态变化
-重试/告警
-```
-
-## 结论
-
-```text
-当前不是 28 张完整时序图
-完整图约 12 张，其余是文字 case
-状态图迁移已修正
-commit 前置条件、lease、跨 TC callback 已补
-剩余 case 必须补图后才能冻结
-```
-
-## 结论
-
-```text
-28 个独立 case
-每个 case 独立时序 + 分析
-branch 不在 TC 执行
-跨 TC 只影响状态读写和 endpoint 路由
 ```
