@@ -106,6 +106,9 @@ C-003.4 Participant Barrier
 C-003.5 Confirm 事务契约与 Outbox 示例
   业务动作在 Confirm 事务内写 Outbox
   框架不生成事件
+  已完成
+
+C-003.6 Scheduler / 重试 / Nacos
   下一步
 ```
 

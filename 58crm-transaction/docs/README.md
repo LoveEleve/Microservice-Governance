@@ -75,6 +75,8 @@
 | 看 C-003.3 Review | `04-验证/08-C003.3-Review.md` |
 | 看 TCC Participant Barrier | `02-设计/26-TCC-Participant-Barrier.md` |
 | 看 C-003.4 Review | `04-验证/09-C003.4-Review.md` |
+| 看 Confirm-Outbox 边界 | `02-设计/27-TCC-Confirm-Outbox边界.md` |
+| 看 C-003.5 Review | `04-验证/10-C003.5-Review.md` |
 
 ## 目录结构
 
