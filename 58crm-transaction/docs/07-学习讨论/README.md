@@ -42,6 +42,7 @@ YYYY-MM-DD-主题.md
 | `05-TCC吃透计划.md` | 从 lead 入口到面试的学习路线 |
 | `06-简历项目描述-TCC与消息.md` | TCC + 消息组件的简历素材 |
 | `07-2026-11-08-双RM-TCC逐段讲解.md` | 双 RM（quota/coupon）逐段代码讲解 |
+| `08-2026-11-08-切面begin与上下文讨论.md` | 切面 begin、嵌套事务、TccContext、begin 重试的讨论记录 |
 
 ## 3. 学习入口
 
