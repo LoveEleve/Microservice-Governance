@@ -14,7 +14,6 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.core.annotation.Order;
 
 import java.time.Duration;
-import java.util.List;
 
 /**
  * @TccTransactional AOP。
@@ -60,13 +59,14 @@ public class TccTransactionalAspect {
             Object result = joinPoint.proceed();
             GlobalStatus status = transaction.commit();
             if (TccResult.class.isAssignableFrom(signature.getReturnType())) {
-                return new TccResult(transaction.xid(), status, List.of(), "");
+                return new TccResult(transaction.xid(), status, transaction.branches(), "");
             }
             return result;
         } catch (TccBranchFailedException branchFailure) {
             GlobalStatus status = transaction.rollback();
             if (TccResult.class.isAssignableFrom(signature.getReturnType())) {
-                return new TccResult(transaction.xid(), status, List.of(), branchFailure.getMessage());
+                return new TccResult(
+                        transaction.xid(), status, transaction.branches(), branchFailure.getMessage());
             }
             throw branchFailure;
         } catch (Throwable failure) {

@@ -31,9 +31,9 @@ public class LeadAssignService {
      * @return TCC 结果
      */
     @TccTransactional(
-            requestId = "#command.requestId",
+            requestId = "#{#command.requestId}",
             bizCode = "lead",
-            bizId = "#command.leadId",
+            bizId = "#{#command.leadId}",
             tryTimeoutSeconds = 30)
     public TccResult assign(AssignLeadCommand command) {
         quotaGateway.reserve(command.userId());

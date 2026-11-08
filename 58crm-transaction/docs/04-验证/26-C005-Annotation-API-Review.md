@@ -10,9 +10,9 @@ TM：
 
 ```java
 @TccTransactional(
-        requestId = "#command.requestId",
+        requestId = "#{#command.requestId}",
         bizCode = "lead",
-        bizId = "#command.leadId",
+        bizId = "#{#command.leadId}",
         tryTimeoutSeconds = 30)
 public TccResult assign(AssignLeadCommand command) {
     quotaGateway.reserve(command.userId());
@@ -25,9 +25,9 @@ public TccResult assign(AssignLeadCommand command) {
 ```java
 @TccBranch(
         actionName = "reserveQuota",
-        resourceKey = "'quota:' + #userId",
+        resourceKey = "quota:#{#userId}",
         callbackEndpoint = "${quota.callback-endpoint}",
-        applicationData = "#userId")
+        applicationData = "#{#userId}")
 public TccTryResult reserve(long userId) {
     TccContext context = TccContext.current();
     // 用 context.xid()/branchId() 调下游 Try
@@ -111,8 +111,8 @@ api 只保留业务契约/状态/注解/TccContext/TccValidation
 ## 8. 仍未完成
 
 ```text
-@TccBranch 暂不支持多分支/循环分支
-SpEL 字面量含 # 的转义规则未文档化
+@TccBranch 多分支/循环分支已支持（C-006）
+SpEL 字面量 # 已有 #{...}/引号规则（C-006）
 多 TC / Confirm/Cancel 故障注入未做
 ```
 

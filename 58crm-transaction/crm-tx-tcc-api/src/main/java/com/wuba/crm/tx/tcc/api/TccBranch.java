@@ -10,6 +10,9 @@ import java.lang.annotation.Target;
  *
  * <p>方法必须在独立 Spring Bean 上调用，避免自调用绕过 AOP。
  * 方法返回值必须是 {@link TccTryResult}，内部通常通过 Feign 调下游 Try。</p>
+ *
+ * <p>属性推荐使用 {@code #{...}} 模板，例如 {@code "quota:#{#userId}"}；
+ * 模板外的 # 原样保留。</p>
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

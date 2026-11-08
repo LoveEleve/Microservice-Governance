@@ -9,9 +9,9 @@
 
 ```java
 @TccTransactional(
-        requestId = "#command.requestId",
+        requestId = "#{#command.requestId}",
         bizCode = "lead",
-        bizId = "#command.leadId",
+        bizId = "#{#command.leadId}",
         tryTimeoutSeconds = 30
 )
 public void assign(AssignLeadCommand command) {
@@ -49,9 +49,9 @@ public class QuotaBranchGateway {
 
     @TccBranch(
             actionName = "reserveQuota",
-            resourceKey = "'quota:' + #userId",
+            resourceKey = "quota:#{#userId}",
             callbackEndpoint = "${quota.callback-endpoint}",
-            applicationData = "#userId")
+            applicationData = "#{#userId}")
     public TccTryResult reserve(long userId) {
         TccContext context = TccContext.current();
         TryQuotaResponse response = quotaClient.tryQuota(new TryQuotaRequest(
@@ -63,6 +63,19 @@ public class QuotaBranchGateway {
 
 不直接标 Feign 方法：Feign 是下游契约，不应该反向依赖 TCC 注解；
 本地网关方法还能显式控制 Try 返回值、applicationData 和异常。
+
+### 1.4 表达式规则
+
+```text
+#{...}        表达式边界，内部 #var 取参数；表达式外 # 原样保留
+"#{#userId}"  取 userId
+"quota:#{#userId}"  拼出 quota:1
+"order:#123"  没有 #{}，按字面量处理
+"#userId"     旧写法，整段 SpEL 兼容
+"'quota:' + #userId"  旧写法，整段 SpEL 兼容
+```
+
+循环分支时 resourceKey 必须每次唯一；同一事务内重复 key 直接失败。
 
 ## 2. 注解如何工作
 
@@ -276,8 +289,8 @@ lead 业务方法只出现 @TccTransactional
 
 ```text
 @TccBranch 必须走 Spring 代理，同类内部调用会绕过 AOP
-SpEL 取 requestId/resourceKey 需要限制表达式范围
-字面量里含 # 可能与 SpEL 冲突，文档需明确
+SpEL 表达式内部暂不支持嵌套 }
+旧写法整段 SpEL 仍保留，新代码优先 #{...}
 注解失败时必须触发外层 rollback
 ```
 
@@ -293,4 +306,5 @@ C-005.2 注解内核：已完成
 C-005.3 AOP：已完成
 C-005.4 lead/quickstart/E2E：已完成
 C-005.5 低层 DTO / BOM：已完成
+C-006 多分支/SpEL 规则：已完成
 ```

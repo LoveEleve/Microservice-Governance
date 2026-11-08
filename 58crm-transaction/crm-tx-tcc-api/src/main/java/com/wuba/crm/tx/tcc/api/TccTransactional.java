@@ -8,7 +8,7 @@ import java.lang.annotation.Target;
 /**
  * 标记一个业务方法为 TCC 全局事务入口。
  *
- * <p>属性支持 SpEL，例如 requestId = "#command.requestId"。</p>
+ * <p>属性支持 #{...} 表达式，例如 requestId = "#{#command.requestId}"。</p>
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

@@ -30,9 +30,9 @@ public class QuotaBranchGateway {
      */
     @TccBranch(
             actionName = "reserveQuota",
-            resourceKey = "'quota:' + #userId",
+            resourceKey = "quota:#{#userId}",
             callbackEndpoint = "${quota.callback-endpoint}",
-            applicationData = "#userId")
+            applicationData = "#{#userId}")
     public TccTryResult reserve(long userId) {
         TccContext context = TccContext.current();
         TryQuotaResponse response = quotaClient.tryQuota(new TryQuotaRequest(

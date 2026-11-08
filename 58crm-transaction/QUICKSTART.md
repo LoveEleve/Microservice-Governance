@@ -67,9 +67,9 @@ public class LeadAssignService {
     }
 
     @TccTransactional(
-            requestId = "#command.requestId",
+            requestId = "#{#command.requestId}",
             bizCode = "lead",
-            bizId = "#command.leadId",
+            bizId = "#{#command.leadId}",
             tryTimeoutSeconds = 30)
     public TccResult assign(AssignLeadCommand command) {
         quotaGateway.reserve(command.userId());
@@ -92,9 +92,9 @@ public class QuotaBranchGateway {
 
     @TccBranch(
             actionName = "reserveQuota",
-            resourceKey = "'quota:' + #userId",
+            resourceKey = "quota:#{#userId}",
             callbackEndpoint = "${quota.callback-endpoint}",
-            applicationData = "#userId")
+            applicationData = "#{#userId}")
     public TccTryResult reserve(long userId) {
         TccContext context = TccContext.current();
         TryQuotaResponse response = quotaClient.tryQuota(new TryQuotaRequest(
@@ -119,6 +119,15 @@ rollback
 ```
 
 `requestId` 必须是稳定业务幂等键（如 `commandId`）；示例 controller 每次点击生成 UUID，只是为了区分多次分配尝试。
+
+注解值规则：
+
+```text
+#{...} 是表达式边界，内部用 #变量，例如 "#{#userId}"
+表达式外的 # 原样保留，例如 "order:#123" 不会被解析
+旧写法 "#userId"、"'quota:' + #userId" 仍兼容
+循环分支必须保证 resourceKey 唯一；重复 key 会直接失败并回滚
+```
 
 ## 4. RM 实现 TCC 动作
 
@@ -284,6 +293,8 @@ Try 成功不 report -> TC 超时回滚
 Confirm 里不写 Outbox -> 下游收不到终态
 框架不会自动生成业务事件
 @TccBranch 写在同类内部调用 -> AOP 不生效
+resourceKey 重复 -> 同一事务内分支键冲突，直接回滚
+字面量 # 写进表达式且不以引号/模板包住 -> SpEL 解析错误
 ```
 
 ## 9. 深入学习
