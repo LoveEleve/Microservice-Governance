@@ -107,6 +107,11 @@ AE. commit 时 branch TRY_FAIL
 AF. owner lease 生命周期
 AG. commit/rollback 落到非 owner TC
 AH. global FAILED 人工处理
+AI. 重复 commit
+AJ. 重复 rollback
+AK. owner lease 续约失败
+AL. callback 与 owner 切换并发
+AM. DEAD 人工 Confirm/Cancel
 ```
 
 ## A. 正常成功
@@ -782,6 +787,118 @@ branch DEAD
   -> 人工根据 branch/barrier 处理
 ```
 
+## AI. 重复 commit
+
+```text
+TM              TC
+ |-- commit ---->|
+ |               |-- owner lease
+ |               |-- CONFIRMING
+ |               |-- all branch CONFIRMED
+ |<-- CONFIRMED --|
+ |-- commit(retry) ->|
+ |               |-- 已 CONFIRMED
+ |<-- CONFIRMED --|
+```
+
+分析：
+
+```text
+重复 commit 只返回已有终态
+不重复调用 Confirm
+不重复推进 branch
+```
+
+## AJ. 重复 rollback
+
+```text
+TM              TC
+ |-- rollback --->|
+ |               |-- CANCELLING
+ |               |-- all branch CANCELLED/SUSPENDED
+ |<-- CANCELLED --|
+ |-- rollback(retry) ->|
+ |               |-- 已 CANCELLED
+ |<-- CANCELLED --|
+```
+
+分析：
+
+```text
+重复 rollback 只返回已有终态
+不重复调用 Cancel
+```
+
+## AK. owner lease 续约失败
+
+```text
+tc-0           MySQL              tc-1
+ |-- owner
+ |-- confirm RM2 处理中
+ |-- renew lease FAILED
+ |-- 停止推进
+ |-- 当前 RPC 可能还在路上
+ |                               |-- lease 到期
+ |                               |-- 抢 owner
+ |                               |-- 重试 Confirm
+ |                               |-- branch CONFIRMED
+ |-- RM 响应回来
+ |-- 更新 branch 被 owner fencing 拒绝
+```
+
+分析：
+
+```text
+续约失败后旧 owner 必须立即停止
+旧 RPC 可能仍到达 RM
+RM barrier 幂等
+旧 owner 的 DB 更新必须失败
+```
+
+## AL. callback 与 owner 切换并发
+
+```text
+tc-0 -> RM confirm
+tc-0 lease 到期
+tc-1 抢 owner -> RM confirm
+RM:
+  barrier 行锁
+  第一个请求 TRIED -> CONFIRMED
+  第二个看到 CONFIRMED
+  -> 返回成功
+tc-0 更新 branch -> owner fencing 0
+tc-1 更新 branch -> 成功
+```
+
+分析：
+
+```text
+Confirm 可以重复到达 RM
+barrier 保证业务只执行一次
+owner fencing 保证旧 TC 不覆盖状态
+```
+
+## AM. DEAD 人工 Confirm/Cancel
+
+```text
+branch DEAD
+  -> global FAILED
+  -> 告警
+  -> Ops 查看 barrier + 业务表
+  -> 选择人工 Confirm 或 Cancel
+  -> 调 RM 的幂等 Confirm/Cancel
+  -> barrier 状态确认
+  -> 更新 branch/global 人工结果
+```
+
+分析：
+
+```text
+DEAD 不能自动继续
+人工重放也必须走 RM barrier
+不能直接改 t_tcc_branch 状态绕过业务
+```
+
 ## Review 2：深度 review 发现
 
 ### P0：状态更新必须带 owner fencing
@@ -950,7 +1067,7 @@ SUSPENDED/CANCELLED --Try--> reject
 ## 结论
 
 ```text
-当前完整时序图：A~AH 共 34 个 case
+当前完整时序图：A~AM 共 39 个 case
 每个 case 独立图 + 分析
 branch 不在 TC 执行
 跨 TC 只影响状态读写和 callback 路由
