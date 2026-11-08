@@ -1,12 +1,12 @@
 package com.wuba.crm.tx.tcc.client.internal;
 
-import com.wuba.crm.tx.tcc.api.TccBeginRequest;
-import com.wuba.crm.tx.tcc.api.TccBeginResult;
-import com.wuba.crm.tx.tcc.api.TccBranchRegisterRequest;
-import com.wuba.crm.tx.tcc.api.TccBranchRegisterResult;
-import com.wuba.crm.tx.tcc.api.TccBranchReportRequest;
-import com.wuba.crm.tx.tcc.api.TccCommitResult;
-import com.wuba.crm.tx.tcc.api.TccRollbackResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccBeginRequest;
+import com.wuba.crm.tx.tcc.protocol.model.TccBeginResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccBranchRegisterRequest;
+import com.wuba.crm.tx.tcc.protocol.model.TccBranchRegisterResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccBranchReportRequest;
+import com.wuba.crm.tx.tcc.protocol.model.TccCommitResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccRollbackResult;
 
 /**
  * DefaultTccTransactionTemplate 对 Coordinator 的最小依赖。

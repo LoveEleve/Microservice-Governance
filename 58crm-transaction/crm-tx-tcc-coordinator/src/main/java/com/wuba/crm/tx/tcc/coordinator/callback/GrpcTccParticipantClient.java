@@ -1,6 +1,6 @@
 package com.wuba.crm.tx.tcc.coordinator.callback;
 
-import com.wuba.crm.tx.tcc.api.TccCallbackResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccCallbackResult;
 import com.wuba.crm.tx.tcc.protocol.grpc.CancelRequest;
 import com.wuba.crm.tx.tcc.protocol.grpc.CancelResponse;
 import com.wuba.crm.tx.tcc.protocol.grpc.ConfirmRequest;

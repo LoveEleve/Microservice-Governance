@@ -1,4 +1,6 @@
-package com.wuba.crm.tx.tcc.api;
+package com.wuba.crm.tx.tcc.protocol.model;
+import com.wuba.crm.tx.tcc.api.BranchStatus;
+import com.wuba.crm.tx.tcc.api.TccValidation;
 
 import java.util.Objects;
 

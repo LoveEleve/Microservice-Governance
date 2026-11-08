@@ -12,13 +12,28 @@ RM 参与方：实现 TccAction + @TccActionHandler
 
 ## 2. Maven 依赖
 
+先 import BOM，业务依赖不再写版本：
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>com.wuba.crm</groupId>
+            <artifactId>crm-tx-bom</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
 TM：
 
 ```xml
 <dependency>
     <groupId>com.wuba.crm</groupId>
     <artifactId>crm-tx-tcc-spring-boot-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -28,12 +43,10 @@ RM：
 <dependency>
     <groupId>com.wuba.crm</groupId>
     <artifactId>crm-tx-tcc-spring-boot-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 <dependency>
     <groupId>com.wuba.crm</groupId>
     <artifactId>crm-tx-tcc-participant</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 

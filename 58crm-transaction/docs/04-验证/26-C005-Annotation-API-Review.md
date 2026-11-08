@@ -96,20 +96,27 @@ barrier SUSPENDED
 ## 6. 验证
 
 ```text
-tests=215 failures=0 errors=0 skipped=1
+tests=212 failures=0 errors=0 skipped=1
 ```
 
-## 7. 仍未完成
+## 7. C-005.5 包边界收口
 
 ```text
-低层 DTO（TccBeginRequest 等）还在公共 api
-crm-tx-bom 未建
+低层 DTO 已从 crm-tx-tcc-api 移到
+  com.wuba.crm.tx.tcc.protocol.model
+新增 crm-tx-bom
+api 只保留业务契约/状态/注解/TccContext/TccValidation
+```
+
+## 8. 仍未完成
+
+```text
 @TccBranch 暂不支持多分支/循环分支
 SpEL 字面量含 # 的转义规则未文档化
 多 TC / Confirm/Cancel 故障注入未做
 ```
 
-## 8. 一句话
+## 9. 一句话
 
 > **注解入口已经不是 demo：业务只写 @TccTransactional + @TccBranch，
 > 包边界和 TM/RM 依赖隔离也已经被真实 E2E 验证。**

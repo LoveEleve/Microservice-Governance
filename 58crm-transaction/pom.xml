@@ -13,6 +13,7 @@
     <description>CRM distributed transaction and reliable message framework</description>
 
     <modules>
+        <module>crm-tx-bom</module>
         <module>crm-tx-common</module>
         <module>crm-tx-tcc-api</module>
         <module>crm-tx-tcc-protocol</module>

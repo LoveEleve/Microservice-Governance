@@ -1,6 +1,6 @@
 package com.wuba.crm.tx.tcc.coordinator.callback;
 
-import com.wuba.crm.tx.tcc.api.TccCallbackResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccCallbackResult;
 import com.wuba.crm.tx.tcc.coordinator.persistence.TccBranchEntity;
 
 /**

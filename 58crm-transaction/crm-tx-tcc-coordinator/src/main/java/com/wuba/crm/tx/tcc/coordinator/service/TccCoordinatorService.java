@@ -2,11 +2,11 @@ package com.wuba.crm.tx.tcc.coordinator.service;
 
 import com.wuba.crm.tx.tcc.api.BranchStatus;
 import com.wuba.crm.tx.tcc.api.GlobalStatus;
-import com.wuba.crm.tx.tcc.api.TccBeginRequest;
-import com.wuba.crm.tx.tcc.api.TccBeginResult;
-import com.wuba.crm.tx.tcc.api.TccBranchRegisterRequest;
-import com.wuba.crm.tx.tcc.api.TccBranchRegisterResult;
-import com.wuba.crm.tx.tcc.api.TccBranchReportRequest;
+import com.wuba.crm.tx.tcc.protocol.model.TccBeginRequest;
+import com.wuba.crm.tx.tcc.protocol.model.TccBeginResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccBranchRegisterRequest;
+import com.wuba.crm.tx.tcc.protocol.model.TccBranchRegisterResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccBranchReportRequest;
 import com.wuba.crm.tx.tcc.api.TccException;
 import com.wuba.crm.tx.tcc.api.TccResultCode;
 import com.wuba.crm.tx.tcc.coordinator.persistence.TccBranchEntity;

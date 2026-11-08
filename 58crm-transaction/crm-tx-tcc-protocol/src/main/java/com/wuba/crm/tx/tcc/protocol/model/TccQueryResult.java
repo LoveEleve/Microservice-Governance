@@ -1,4 +1,5 @@
-package com.wuba.crm.tx.tcc.api;
+package com.wuba.crm.tx.tcc.protocol.model;
+import com.wuba.crm.tx.tcc.api.GlobalStatus;
 
 import java.util.List;
 import java.util.Objects;

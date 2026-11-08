@@ -4,16 +4,16 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import com.wuba.crm.tx.tcc.api.BranchStatus;
 import com.wuba.crm.tx.tcc.api.GlobalStatus;
-import com.wuba.crm.tx.tcc.api.TccBeginRequest;
-import com.wuba.crm.tx.tcc.api.TccBeginResult;
-import com.wuba.crm.tx.tcc.api.TccBranchRegisterRequest;
-import com.wuba.crm.tx.tcc.api.TccBranchRegisterResult;
-import com.wuba.crm.tx.tcc.api.TccBranchReportRequest;
-import com.wuba.crm.tx.tcc.api.TccCommitResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccBeginRequest;
+import com.wuba.crm.tx.tcc.protocol.model.TccBeginResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccBranchRegisterRequest;
+import com.wuba.crm.tx.tcc.protocol.model.TccBranchRegisterResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccBranchReportRequest;
+import com.wuba.crm.tx.tcc.protocol.model.TccCommitResult;
 import com.wuba.crm.tx.tcc.api.TccException;
-import com.wuba.crm.tx.tcc.api.TccQueryResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccQueryResult;
 import com.wuba.crm.tx.tcc.api.TccResultCode;
-import com.wuba.crm.tx.tcc.api.TccRollbackResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccRollbackResult;
 import com.wuba.crm.tx.tcc.coordinator.callback.TccParticipantClient;
 import com.wuba.crm.tx.tcc.coordinator.metrics.TccMetrics;
 import com.wuba.crm.tx.tcc.coordinator.persistence.MybatisTccBranchRepository;
@@ -351,7 +351,7 @@ class TccCoordinatorServiceTest {
         reportSuccess(xid, first);
         reportSuccess(xid, second);
         when(participantClient.confirm(any())).thenReturn(
-                com.wuba.crm.tx.tcc.api.TccCallbackResult.success());
+                com.wuba.crm.tx.tcc.protocol.model.TccCallbackResult.success());
 
         TccCommitResult result = phase2.commit(xid);
 
@@ -369,7 +369,7 @@ class TccCoordinatorServiceTest {
         long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
         reportSuccess(xid, branchId);
         when(participantClient.confirm(any())).thenReturn(
-                com.wuba.crm.tx.tcc.api.TccCallbackResult.retryable("temporary"));
+                com.wuba.crm.tx.tcc.protocol.model.TccCallbackResult.retryable("temporary"));
 
         TccCommitResult result = phase2.commit(xid);
 
@@ -384,7 +384,7 @@ class TccCoordinatorServiceTest {
         long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
         reportSuccess(xid, branchId);
         when(participantClient.confirm(any())).thenReturn(
-                com.wuba.crm.tx.tcc.api.TccCallbackResult.permanentFailure("business rejected"));
+                com.wuba.crm.tx.tcc.protocol.model.TccCallbackResult.permanentFailure("business rejected"));
 
         TccCommitResult result = phase2.commit(xid);
 
@@ -403,7 +403,7 @@ class TccCoordinatorServiceTest {
         reportSuccess(xid, first);
         reportSuccess(xid, second);
         when(participantClient.cancel(any())).thenReturn(
-                com.wuba.crm.tx.tcc.api.TccCallbackResult.success());
+                com.wuba.crm.tx.tcc.protocol.model.TccCallbackResult.success());
 
         TccRollbackResult result = phase2.rollback(xid);
 
@@ -449,7 +449,7 @@ class TccCoordinatorServiceTest {
         long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
         reportSuccess(xid, branchId);
         when(participantClient.confirm(any())).thenReturn(
-                com.wuba.crm.tx.tcc.api.TccCallbackResult.retryable("temporary"));
+                com.wuba.crm.tx.tcc.protocol.model.TccCallbackResult.retryable("temporary"));
         phase2.commit(xid);
         assertEquals(1, jdbc.queryForObject(
                 "SELECT retry_count FROM t_tcc_branch WHERE xid = ?", Integer.class, xid));
@@ -464,7 +464,7 @@ class TccCoordinatorServiceTest {
                         java.time.ZoneOffset.UTC),
                 xid);
         when(participantClient.confirm(any())).thenReturn(
-                com.wuba.crm.tx.tcc.api.TccCallbackResult.success());
+                com.wuba.crm.tx.tcc.protocol.model.TccCallbackResult.success());
 
         scheduler.scanOnce();
 
@@ -480,7 +480,7 @@ class TccCoordinatorServiceTest {
         long branchId = service.registerBranch(branch(xid, "lead:1")).branchId();
         reportSuccess(xid, branchId);
         when(participantClient.confirm(any())).thenReturn(
-                com.wuba.crm.tx.tcc.api.TccCallbackResult.retryable("temporary"));
+                com.wuba.crm.tx.tcc.protocol.model.TccCallbackResult.retryable("temporary"));
         phase2.commit(xid);
 
         for (int i = 0; i < 4; i++) {
@@ -511,7 +511,7 @@ class TccCoordinatorServiceTest {
                         java.time.ZoneOffset.UTC),
                 xid);
         when(participantClient.cancel(any())).thenReturn(
-                com.wuba.crm.tx.tcc.api.TccCallbackResult.success());
+                com.wuba.crm.tx.tcc.protocol.model.TccCallbackResult.success());
 
         scheduler.scanOnce();
 

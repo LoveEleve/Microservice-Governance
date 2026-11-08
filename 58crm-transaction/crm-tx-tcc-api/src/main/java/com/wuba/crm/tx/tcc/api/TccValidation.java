@@ -8,9 +8,9 @@ import java.nio.charset.StandardCharsets;
  * <p>所有校验失败都抛 {@link IllegalArgumentException}；服务端在 gRPC
  * 边界应把它转换成明确的参数错误，而不是 500。</p>
  */
-final class TccValidation {
+public final class TccValidation {
 
-    static final int MAX_APPLICATION_DATA_BYTES = 64 * 1024;
+    public static final int MAX_APPLICATION_DATA_BYTES = 64 * 1024;
 
     private TccValidation() {
     }
@@ -23,7 +23,7 @@ final class TccValidation {
      * @param maxLength 最大字符数
      * @return 原值
      */
-    static String requireText(String value, String field, int maxLength) {
+    public static String requireText(String value, String field, int maxLength) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " must not be blank");
         }
@@ -41,7 +41,7 @@ final class TccValidation {
      * @param maxLength 最大字符数
      * @return 归一化后的文本
      */
-    static String optionalText(String value, String field, int maxLength) {
+    public static String optionalText(String value, String field, int maxLength) {
         if (value == null) {
             return "";
         }
@@ -57,7 +57,7 @@ final class TccValidation {
      * @param value 业务上下文
      * @return 归一化后的业务上下文
      */
-    static String applicationData(String value) {
+    public static String applicationData(String value) {
         String data = value == null ? "" : value;
         if (data.getBytes(StandardCharsets.UTF_8).length > MAX_APPLICATION_DATA_BYTES) {
             throw new IllegalArgumentException("applicationData exceeds 64KB");
@@ -72,7 +72,7 @@ final class TccValidation {
      * @param field 字段名
      * @return 原值
      */
-    static long requirePositive(long value, String field) {
+    public static long requirePositive(long value, String field) {
         if (value <= 0) {
             throw new IllegalArgumentException(field + " must be positive");
         }

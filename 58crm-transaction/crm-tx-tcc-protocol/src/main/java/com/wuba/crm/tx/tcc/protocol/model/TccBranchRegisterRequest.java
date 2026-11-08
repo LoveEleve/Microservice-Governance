@@ -1,5 +1,6 @@
-package com.wuba.crm.tx.tcc.api;
+package com.wuba.crm.tx.tcc.protocol.model;
 
+import com.wuba.crm.tx.tcc.api.TccValidation;
 /**
  * 注册分支事务的请求。
  *

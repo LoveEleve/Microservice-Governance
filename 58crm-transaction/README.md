@@ -70,13 +70,15 @@ C-004.4：TCC 独立 Starter（已完成，按角色显式开启）
 C-004.5：examples 迁移（已完成）
 C-004.6：quickstart + 迁移后 E2E 复跑（已完成）
 C-005：注解 API + 包边界 + 注解版 E2E（已完成）
+C-005.5：低层 DTO 移出 api + crm-tx-bom（已完成）
 ```
 
-TCC 协调器、参与方 barrier、业务示例均已落地；下一刀是低层 DTO/BOM。
+TCC 协调器、参与方 barrier、业务示例、注解入口均已落地。
 
 ## 工程目录
 
 ```text
+crm-tx-bom           统一依赖版本
 crm-tx-common        通用模型/状态/错误码
 crm-tx-tcc-api       TCC 公共 API / 状态 / DTO / proto
 crm-tx-tcc-protocol  TCC proto / gRPC stubs

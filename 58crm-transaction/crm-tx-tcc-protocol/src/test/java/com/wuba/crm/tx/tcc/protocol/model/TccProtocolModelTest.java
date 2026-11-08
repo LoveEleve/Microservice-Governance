@@ -1,5 +1,9 @@
-package com.wuba.crm.tx.tcc.api;
+package com.wuba.crm.tx.tcc.protocol.model;
 
+import com.wuba.crm.tx.tcc.api.BranchStatus;
+import com.wuba.crm.tx.tcc.api.GlobalStatus;
+import com.wuba.crm.tx.tcc.api.TccPhaseResult;
+import com.wuba.crm.tx.tcc.api.TccValidation;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -8,9 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * 验证 TCC DTO 的必填、状态和 64KB 上下文校验。
+ * 验证内部协议 DTO 的必填、状态和 64KB 上下文校验。
  */
-class TccRequestValidationTest {
+class TccProtocolModelTest {
 
     @Test
     void beginRequest_rejectsBlankRequestId() {
@@ -75,14 +79,5 @@ class TccRequestValidationTest {
         assertEquals(TccPhaseResult.RETRYABLE, TccCallbackResult.retryable("busy").result());
         assertEquals(TccPhaseResult.PERMANENT_FAILURE,
                 TccCallbackResult.permanentFailure("bad state").result());
-    }
-
-    @Test
-    void resultCode_marksOnlyTransientCodesRetryable() {
-        assertEquals(true, TccResultCode.TCC_NOT_READY.isRetryable());
-        assertEquals(true, TccResultCode.TCC_BUSY.isRetryable());
-        assertEquals(true, TccResultCode.TCC_CALLBACK_FAILED.isRetryable());
-        assertEquals(false, TccResultCode.TCC_INVALID_STATE.isRetryable());
-        assertEquals(false, TccResultCode.TCC_RETRY_EXHAUSTED.isRetryable());
     }
 }

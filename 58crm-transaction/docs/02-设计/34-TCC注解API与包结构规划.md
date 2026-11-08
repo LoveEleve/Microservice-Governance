@@ -133,6 +133,9 @@ builder 不再出现在 quickstart。
 ## 5. 目标模块与包
 
 ```text
+crm-tx-bom
+  统一依赖版本
+
 crm-tx-tcc-api
   com.wuba.crm.tx.tcc.api
     TccTransactionTemplate
@@ -289,5 +292,5 @@ C-005.1 proto 包名 / client internal：已完成
 C-005.2 注解内核：已完成
 C-005.3 AOP：已完成
 C-005.4 lead/quickstart/E2E：已完成
-C-005.5 低层 DTO / BOM：未完成，留到下一刀
+C-005.5 低层 DTO / BOM：已完成
 ```

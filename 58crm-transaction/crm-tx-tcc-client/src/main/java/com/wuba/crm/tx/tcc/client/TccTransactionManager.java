@@ -1,8 +1,8 @@
 package com.wuba.crm.tx.tcc.client;
 
 import com.wuba.crm.tx.tcc.api.GlobalStatus;
-import com.wuba.crm.tx.tcc.api.TccBeginRequest;
-import com.wuba.crm.tx.tcc.api.TccBeginResult;
+import com.wuba.crm.tx.tcc.protocol.model.TccBeginRequest;
+import com.wuba.crm.tx.tcc.protocol.model.TccBeginResult;
 import com.wuba.crm.tx.tcc.client.internal.TccCoordinatorOperations;
 
 /**

@@ -1,3 +1,5 @@
+> 后续：C-005.5 已完成低层 DTO 迁移、client.internal 分包和 crm-tx-bom；本文保留为当时的审查记录。
+
 # C-004 API 与包结构 Review
 
 > 结论：当前是“半注解、半 builder”的过渡态，包结构也没有按公共/内部边界收干净。
