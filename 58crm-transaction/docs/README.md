@@ -79,6 +79,8 @@
 | 看 C-003.5 Review | `04-验证/10-C003.5-Review.md` |
 | 看 TCC Scheduler 与重试 | `02-设计/28-TCC-Scheduler与重试.md` |
 | 看 C-003.6 Review | `04-验证/11-C003.6-Review.md` |
+| 看 TCC Participant Starter | `02-设计/29-TCC-Production-Starter.md` |
+| 看 C-003.7 Starter Review | `04-验证/12-C003.7-Starter-Review.md` |
 
 ## 目录结构
 

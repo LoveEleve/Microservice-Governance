@@ -1,0 +1,57 @@
+package com.wuba.crm.tx.starter;
+
+import com.wuba.crm.tx.tcc.participant.action.TccActionRegistry;
+import com.wuba.crm.tx.tcc.participant.barrier.BarrierMapper;
+import com.wuba.crm.tx.tcc.participant.barrier.BarrierRepository;
+import com.wuba.crm.tx.tcc.participant.barrier.TccParticipantService;
+import com.wuba.crm.tx.tcc.participant.grpc.TccParticipantCallbackGrpcService;
+import com.wuba.crm.tx.tcc.participant.grpc.TccParticipantGrpcServer;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * 验证 Participant Starter 自动装配和关闭开关。
+ */
+class CrmTxTccParticipantAutoConfigurationTest {
+
+    private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(
+                    CrmTxTccParticipantAutoConfiguration.class))
+            .withUserConfiguration(TestBeans.class)
+            .withPropertyValues(
+                    "crm.tx.tcc.participant.grpc-port=0");
+
+    @Test
+    void autoConfiguresParticipantInfrastructure() {
+        runner.run(context -> {
+            assertThat(context).hasSingleBean(TccActionRegistry.class);
+            assertThat(context).hasSingleBean(BarrierRepository.class);
+            assertThat(context).hasSingleBean(TccParticipantService.class);
+            assertThat(context).hasSingleBean(TccParticipantCallbackGrpcService.class);
+            assertThat(context).hasSingleBean(TccParticipantGrpcServer.class);
+        });
+    }
+
+    @Test
+    void disabledPropertyStopsAutoConfiguration() {
+        runner.withPropertyValues("crm.tx.tcc.participant.enabled=false").run(context -> {
+            assertThat(context).doesNotHaveBean(TccParticipantService.class);
+            assertThat(context).doesNotHaveBean(TccParticipantGrpcServer.class);
+        });
+    }
+
+    @Configuration
+    static class TestBeans {
+
+        @Bean
+        BarrierMapper barrierMapper() {
+            return Mockito.mock(BarrierMapper.class);
+        }
+    }
+}

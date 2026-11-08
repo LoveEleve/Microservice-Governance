@@ -60,7 +60,7 @@ C-003.3：Commit / Rollback / RM callback（已完成）
 C-003.4：Participant Barrier（已完成）
 C-003.5：Confirm 事务契约与 Outbox 示例（已完成）
 C-003.6：Scheduler / 重试（已完成）
-C-003.7：生产化接入（Nacos/Sentinel/metrics/真实集成，下一步）
+C-003.7：生产化接入（进行中：Participant Starter 已完成）
 ```
 
 TCC 协调器、参与方 barrier、业务示例在后续变更中实现。
