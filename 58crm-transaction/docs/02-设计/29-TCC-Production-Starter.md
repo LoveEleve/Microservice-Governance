@@ -16,18 +16,21 @@ CrmTxTccParticipantAutoConfiguration
 条件：
 
 ```text
-crm.tx.enabled=true
 crm.tx.tcc.participant.enabled=true
-存在 BarrierMapper
+存在 BarrierMapper，或存在 SqlSessionTemplate
 ```
+
+如果存在 `SqlSessionTemplate`，Starter 自动创建 `BarrierMapper`。
 
 ## 2. 业务方最少需要
 
 ```text
-BarrierMapper 所在包的 @MapperScan
 自己的 TccAction 实现注册
 数据库 t_branch_barrier
+SqlSessionTemplate（通常由 MyBatis Starter 提供）
 ```
+
+如果业务没有 `SqlSessionTemplate`，则需要显式提供 `BarrierMapper`。
 
 注册：
 
@@ -54,12 +57,12 @@ crm:
         grpc-port: 9091
 ```
 
-## 4. 为什么需要 BarrierMapper
+## 4. 为什么不是直接扫描 Mapper 包
 
-Starter 不强行替业务扫描 Mapper 包，避免和业务自己的
+Starter 不替业务扫描 Mapper 包，避免和业务自己的
 `@MapperScan`/多数据源配置冲突。
 
-业务方显式提供 `BarrierMapper` 后，Participant 自动装配才启动。
+优先从 `SqlSessionTemplate` 创建 `BarrierMapper`；没有时再要求业务显式提供。
 
 ## 5. 当前不做
 
