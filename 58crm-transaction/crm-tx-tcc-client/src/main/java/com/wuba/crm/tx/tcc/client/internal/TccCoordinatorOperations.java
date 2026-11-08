@@ -1,4 +1,4 @@
-package com.wuba.crm.tx.tcc.client;
+package com.wuba.crm.tx.tcc.client.internal;
 
 import com.wuba.crm.tx.tcc.api.TccBeginRequest;
 import com.wuba.crm.tx.tcc.api.TccBeginResult;

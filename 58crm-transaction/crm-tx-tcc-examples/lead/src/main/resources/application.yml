@@ -13,9 +13,12 @@ spring:
 crm:
   tx:
     tcc:
-      coordinator:
-        service-name: crm-tx-tcc-coordinator
+      client:
+        enabled: true
+        coordinator-service-name: crm-tx-tcc-coordinator
         deadline-seconds: 15
+      participant:
+        enabled: false
 
 quota:
   callback-endpoint: ${QUOTA_CALLBACK_ENDPOINT:127.0.0.1:9092}

@@ -23,7 +23,7 @@ public void assign(AssignLeadCommand command) {
 
 ```text
 TccRequest.builder()
-TccBranch.builder()
+TccBranchSpec.builder()
 begin/register/report/commit
 ```
 
@@ -41,18 +41,28 @@ RM 仍只实现 TccAction。
 
 ### 1.3 分支声明
 
-分支标在 Feign 方法上：
+分支标在独立 Spring Bean 的本地方法上，方法体负责通过 Feign 调下游 Try：
 
 ```java
-@TccBranch(
-        actionName = "reserveQuota",
-        resourceKey = "#userId",
-        callbackEndpoint = "${quota.callback-endpoint}",
-        applicationData = "#userId"
-)
-@PostMapping("/tcc/try")
-TccTryResponse tryQuota(@RequestParam long userId);
+@Service
+public class QuotaBranchGateway {
+
+    @TccBranch(
+            actionName = "reserveQuota",
+            resourceKey = "'quota:' + #userId",
+            callbackEndpoint = "${quota.callback-endpoint}",
+            applicationData = "#userId")
+    public TccTryResult reserve(long userId) {
+        TccContext context = TccContext.current();
+        TryQuotaResponse response = quotaClient.tryQuota(new TryQuotaRequest(
+                context.xid(), context.branchId(), "reserveQuota", payload(userId)));
+        return response.success() ? TccTryResult.SUCCESS : TccTryResult.FAILURE;
+    }
+}
 ```
+
+不直接标 Feign 方法：Feign 是下游契约，不应该反向依赖 TCC 注解；
+本地网关方法还能显式控制 Try 返回值、applicationData 和异常。
 
 ## 2. 注解如何工作
 
@@ -70,15 +80,17 @@ AOP around 业务方法
 ### 2.2 @TccBranch
 
 ```text
-AOP around Feign 方法
+AOP around 本地网关方法
   -> 从 ThreadLocal 取当前 TCC 事务
   -> registerBranch
-  -> 设置 TccBranchContext(xid, branchId)
-  -> Feign RequestInterceptor 注入 X-Tcc-Xid / X-Tcc-Branch-Id
-  -> 调用 RM 通用 /tcc/try
+  -> 设置 TccContext(xid, branchId)
+  -> 方法体用 context 调 Feign /tcc/try
   -> 成功 report TRY_SUCCESS
-  -> 失败 report TRY_FAIL + 抛 TccTryFailedException
+  -> 失败 report TRY_FAIL + 抛 TccBranchFailedException
 ```
+
+分支失败由外层 @TccTransactional 转成 rollback；如果业务方法返回
+TccResult，则返回 CANCELLED 而不是 HTTP 500。
 
 ### 2.3 Participant 通用入口
 
@@ -94,15 +106,16 @@ Body:
 
 兼容旧 body xid/branchId。
 
-## 3. 为什么需要 AOP + Feign 拦截器
+## 3. 为什么需要 AOP
 
 ```text
 分支不是方法参数里的普通对象
-xid/branchId 必须由框架注入请求
+xid/branchId 必须由框架创建并暴露给业务
 callbackEndpoint 属于参与者配置，不属于业务 Try 参数
 ```
 
-当前 builder 把这些问题显式丢给业务；注解模式必须由框架处理。
+当前 builder 把这些问题显式丢给业务；注解模式由 AOP 完成
+register/report，业务只在方法体里传 xid/branchId 调下游。
 
 ## 4. 两条 API 线
 
@@ -111,7 +124,7 @@ callbackEndpoint 属于参与者配置，不属于业务 Try 参数
   @TccTransactional + @TccBranch
 
 高级：
-  TccRequest / TccBranch / TccTransactionTemplate
+  TccRequest / TccBranchSpec / TccTransactionTemplate
   用于动态分支、运行时生成分支、测试
 ```
 
@@ -123,9 +136,9 @@ builder 不再出现在 quickstart。
 crm-tx-tcc-api
   com.wuba.crm.tx.tcc.api
     TccTransactionTemplate
-    TccRequest / TccBranch / TccResult
+    TccRequest / TccBranchSpec / TccResult
     TccAction / TccActionHandler
-    TccTransactional / TccBranch
+    TccTransactional / TccBranch / TccContext
 
 crm-tx-tcc-protocol
   com.wuba.crm.tx.tcc.protocol.grpc
@@ -154,8 +167,8 @@ crm-tx-tcc-coordinator
 crm-tx-tcc-spring-boot-starter
   com.wuba.crm.tx.tcc.starter
     client/participant auto config
-    @TccTransactional AOP
-    Feign interceptor
+    @TccTransactional / @TccBranch AOP
+    SpEL resolver
 
 crm-tx-tcc-examples
   lead / quota
@@ -190,9 +203,9 @@ client.internal 或 protocol.model
 公共保留：
 
 ```text
-TccRequest / TccBranch / TccResult / TccBranchResult
+TccRequest / TccBranchSpec / TccResult / TccBranchResult
 TccAction / TccActionHandler
-TccTransactional / TccBranch
+TccTransactional / TccBranch / TccContext
 TccTransactionTemplate
 状态枚举 / TccException
 ```
@@ -227,13 +240,13 @@ TccTransactionContext / TccBranchContext
 TccTransactionManager
 ```
 
-### C-005.3 AOP + Feign
+### C-005.3 AOP
 
 ```text
 @TccTransactional aspect
 @TccBranch aspect
-Feign RequestInterceptor
-参与方通用 /tcc/try header
+SpEL resolver
+分支失败 -> rollback/CANCELLED
 ```
 
 ### C-005.4 示例与文档
@@ -249,7 +262,7 @@ quickstart 重写
 
 ```text
 lead 业务方法只出现 @TccTransactional
-Feign 方法只出现 @TccBranch
+本地分支网关方法只出现 @TccBranch
 业务不 import proto
 业务不手写 begin/register/report/commit
 业务不手写 /tcc/try
@@ -259,12 +272,22 @@ Feign 方法只出现 @TccBranch
 ## 10. 风险
 
 ```text
-Spring AOP 对 Feign 代理的拦截需要 PoC
+@TccBranch 必须走 Spring 代理，同类内部调用会绕过 AOP
 SpEL 取 requestId/resourceKey 需要限制表达式范围
-xid/branchId 用 header 注入，需要参与方兼容
+字面量里含 # 可能与 SpEL 冲突，文档需明确
 注解失败时必须触发外层 rollback
 ```
 
 ## 11. 一句话
 
 > **注解是业务默认入口，builder 是高级内核；两者共用同一套 TCC 语义，包结构按 public/protocol/internal 三层切干净。**
+
+## 12. 实施状态
+
+```text
+C-005.1 proto 包名 / client internal：已完成
+C-005.2 注解内核：已完成
+C-005.3 AOP：已完成
+C-005.4 lead/quickstart/E2E：已完成
+C-005.5 低层 DTO / BOM：未完成，留到下一刀
+```

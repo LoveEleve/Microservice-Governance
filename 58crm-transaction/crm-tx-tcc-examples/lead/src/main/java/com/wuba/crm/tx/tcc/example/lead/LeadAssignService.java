@@ -1,75 +1,42 @@
 package com.wuba.crm.tx.tcc.example.lead;
 
-import com.wuba.crm.tx.tcc.api.TccBranch;
-import com.wuba.crm.tx.tcc.api.TccRequest;
 import com.wuba.crm.tx.tcc.api.TccResult;
-import com.wuba.crm.tx.tcc.api.TccTransactionTemplate;
-import com.wuba.crm.tx.tcc.api.TccTryResult;
-import org.springframework.beans.factory.annotation.Value;
+import com.wuba.crm.tx.tcc.api.TccTransactional;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
-import java.util.UUID;
-
 /**
- * 业务方 TCC 编排示例。
+ * 业务方 TCC。
  *
- * <p>业务代码只构造 TccRequest 和 Try 回调；begin/register/report/commit
- * 全部由 DefaultTccTransactionTemplate 处理。</p>
+ * <p>业务方法只标注 @TccTransactional，分支由 QuotaBranchGateway 的
+ * @TccBranch 声明；begin/register/report/commit/rollback 由框架完成。</p>
  */
 @Service
 public class LeadAssignService {
 
-    private final TccTransactionTemplate tcc;
-    private final QuotaFeignClient quotaClient;
-    private final String quotaCallbackEndpoint;
+    private final QuotaBranchGateway quotaGateway;
 
     /**
-     * 创建编排服务。
+     * 创建服务。
      *
-     * @param tcc                  公共 TCC 模板
-     * @param quotaClient          quota OpenFeign 客户端
-     * @param quotaCallbackEndpoint quota gRPC callback endpoint
+     * @param quotaGateway quota 分支网关
      */
-    public LeadAssignService(
-            TccTransactionTemplate tcc,
-            QuotaFeignClient quotaClient,
-            @Value("${quota.callback-endpoint:127.0.0.1:9092}")
-            String quotaCallbackEndpoint) {
-        this.tcc = tcc;
-        this.quotaClient = quotaClient;
-        this.quotaCallbackEndpoint = quotaCallbackEndpoint;
+    public LeadAssignService(QuotaBranchGateway quotaGateway) {
+        this.quotaGateway = quotaGateway;
     }
 
     /**
      * 分配线索。
      *
-     * @param leadId 线索
-     * @param userId 用户
-     * @return 分配结果
+     * @param command 命令
+     * @return TCC 结果
      */
-    public AssignResult assign(long leadId, long userId) {
-        TccResult result = tcc.execute(TccRequest.builder()
-                .requestId("lead-" + leadId + "-" + userId + "-" + UUID.randomUUID())
-                .bizCode("lead")
-                .bizId(String.valueOf(leadId))
-                .tryTimeout(Duration.ofSeconds(30))
-                .branch(TccBranch.builder()
-                        .resourceKey("quota:" + userId)
-                        .actionName("reserveQuota")
-                        .callbackEndpoint(quotaCallbackEndpoint)
-                        .applicationData("{\"userId\":" + userId + "}")
-                        .tryAction(context -> {
-                            TryQuotaResponse response = quotaClient.tryQuota(
-                                    new TryQuotaRequest(
-                                            context.xid(), context.branchId(),
-                                            "reserveQuota",
-                                            "{\"userId\":" + userId + "}"));
-                            return response.success()
-                                    ? TccTryResult.SUCCESS : TccTryResult.FAILURE;
-                        })
-                        .build())
-                .build());
-        return new AssignResult(result.xid(), result.status().name());
+    @TccTransactional(
+            requestId = "#command.requestId",
+            bizCode = "lead",
+            bizId = "#command.leadId",
+            tryTimeoutSeconds = 30)
+    public TccResult assign(AssignLeadCommand command) {
+        quotaGateway.reserve(command.userId());
+        return null;
     }
 }

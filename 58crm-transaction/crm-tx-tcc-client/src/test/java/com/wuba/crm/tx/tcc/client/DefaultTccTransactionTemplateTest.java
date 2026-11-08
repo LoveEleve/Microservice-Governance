@@ -4,7 +4,7 @@ import com.wuba.crm.tx.tcc.api.BranchStatus;
 import com.wuba.crm.tx.tcc.api.GlobalStatus;
 import com.wuba.crm.tx.tcc.api.TccBeginRequest;
 import com.wuba.crm.tx.tcc.api.TccBeginResult;
-import com.wuba.crm.tx.tcc.api.TccBranch;
+import com.wuba.crm.tx.tcc.api.TccBranchSpec;
 import com.wuba.crm.tx.tcc.api.TccBranchRegisterRequest;
 import com.wuba.crm.tx.tcc.api.TccBranchRegisterResult;
 import com.wuba.crm.tx.tcc.api.TccBranchReportRequest;
@@ -12,6 +12,7 @@ import com.wuba.crm.tx.tcc.api.TccCommitResult;
 import com.wuba.crm.tx.tcc.api.TccRequest;
 import com.wuba.crm.tx.tcc.api.TccRollbackResult;
 import com.wuba.crm.tx.tcc.api.TccTryResult;
+import com.wuba.crm.tx.tcc.client.internal.TccCoordinatorOperations;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -135,8 +136,8 @@ class DefaultTccTransactionTemplateTest {
 
     @Test
     void request_rejectsDuplicateResourceKeys() {
-        TccBranch first = branch("quota:1", () -> TccTryResult.SUCCESS);
-        TccBranch second = branch("quota:1", () -> TccTryResult.SUCCESS);
+        TccBranchSpec first = branch("quota:1", () -> TccTryResult.SUCCESS);
+        TccBranchSpec second = branch("quota:1", () -> TccTryResult.SUCCESS);
 
         assertThrows(IllegalArgumentException.class,
                 () -> TccRequest.builder()
@@ -158,8 +159,8 @@ class DefaultTccTransactionTemplateTest {
                         .build());
     }
 
-    private TccBranch branch(String resourceKey, TccTryCallback callback) {
-        return TccBranch.builder()
+    private TccBranchSpec branch(String resourceKey, TccTryCallback callback) {
+        return TccBranchSpec.builder()
                 .resourceKey(resourceKey)
                 .actionName("reserveQuota")
                 .callbackEndpoint("127.0.0.1:9092")

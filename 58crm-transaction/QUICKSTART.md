@@ -1,11 +1,12 @@
 # 58CRM TCC Quickstart
 
 > 目标：5 分钟理解业务方怎么用；不要求先读 Coordinator 源码。
+> 默认写法是指注解法；`TccRequest.builder()` 只作为高级逃生口保留。
 
 ## 1. 两个角色
 
 ```text
-TM 业务方：tcc.execute(...)
+TM 业务方：@TccTransactional + @TccBranch
 RM 参与方：实现 TccAction + @TccActionHandler
 ```
 
@@ -16,7 +17,7 @@ TM：
 ```xml
 <dependency>
     <groupId>com.wuba.crm</groupId>
-    <artifactId>crm-tx-tcc-client</artifactId>
+    <artifactId>crm-tx-tcc-spring-boot-starter</artifactId>
     <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
@@ -29,34 +30,68 @@ RM：
     <artifactId>crm-tx-tcc-spring-boot-starter</artifactId>
     <version>0.1.0-SNAPSHOT</version>
 </dependency>
+<dependency>
+    <groupId>com.wuba.crm</groupId>
+    <artifactId>crm-tx-tcc-participant</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
 ```
+
+> starter 把 participant 标为 optional：TM-only 应用不会被 MyBatis/DataSource 依赖污染；RM 显式加 participant。
 
 ## 3. TM 发起 TCC
 
+业务方法只写注解，不碰 begin/register/report/commit：
+
 ```java
-TccResult result = tcc.execute(
-        TccRequest.builder()
-                .requestId("lead-assign:" + leadId + ":" + commandId)
-                .bizCode("lead")
-                .bizId(String.valueOf(leadId))
-                .tryTimeout(Duration.ofSeconds(30))
-                .branch(TccBranch.builder()
-                        .resourceKey("quota:" + userId)
-                        .actionName("reserveQuota")
-                        .callbackEndpoint("quota-service:9092")
-                        .applicationData("{\"userId\":" + userId + "}")
-                        .tryAction(context -> {
-                            TryQuotaResponse response = quotaClient.tryQuota(
-                                    new TryQuotaRequest(
-                                            context.xid(),
-                                            context.branchId(),
-                                            "reserveQuota",
-                                            "{\"userId\":" + userId + "}"));
-                            return response.success()
-                                    ? TccTryResult.SUCCESS : TccTryResult.FAILURE;
-                        })
-                        .build())
-                .build());
+@Service
+public class LeadAssignService {
+
+    private final QuotaBranchGateway quotaGateway;
+
+    public LeadAssignService(QuotaBranchGateway quotaGateway) {
+        this.quotaGateway = quotaGateway;
+    }
+
+    @TccTransactional(
+            requestId = "#command.requestId",
+            bizCode = "lead",
+            bizId = "#command.leadId",
+            tryTimeoutSeconds = 30)
+    public TccResult assign(AssignLeadCommand command) {
+        quotaGateway.reserve(command.userId());
+        return null;
+    }
+}
+```
+
+分支放在独立 Spring Bean 的方法上，方法体只负责调下游 Try：
+
+```java
+@Service
+public class QuotaBranchGateway {
+
+    private final QuotaFeignClient quotaClient;
+
+    public QuotaBranchGateway(QuotaFeignClient quotaClient) {
+        this.quotaClient = quotaClient;
+    }
+
+    @TccBranch(
+            actionName = "reserveQuota",
+            resourceKey = "'quota:' + #userId",
+            callbackEndpoint = "${quota.callback-endpoint}",
+            applicationData = "#userId")
+    public TccTryResult reserve(long userId) {
+        TccContext context = TccContext.current();
+        TryQuotaResponse response = quotaClient.tryQuota(new TryQuotaRequest(
+                context.xid(),
+                context.branchId(),
+                "reserveQuota",
+                "{\"userId\":" + userId + "}"));
+        return response.success() ? TccTryResult.SUCCESS : TccTryResult.FAILURE;
+    }
+}
 ```
 
 业务代码不需要：
@@ -69,6 +104,8 @@ reportBranch
 commit
 rollback
 ```
+
+`requestId` 必须是稳定业务幂等键（如 `commandId`）；示例 controller 每次点击生成 UUID，只是为了区分多次分配尝试。
 
 ## 4. RM 实现 TCC 动作
 
@@ -141,6 +178,10 @@ crm:
       client:
         enabled: true
         coordinator-service-name: crm-tx-tcc-coordinator
+      participant:
+        enabled: false
+      annotation:
+        enabled: true
 ```
 
 RM：
@@ -209,6 +250,8 @@ curl -X POST 'http://127.0.0.1:8081/leads/1001/assign?userId=999'
 {"xid":2,"status":"CANCELLED"}
 ```
 
+Try 失败是业务结果，不是 HTTP 500：注解事务返回 `TccResult(CANCELLED)`。
+
 数据库：
 
 ```text
@@ -227,6 +270,7 @@ callbackEndpoint 不可达 -> Confirm/Cancel 失败
 Try 成功不 report -> TC 超时回滚
 Confirm 里不写 Outbox -> 下游收不到终态
 框架不会自动生成业务事件
+@TccBranch 写在同类内部调用 -> AOP 不生效
 ```
 
 ## 9. 深入学习
@@ -235,5 +279,5 @@ Confirm 里不写 Outbox -> 下游收不到终态
 docs/07-学习讨论/00-项目学习路线.md
 docs/02-设计/19-TCC时序与状态图.md
 docs/02-设计/21-TCC表结构与SQL.md
-docs/04-验证/23-C004.5-Review.md
+docs/04-验证/25-C004-API-Package-Review.md
 ```

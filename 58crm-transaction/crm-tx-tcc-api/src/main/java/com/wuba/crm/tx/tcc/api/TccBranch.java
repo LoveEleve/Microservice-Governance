@@ -1,102 +1,45 @@
 package com.wuba.crm.tx.tcc.api;
 
-import java.util.Objects;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
- * 一个 TCC 分支的公共描述。
+ * 标记一个本地分支方法。
  *
- * @param resourceKey      分支幂等键
- * @param actionName       TCC 动作名
- * @param callbackEndpoint TC 回调 RM 的 gRPC 地址，格式 host:port
- * @param applicationData  Try/Confirm/Cancel 需要的业务上下文
- * @param tryAction        业务 Try 回调
+ * <p>方法必须在独立 Spring Bean 上调用，避免自调用绕过 AOP。
+ * 方法返回值必须是 {@link TccTryResult}，内部通常通过 Feign 调下游 Try。</p>
  */
-public record TccBranch(
-        String resourceKey,
-        String actionName,
-        String callbackEndpoint,
-        String applicationData,
-        TccTryAction tryAction) {
-
-    public TccBranch {
-        resourceKey = TccValidation.requireText(resourceKey, "resourceKey", 128);
-        actionName = TccValidation.requireText(actionName, "actionName", 128);
-        callbackEndpoint = TccValidation.requireText(callbackEndpoint, "callbackEndpoint", 256);
-        applicationData = TccValidation.applicationData(applicationData);
-        tryAction = Objects.requireNonNull(tryAction, "tryAction");
-    }
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface TccBranch {
 
     /**
-     * 创建 branch builder。
+     * TCC 动作名。
      *
-     * @return builder
+     * @return 动作名
      */
-    public static Builder builder() {
-        return new Builder();
-    }
+    String actionName();
 
     /**
-     * TccBranch builder。
+     * resourceKey SpEL 表达式。
+     *
+     * @return 表达式
      */
-    public static final class Builder {
+    String resourceKey();
 
-        private String resourceKey;
-        private String actionName;
-        private String callbackEndpoint;
-        private String applicationData = "";
-        private TccTryAction tryAction;
+    /**
+     * RM callback gRPC 地址，支持 ${} 占位符。
+     *
+     * @return endpoint
+     */
+    String callbackEndpoint();
 
-        /**
-         * @param value 分支幂等键
-         * @return this
-         */
-        public Builder resourceKey(String value) {
-            this.resourceKey = value;
-            return this;
-        }
-
-        /**
-         * @param value TCC 动作名
-         * @return this
-         */
-        public Builder actionName(String value) {
-            this.actionName = value;
-            return this;
-        }
-
-        /**
-         * @param value TC 回调 gRPC 地址
-         * @return this
-         */
-        public Builder callbackEndpoint(String value) {
-            this.callbackEndpoint = value;
-            return this;
-        }
-
-        /**
-         * @param value 业务上下文
-         * @return this
-         */
-        public Builder applicationData(String value) {
-            this.applicationData = value;
-            return this;
-        }
-
-        /**
-         * @param value 业务 Try 回调
-         * @return this
-         */
-        public Builder tryAction(TccTryAction value) {
-            this.tryAction = value;
-            return this;
-        }
-
-        /**
-         * @return 不可变分支
-         */
-        public TccBranch build() {
-            return new TccBranch(
-                    resourceKey, actionName, callbackEndpoint, applicationData, tryAction);
-        }
-    }
+    /**
+     * applicationData SpEL 表达式。
+     *
+     * @return 表达式
+     */
+    String applicationData() default "";
 }

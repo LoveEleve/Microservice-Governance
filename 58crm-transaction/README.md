@@ -36,21 +36,17 @@ Redis Stream 是传送带：PEL + XACK，可恢复
 一个业务线一个消费组，不做 fan-out
 ```
 
-## 生产形态
+## 部署基线
 
 ```text
-MySQL 8.0
-ShardingSphere-JDBC：16 库 × 4 表 = 64 分片
-1 主 2 从，读写分离
-Redis 7.x Cluster（本机验证 7.0.15）：3 主 3 从，Stream 分片
+MySQL 8.0：集群/主从，事务日志与业务事实
+Redis 7.x Cluster：Stream 按业务线分片
 Nacos：注册 + 配置
-Sentinel：8W 流控 + 熔断
-协调器：无状态 5 实例
-Prometheus + Grafana + 链路追踪
+协调器：无状态多实例
 ```
 
-代码按生产形态写，不提供 `production=false` 的单库分支。  
-本地测试可以指向单实例，但必须走同一套逻辑表、分片键和路由代码。
+当前代码不引入 ShardingSphere 分库分表、Sentinel、Prometheus/Grafana；
+这些属于后续生产能力，不假装已经实现。
 
 ## 当前阶段
 
@@ -73,9 +69,10 @@ C-004.3：@TccActionHandler + 通用 /tcc/try（已完成，E2E 复跑）
 C-004.4：TCC 独立 Starter（已完成，按角色显式开启）
 C-004.5：examples 迁移（已完成）
 C-004.6：quickstart + 迁移后 E2E 复跑（已完成）
+C-005：注解 API + 包边界 + 注解版 E2E（已完成）
 ```
 
-TCC 协调器、参与方 barrier、业务示例在后续变更中实现。
+TCC 协调器、参与方 barrier、业务示例均已落地；下一刀是低层 DTO/BOM。
 
 ## 工程目录
 
@@ -86,12 +83,13 @@ crm-tx-tcc-protocol  TCC proto / gRPC stubs
 crm-tx-tcc-client    公共 TCC 模板 / Coordinator 客户端
 crm-tx-tcc-id        TCC XID 号段生成
 crm-tx-tcc-coordinator TCC 协调器核心
-crm-tx-tcc-participant 参与方 SDK/barrier（后续）
+crm-tx-tcc-participant 参与方 SDK/barrier/通用 Try
 crm-tx-outbox        Outbox/Scanner/Buffer/Sender/Stream
 crm-tx-consumer      Redis Stream 消费者
 crm-tx-spring-boot-starter  Outbox/Consumer 自动装配
-crm-tx-tcc-spring-boot-starter TCC client/participant 自动装配
-crm-tx-demo      业务方接入示例（线索分配）
+crm-tx-tcc-spring-boot-starter TCC client/participant/注解自动装配
+crm-tx-tcc-examples  TCC 业务示例（lead/quota）
+crm-tx-demo          消息业务示例
 ```
 
 ## 学习入口

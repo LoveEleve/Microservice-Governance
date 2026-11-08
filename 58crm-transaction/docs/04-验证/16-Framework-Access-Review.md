@@ -150,7 +150,7 @@ TccResult result = tcc.execute(
                 .bizCode("lead")
                 .bizId(String.valueOf(leadId))
                 .tryTimeout(Duration.ofSeconds(30))
-                .branch(TccBranch.builder()
+                .branch(TccBranchSpec.builder()
                         .resourceKey("quota:" + userId)
                         .actionName("reserveQuota")
                         .callbackEndpoint(quotaCallbackEndpoint)

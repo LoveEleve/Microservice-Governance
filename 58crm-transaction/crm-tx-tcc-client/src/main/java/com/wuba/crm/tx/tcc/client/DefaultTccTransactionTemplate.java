@@ -1,10 +1,12 @@
 package com.wuba.crm.tx.tcc.client;
 
+import com.wuba.crm.tx.tcc.client.internal.TccCoordinatorOperations;
+
 import com.wuba.crm.tx.tcc.api.BranchStatus;
 import com.wuba.crm.tx.tcc.api.GlobalStatus;
 import com.wuba.crm.tx.tcc.api.TccBeginRequest;
 import com.wuba.crm.tx.tcc.api.TccBeginResult;
-import com.wuba.crm.tx.tcc.api.TccBranch;
+import com.wuba.crm.tx.tcc.api.TccBranchSpec;
 import com.wuba.crm.tx.tcc.api.TccBranchRegisterRequest;
 import com.wuba.crm.tx.tcc.api.TccBranchRegisterResult;
 import com.wuba.crm.tx.tcc.api.TccBranchReportRequest;
@@ -65,7 +67,7 @@ public class DefaultTccTransactionTemplate implements TccTransactionTemplate {
 
         List<RegisteredBranch> registered = new ArrayList<>();
         try {
-            for (TccBranch branch : request.branches()) {
+            for (TccBranchSpec branch : request.branches()) {
                 TccBranchRegisterResult result = coordinator.registerBranch(
                         new TccBranchRegisterRequest(
                                 xid,
@@ -159,6 +161,6 @@ public class DefaultTccTransactionTemplate implements TccTransactionTemplate {
         return (int) Math.max(1, Math.min(Integer.MAX_VALUE, seconds));
     }
 
-    private record RegisteredBranch(TccBranch branch, long branchId) {
+    private record RegisteredBranch(TccBranchSpec branch, long branchId) {
     }
 }

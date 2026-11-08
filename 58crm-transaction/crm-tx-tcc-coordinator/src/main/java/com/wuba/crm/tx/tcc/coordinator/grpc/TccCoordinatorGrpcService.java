@@ -13,21 +13,21 @@ import com.wuba.crm.tx.tcc.api.TccQueryResult;
 import com.wuba.crm.tx.tcc.api.TccResultCode;
 import com.wuba.crm.tx.tcc.api.TccRollbackResult;
 import com.wuba.crm.tx.tcc.api.TccBranchInfo;
-import com.wuba.crm.tx.tcc.api.grpc.BeginRequest;
-import com.wuba.crm.tx.tcc.api.grpc.BeginResponse;
-import com.wuba.crm.tx.tcc.api.grpc.RegisterBranchRequest;
-import com.wuba.crm.tx.tcc.api.grpc.RegisterBranchResponse;
-import com.wuba.crm.tx.tcc.api.grpc.BranchInfo;
-import com.wuba.crm.tx.tcc.api.grpc.CommitRequest;
-import com.wuba.crm.tx.tcc.api.grpc.CommitResponse;
-import com.wuba.crm.tx.tcc.api.grpc.QueryRequest;
-import com.wuba.crm.tx.tcc.api.grpc.QueryResponse;
-import com.wuba.crm.tx.tcc.api.grpc.ReportBranchRequest;
-import com.wuba.crm.tx.tcc.api.grpc.ReportBranchResponse;
-import com.wuba.crm.tx.tcc.api.grpc.ResultCode;
-import com.wuba.crm.tx.tcc.api.grpc.RollbackRequest;
-import com.wuba.crm.tx.tcc.api.grpc.RollbackResponse;
-import com.wuba.crm.tx.tcc.api.grpc.TccCoordinatorGrpc;
+import com.wuba.crm.tx.tcc.protocol.grpc.BeginRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.BeginResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.RegisterBranchRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.RegisterBranchResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.BranchInfo;
+import com.wuba.crm.tx.tcc.protocol.grpc.CommitRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.CommitResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.QueryRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.QueryResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.ReportBranchRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.ReportBranchResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.ResultCode;
+import com.wuba.crm.tx.tcc.protocol.grpc.RollbackRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.RollbackResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.TccCoordinatorGrpc;
 import com.wuba.crm.tx.tcc.coordinator.service.TccCoordinatorService;
 import com.wuba.crm.tx.tcc.coordinator.service.TccPhase2Coordinator;
 import io.grpc.stub.StreamObserver;
@@ -306,32 +306,32 @@ public class TccCoordinatorGrpcService extends TccCoordinatorGrpc.TccCoordinator
         return message == null ? "" : message;
     }
 
-    private com.wuba.crm.tx.tcc.api.grpc.GlobalStatus toProto(GlobalStatus status) {
+    private com.wuba.crm.tx.tcc.protocol.grpc.GlobalStatus toProto(GlobalStatus status) {
         return switch (status) {
-            case TRYING -> com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.TRYING;
-            case CONFIRMING -> com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.CONFIRMING;
-            case CONFIRMED -> com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.CONFIRMED;
-            case CANCELLING -> com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.CANCELLING;
-            case CANCELLED -> com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.CANCELLED;
-            case FAILED -> com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.FAILED;
+            case TRYING -> com.wuba.crm.tx.tcc.protocol.grpc.GlobalStatus.TRYING;
+            case CONFIRMING -> com.wuba.crm.tx.tcc.protocol.grpc.GlobalStatus.CONFIRMING;
+            case CONFIRMED -> com.wuba.crm.tx.tcc.protocol.grpc.GlobalStatus.CONFIRMED;
+            case CANCELLING -> com.wuba.crm.tx.tcc.protocol.grpc.GlobalStatus.CANCELLING;
+            case CANCELLED -> com.wuba.crm.tx.tcc.protocol.grpc.GlobalStatus.CANCELLED;
+            case FAILED -> com.wuba.crm.tx.tcc.protocol.grpc.GlobalStatus.FAILED;
         };
     }
 
-    private com.wuba.crm.tx.tcc.api.grpc.BranchStatus toProto(BranchStatus status) {
+    private com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus toProto(BranchStatus status) {
         return switch (status) {
-            case TRYING -> com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_TRYING;
-            case TRY_SUCCESS -> com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_TRY_SUCCESS;
-            case TRY_FAIL -> com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_TRY_FAIL;
-            case CONFIRMING -> com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_CONFIRMING;
-            case CONFIRMED -> com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_CONFIRMED;
-            case CANCELLING -> com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_CANCELLING;
-            case CANCELLED -> com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_CANCELLED;
-            case SUSPENDED -> com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_SUSPENDED;
-            case DEAD -> com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_DEAD;
+            case TRYING -> com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_TRYING;
+            case TRY_SUCCESS -> com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_TRY_SUCCESS;
+            case TRY_FAIL -> com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_TRY_FAIL;
+            case CONFIRMING -> com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_CONFIRMING;
+            case CONFIRMED -> com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_CONFIRMED;
+            case CANCELLING -> com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_CANCELLING;
+            case CANCELLED -> com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_CANCELLED;
+            case SUSPENDED -> com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_SUSPENDED;
+            case DEAD -> com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_DEAD;
         };
     }
 
-    private BranchStatus toBranchStatus(com.wuba.crm.tx.tcc.api.grpc.BranchStatus status) {
+    private BranchStatus toBranchStatus(com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus status) {
         return switch (status) {
             case BRANCH_TRY_SUCCESS -> BranchStatus.TRY_SUCCESS;
             case BRANCH_TRY_FAIL -> BranchStatus.TRY_FAIL;

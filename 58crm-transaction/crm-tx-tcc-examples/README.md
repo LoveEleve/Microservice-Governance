@@ -49,7 +49,7 @@ curl -X POST 'http://127.0.0.1:8081/leads/1001/assign?userId=999'
 ## 业务代码
 
 ```text
-lead:  TccTransactionTemplate + OpenFeign Try
+lead:  @TccTransactional + @TccBranch + OpenFeign Try
 quota: TccAction + @TccActionHandler
 ```
 

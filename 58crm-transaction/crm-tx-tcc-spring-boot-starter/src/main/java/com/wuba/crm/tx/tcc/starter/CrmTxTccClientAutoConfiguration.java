@@ -1,9 +1,11 @@
 package com.wuba.crm.tx.tcc.starter;
 
 import com.wuba.crm.tx.tcc.api.TccTransactionTemplate;
-import com.wuba.crm.tx.tcc.client.CoordinatorGrpcClient;
 import com.wuba.crm.tx.tcc.client.DefaultTccTransactionTemplate;
 import com.wuba.crm.tx.tcc.client.TccCoordinatorEndpointProvider;
+import com.wuba.crm.tx.tcc.client.TccTransactionManager;
+import com.wuba.crm.tx.tcc.client.internal.CoordinatorGrpcClient;
+import com.wuba.crm.tx.tcc.client.internal.TccCoordinatorOperations;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -59,10 +61,24 @@ public class CrmTxTccClientAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public TccTransactionTemplate tccTransactionTemplate(
+    public TccCoordinatorOperations tccCoordinatorOperations(
             TccCoordinatorEndpointProvider endpointProvider,
             CrmTxTccProperties properties) {
-        return new DefaultTccTransactionTemplate(new CoordinatorGrpcClient(
-                endpointProvider, properties.getClient().getDeadlineSeconds()));
+        return new CoordinatorGrpcClient(
+                endpointProvider, properties.getClient().getDeadlineSeconds());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TccTransactionTemplate tccTransactionTemplate(
+            TccCoordinatorOperations operations) {
+        return new DefaultTccTransactionTemplate(operations);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TccTransactionManager tccTransactionManager(
+            TccCoordinatorOperations operations) {
+        return new TccTransactionManager(operations);
     }
 }

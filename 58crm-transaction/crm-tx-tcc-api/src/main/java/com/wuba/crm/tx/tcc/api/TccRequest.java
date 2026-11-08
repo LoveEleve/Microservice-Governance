@@ -18,7 +18,7 @@ public record TccRequest(
         String bizCode,
         String bizId,
         Duration tryTimeout,
-        List<TccBranch> branches) {
+        List<TccBranchSpec> branches) {
 
     public TccRequest {
         requestId = TccValidation.requireText(requestId, "requestId", 128);
@@ -33,7 +33,7 @@ public record TccRequest(
             throw new IllegalArgumentException("branches must not be empty");
         }
         java.util.Set<String> resourceKeys = new java.util.HashSet<>();
-        for (TccBranch branch : branches) {
+        for (TccBranchSpec branch : branches) {
             if (!resourceKeys.add(branch.resourceKey())) {
                 throw new IllegalArgumentException(
                         "duplicate resourceKey: " + branch.resourceKey());
@@ -59,7 +59,7 @@ public record TccRequest(
         private String bizCode;
         private String bizId;
         private Duration tryTimeout = Duration.ofSeconds(30);
-        private final java.util.List<TccBranch> branches = new java.util.ArrayList<>();
+        private final java.util.List<TccBranchSpec> branches = new java.util.ArrayList<>();
 
         /**
          * @param value 业务幂等键
@@ -101,7 +101,7 @@ public record TccRequest(
          * @param value 分支描述
          * @return this
          */
-        public Builder branch(TccBranch value) {
+        public Builder branch(TccBranchSpec value) {
             this.branches.add(value);
             return this;
         }

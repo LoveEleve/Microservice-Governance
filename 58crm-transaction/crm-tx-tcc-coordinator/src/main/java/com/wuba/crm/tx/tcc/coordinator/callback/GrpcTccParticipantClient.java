@@ -1,11 +1,11 @@
 package com.wuba.crm.tx.tcc.coordinator.callback;
 
 import com.wuba.crm.tx.tcc.api.TccCallbackResult;
-import com.wuba.crm.tx.tcc.api.grpc.CancelRequest;
-import com.wuba.crm.tx.tcc.api.grpc.CancelResponse;
-import com.wuba.crm.tx.tcc.api.grpc.ConfirmRequest;
-import com.wuba.crm.tx.tcc.api.grpc.ConfirmResponse;
-import com.wuba.crm.tx.tcc.api.grpc.TccParticipantCallbackGrpc;
+import com.wuba.crm.tx.tcc.protocol.grpc.CancelRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.CancelResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.ConfirmRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.ConfirmResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.TccParticipantCallbackGrpc;
 import com.wuba.crm.tx.tcc.coordinator.persistence.TccBranchEntity;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -109,7 +109,7 @@ public class GrpcTccParticipantClient implements TccParticipantClient {
     }
 
     private TccCallbackResult callbackResult(
-            com.wuba.crm.tx.tcc.api.grpc.PhaseResult result, String message) {
+            com.wuba.crm.tx.tcc.protocol.grpc.PhaseResult result, String message) {
         return switch (result) {
             case PHASE_SUCCESS -> TccCallbackResult.success();
             case PHASE_RETRYABLE -> TccCallbackResult.retryable(message);

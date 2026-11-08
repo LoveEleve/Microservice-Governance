@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package crm.tx.tcc.v1;
 
-option java_package = "com.wuba.crm.tx.tcc.api.grpc";
+option java_package = "com.wuba.crm.tx.tcc.protocol.grpc";
 option java_multiple_files = true;
 
 enum GlobalStatus {

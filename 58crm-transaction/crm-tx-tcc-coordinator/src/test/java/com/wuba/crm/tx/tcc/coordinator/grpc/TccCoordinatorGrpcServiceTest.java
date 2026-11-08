@@ -8,19 +8,19 @@ import com.wuba.crm.tx.tcc.api.TccBranchInfo;
 import com.wuba.crm.tx.tcc.api.TccCommitResult;
 import com.wuba.crm.tx.tcc.api.TccException;
 import com.wuba.crm.tx.tcc.api.TccResultCode;
-import com.wuba.crm.tx.tcc.api.grpc.BeginRequest;
-import com.wuba.crm.tx.tcc.api.grpc.BeginResponse;
-import com.wuba.crm.tx.tcc.api.grpc.CommitRequest;
-import com.wuba.crm.tx.tcc.api.grpc.CommitResponse;
-import com.wuba.crm.tx.tcc.api.grpc.QueryRequest;
-import com.wuba.crm.tx.tcc.api.grpc.QueryResponse;
-import com.wuba.crm.tx.tcc.api.grpc.RegisterBranchRequest;
-import com.wuba.crm.tx.tcc.api.grpc.RegisterBranchResponse;
-import com.wuba.crm.tx.tcc.api.grpc.ReportBranchRequest;
-import com.wuba.crm.tx.tcc.api.grpc.ReportBranchResponse;
-import com.wuba.crm.tx.tcc.api.grpc.ResultCode;
-import com.wuba.crm.tx.tcc.api.grpc.RollbackRequest;
-import com.wuba.crm.tx.tcc.api.grpc.RollbackResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.BeginRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.BeginResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.CommitRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.CommitResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.QueryRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.QueryResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.RegisterBranchRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.RegisterBranchResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.ReportBranchRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.ReportBranchResponse;
+import com.wuba.crm.tx.tcc.protocol.grpc.ResultCode;
+import com.wuba.crm.tx.tcc.protocol.grpc.RollbackRequest;
+import com.wuba.crm.tx.tcc.protocol.grpc.RollbackResponse;
 import com.wuba.crm.tx.tcc.api.TccQueryResult;
 import com.wuba.crm.tx.tcc.api.TccRollbackResult;
 import com.wuba.crm.tx.tcc.coordinator.service.TccCoordinatorService;
@@ -70,7 +70,7 @@ class TccCoordinatorGrpcServiceTest {
         BeginResponse response = observer.values.get(0);
         assertEquals(ResultCode.OK, response.getCode());
         assertEquals(7L, response.getXid());
-        assertEquals(com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.TRYING, response.getStatus());
+        assertEquals(com.wuba.crm.tx.tcc.protocol.grpc.GlobalStatus.TRYING, response.getStatus());
     }
 
     @Test
@@ -120,7 +120,7 @@ class TccCoordinatorGrpcServiceTest {
 
         assertEquals(ResultCode.OK, observer.values.get(0).getCode());
         assertEquals(3L, observer.values.get(0).getBranchId());
-        assertEquals(com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_TRYING,
+        assertEquals(com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_TRYING,
                 observer.values.get(0).getStatus());
     }
 
@@ -131,7 +131,7 @@ class TccCoordinatorGrpcServiceTest {
         adapter.reportBranch(ReportBranchRequest.newBuilder()
                 .setXid(7L)
                 .setBranchId(3L)
-                .setStatus(com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_TRY_SUCCESS)
+                .setStatus(com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_TRY_SUCCESS)
                 .build(), observer);
 
         assertEquals(ResultCode.OK, observer.values.get(0).getCode());
@@ -146,7 +146,7 @@ class TccCoordinatorGrpcServiceTest {
         adapter.commit(CommitRequest.newBuilder().setXid(7L).build(), observer);
 
         assertEquals(ResultCode.OK, observer.values.get(0).getCode());
-        assertEquals(com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.CONFIRMED,
+        assertEquals(com.wuba.crm.tx.tcc.protocol.grpc.GlobalStatus.CONFIRMED,
                 observer.values.get(0).getStatus());
     }
 
@@ -159,7 +159,7 @@ class TccCoordinatorGrpcServiceTest {
         adapter.rollback(RollbackRequest.newBuilder().setXid(7L).build(), observer);
 
         assertEquals(ResultCode.OK, observer.values.get(0).getCode());
-        assertEquals(com.wuba.crm.tx.tcc.api.grpc.GlobalStatus.CANCELLED,
+        assertEquals(com.wuba.crm.tx.tcc.protocol.grpc.GlobalStatus.CANCELLED,
                 observer.values.get(0).getStatus());
     }
 
@@ -185,7 +185,7 @@ class TccCoordinatorGrpcServiceTest {
         adapter.reportBranch(ReportBranchRequest.newBuilder()
                 .setXid(7L)
                 .setBranchId(3L)
-                .setStatus(com.wuba.crm.tx.tcc.api.grpc.BranchStatus.BRANCH_CONFIRMING)
+                .setStatus(com.wuba.crm.tx.tcc.protocol.grpc.BranchStatus.BRANCH_CONFIRMING)
                 .build(), observer);
 
         assertEquals(ResultCode.TCC_INVALID_ARGUMENT, observer.values.get(0).getCode());
